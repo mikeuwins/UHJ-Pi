@@ -1,0 +1,9 @@
+{
+  "input_channel" : 8,
+  "input_l" : 60,
+  "input_r" : 100,
+  "output_l" : 145,
+  "output_r" : 145,
+  "headphone_enabled" : 1,
+  "monitor_enabled" : 1
+}

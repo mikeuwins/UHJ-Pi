@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", RUN+="/usr/local/bin/set_line_input.sh"
