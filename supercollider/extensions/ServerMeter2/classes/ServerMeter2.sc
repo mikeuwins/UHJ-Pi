@@ -1,5 +1,3 @@
-"=== THIS IS THE REAL ServerMeter2.sc ===".postln;
-
 ServerMeter2View {
 
 	classvar serverMeter2Views, updateFreq = 10, dBLow = -80, meterWidth = 20, gapWidth = 2.5, <height = 230;
@@ -30,54 +28,24 @@ ServerMeter2View {
 
 		view = CompositeView(parent, Rect(leftUp.x, leftUp.y, viewWidth, height) );
 		view.onClose_( { this.stop });
-		innerView = CompositeView(view, Rect(10, 20, viewWidth, height-20) );
+		innerView = CompositeView(view, Rect(10, 25, viewWidth, height) );
 		innerView.addFlowLayout(0@0, gapWidth@gapWidth);
 
-		// dB scale - using StaticText instead of Pen.font for better font control
-		StaticText(innerView, Rect(0, 0, meterWidth, 12))
-			.string_("10")
-			.font_(Font("Helvetica", 10))
-			.stringColor_(Color.cyan)
-			.align_(\center)
-			.background_(Color.clear);
-		StaticText(innerView, Rect(0, 148, meterWidth, 12))
-			.string_("0")
-			.font_(Font("Helvetica", 10))
-			.stringColor_(Color.cyan)
-			.align_(\center)
-			.background_(Color.clear);
-
-		// --- FONT DEBUG ---
-		var labelFont;
-		if(Font.availableFonts.includes("Helvetica-Bold")) {
-			labelFont = Font("Helvetica-Bold", 10);
-		} {
-			labelFont = Font("Helvetica", 10).boldVariant;
-		}
-		("[ServerMeter2View] INPUT label font: " ++ labelFont.name).postln;
-		StaticText(view, Rect(5, 25, 250, 20))
-			.string_("[DEBUG] INPUT font: " ++ labelFont.name)
-			.font_(Font("Helvetica", 12).boldVariant)
-			.stringColor_(Color.red)
-			.align_(\left);
-		// --- END FONT DEBUG ---
+		// Restore dB scale
+		UserView(innerView, Rect(0, 0, meterWidth, 195)).drawFunc_( {
+			// Draw invisible dB scale numbers, but keep container for alignment
+			Pen.color = Color.clear; // Make text fully invisible
+			Pen.font = Font("Helvetica", 10).boldVariant;
+			Pen.stringCenteredIn("10", Rect(0, 0, meterWidth, 12));
+			Pen.stringCenteredIn("0", Rect(0, 170, meterWidth, 12));
+		});
 
 		if(numIns > 0) {
 			// ins - gui tweaks
-			StaticText(view, Rect(10, 5, 100, 15))
-			.font_(labelFont)
-			.align_(\left)
-			.stringColor_(Color.cyan)
-			.string_("INPUT");
 			inmeters = Array.fill( numIns, { arg i;
 				var comp;
-				comp = CompositeView(innerView, Rect(0, 0, meterWidth, 170)).resize_(5);
-				StaticText(comp, Rect(0, 160, meterWidth, 10))
-				.font_(Font("Helvetica", 9))
-				.align_(\center)
-				.stringColor_(Color.cyan)
-				.string_((i+1).asString);
-				levelIndic = LevelIndicator( comp, Rect(0, 0, meterWidth, 160) ).warning_(0.6).critical_(0.9)
+				comp = CompositeView(innerView, Rect(0, 0, meterWidth, 195)).resize_(5);
+				levelIndic = LevelIndicator( comp, Rect(0, 0, meterWidth, 180) ).warning_(0.6).critical_(0.9)
 				.style_(\led)
 				.stepWidth_(4)
 				.meterColor_(Color.cyan)
@@ -92,41 +60,29 @@ ServerMeter2View {
 
 		if((numIns > 0) && (numOuts > 0)) {
 			// divider - color tweaks
-			UserView(innerView, Rect(0, 0, meterWidth, 160)).drawFunc_( {
+			UserView(innerView, Rect(0, 0, meterWidth, 180)).drawFunc_( {
 				try {
 					Pen.color = \QPalette.asClass.new.windowText;
 				} {
 					Pen.color = Color.white;
 				};
 				Pen.color = Color.clear;
-				Pen.line(((meterWidth + gapWidth) * 0.5)@0, ((meterWidth + gapWidth) * 0.5)@160);
+				Pen.line(((meterWidth + gapWidth) * 0.5)@0, ((meterWidth + gapWidth) * 0.5)@180);
 				Pen.stroke;
 			});
 		};
 
 		// outs - gui tweaks
 		if(numOuts > 0) {
-			// Try Helvetica-Bold first, fallback to Helvetica boldVariant if not available
-			var labelFont;
-			if(Font.availableFonts.includes("Helvetica-Bold")) {
-				labelFont = Font("Helvetica-Bold", 10);
-			} {
-				labelFont = Font("Helvetica", 10).boldVariant;
-			}
-			StaticText(view, Rect(10 + if(numIns > 0) { (numIns + 2) * (meterWidth + gapWidth) } { 0 }, 5, 100, 15))
-			.font_(labelFont)
-			.align_(\left)
-			.stringColor_(Color.cyan)
-			.string_("OUTPUT");
 			outmeters = Array.fill( numOuts, { arg i;
 				var comp;
-				comp = CompositeView(innerView, Rect(0, 0, meterWidth, 170));
-				StaticText(comp, Rect(0, 160, meterWidth, 10))
-				.font_(Font("Helvetica", 9))
+				comp = CompositeView(innerView, Rect(0, 0, meterWidth, 195));
+				StaticText(comp, Rect(0, 180, meterWidth, 15))
+				.font_(Font("Helvetica", 9).boldVariant)
 				.align_(\center)
 				.stringColor_(Color.cyan)
 				.string_((i+1).asString);
-				levelIndic = LevelIndicator( comp, Rect(0, 0, meterWidth, 160) ).warning_(0.6).critical_(0.9)
+				levelIndic = LevelIndicator( comp, Rect(0, 0, meterWidth, 180) ).warning_(0.6).critical_(0.9)
 				.style_(\led)
 				.numSteps_(10)
 				.stepWidth_(4)
@@ -193,7 +149,6 @@ ServerMeter2View {
 				{
 					try {
 						var channelCount = min(msg.size - 3 / 2, numIns);
-
 						channelCount.do {|channel|
 							var baseIndex = 3 + (2*channel);
 							var peakLevel = msg.at(baseIndex);
@@ -216,8 +171,7 @@ ServerMeter2View {
 			outresp = OSCFunc( {|msg|
 				{
 					try {
-						var channelCount = min(msg.size - 3 / 2, numOuts);
-
+						var channelCount = min((msg.size - 3) / 2, numOuts);
 						channelCount.do {|channel|
 							var baseIndex = 3 + (2*channel);
 							var peakLevel = msg.at(baseIndex);
@@ -229,7 +183,7 @@ ServerMeter2View {
 									meter.value = rmsValue.ampdb.linlin(dBLow, 0, 0, 1);
 								}
 							}
-						}
+						};
 					} { |error|
 						if(error.isKindOf(PrimitiveFailedError).not) { error.throw }
 					};

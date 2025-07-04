@@ -35,16 +35,6 @@ UserView(layoutOverlay, Rect(10, 30, 300, 235))
         var bounds = view.bounds;
         var centerX = bounds.width / 2;
         var centerY = bounds.height / 2;
-        
-        // Fill background with black
-        Pen.color = Color.black;
-        Pen.addRect(Rect(0, 0, bounds.width, bounds.height));
-        Pen.fill;
-        
-        // Draw a simple test layout - QUAD SQUARE
-        Pen.width = 2;
-        Pen.color = Color.cyan;
-        
         var speakerSize = 20;
         var distance = 60;
         var positions = [
@@ -54,6 +44,15 @@ UserView(layoutOverlay, Rect(10, 30, 300, 235))
             [centerX - distance, centerY + distance]  // Bottom-left (BL)
         ];
         var labels = ["1", "2", "3", "4"];
+        
+        // Fill background with black
+        Pen.color = Color.black;
+        Pen.addRect(Rect(0, 0, bounds.width, bounds.height));
+        Pen.fill;
+        
+        // Draw a simple test layout - QUAD SQUARE
+        Pen.width = 2;
+        Pen.color = Color.cyan;
         
         positions.do({ |pos, i|
             // Draw speaker box
