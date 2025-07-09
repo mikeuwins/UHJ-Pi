@@ -957,6 +957,7 @@ win.front;
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 12))
     .action_({ |btn|
+        var roomNames, roomMenu, params, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
@@ -964,7 +965,90 @@ win.front;
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
-            // TODO: Implement Ambience overlay
+            // --- Remove any previous Ambience overlay and controls to prevent duplicates ---
+            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
+            // Create Ambience overlay directly in main window
+            ~ambienceOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+            UserView(~ambienceOverlay, Rect(0, 0, 320, 275))
+                .background_(Color.clear)
+                .drawFunc_({ |v|
+                    Pen.width = 0.5;
+                    Pen.color = Color.cyan;
+                    Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
+                    Pen.stroke;
+                });
+            StaticText(~ambienceOverlay, Rect(10, 5, 120, 22))
+                .string_("AMBIENCE")
+                .align_(\left)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 12).boldVariant)
+                .background_(Color.clear);
+            // Room selector (dropdown)
+            roomNames = ["Small Room", "Medium Room", "Large Hall", "Cathedral", "Plate", "Chamber", "Bright", "Dark"];
+            roomMenu = PopUpMenu(~ambienceOverlay, Rect(140, 7, 170, 20))
+                .items_(roomNames)
+                .font_(Font("Helvetica", 11))
+                .background_(Color.black)
+                .stringColor_(Color.cyan)
+                .value_(0);
+            // Parameter names and default values
+            params = [
+                ["Wet", 0.5],
+                ["Dry", 0.5],
+                ["Size", 0.7],
+                ["Damp", 0.3],
+                ["PreDly", 0.2],
+                ["MRate", 0.5],
+                ["MDep", 0.5]
+            ];
+            sliderWidth = 32; sliderHeight = 140; startX = 12; gap = 44;
+            ~ambienceSliders = List[];
+            ~ambienceValues = List[];
+            params.do({ |pair, i|
+                x = startX + (i * gap);
+                StaticText(~ambienceOverlay, Rect(x, 35, sliderWidth, 16))
+                    .string_(pair[0])
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 10))
+                    .background_(Color.clear);
+                slider = Slider(~ambienceOverlay, Rect(x, 55, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .knobColor_(Color.cyan)
+                    .value_(pair[1])
+                    .action_({ |sl|
+                        var val = (sl.value * 100).round(0.1);
+                        ~ambienceValues[i].string = val.asString ++ "%";
+                        if(i == 0 and: { synth.notNil }) {
+                            // Connect only the Wet (mix) slider to the synth's ambience param
+                            synth.set(\ambience, sl.value);
+                        }
+                    });
+                ~ambienceSliders.add(slider);
+                valDisp = StaticText(~ambienceOverlay, Rect(x, 200, sliderWidth, 16))
+                    .string_((pair[1] * 100).asString ++ "%")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9))
+                    .background_(Color.clear);
+                ~ambienceValues.add(valDisp);
+            });
+            // Freeze toggle
+            ~freezeBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([["FREEZE", Color.cyan, Color.black], ["FREEZE", Color.black, Color.cyan]])
+                .font_(Font("Helvetica", 11));
+            // Close button
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([["CLOSE", Color.cyan, Color.black]])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~ambienceOverlay.remove;
+                    ~ambienceOverlay = nil;
+                    ~ambienceBtn.value_(0);
+                });
+            ~ambienceOverlay.front;
         } {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
         }

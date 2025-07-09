@@ -1,12 +1,9 @@
 (
 var win, mainView,
     // Input section variables (from MainApp2)
-    isUpdating, leftSlider, rightSlider, labelLVal, labelRVal, linkButton,
-    lastInputCmd, muteBtn, monBtn, lineBtn, mmBtn, mcBtn, linkFaders,
-    lastInL, lastInR, minIn, maxIn, lastFaderGroup,
+    isUpdating, lastInputCmd, linkFaders, lastInL, lastInR, minIn, maxIn, lastFaderGroup,
     // Audio engine variables (from MainApp2)
-    rotini, tltini, tumini, volini, ambini, voltmp,
-    cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
+    voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
     // dB conversion variables and functions
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 
@@ -26,11 +23,6 @@ maxIn = 127;
 lastFaderGroup = \none;
 
 // Audio engine initial values
-rotini = 0.5;
-tltini = 0.5;
-tumini = 0.5;
-volini = 0.5;
-ambini = 0;
 voltmp = 0.5;
 
 // Encoder/Decoder configuration defaults
@@ -304,6 +296,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     ],
     globalAction: { |menu|
         ("Selected encoder: " ++ menu.item).postln;
+        // Always call audio engine init; it will reload only if needed
+        ~initAudioEngine.value();
     },
     initVal: 0,
     initAction: false,
@@ -376,8 +370,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 // --- Track previous channel counts for safe decoder switching ---
 ~prevInputs = inputs;
 ~prevOutputs = outputs;
-// --- Track previous decoder key for always-reload logic ---
+// --- Track previous decoder and encoder key for always-reload logic ---
 ~prevConfigKeyD = configKeyD;
+~prevConfigKeyE = configKeyE;
 
 // Audio engine initialization function (from MainApp2)
 ~initAudioEngine = {
@@ -385,8 +380,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     var decoderDict, encoderDict;
     var tryBoot;
     var needReboot;
-    // Always reload kernels and restart synth on decoder change
-    needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD));
+    // Always reload kernels and restart synth on decoder or encoder change
+    needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
     tryBoot = {
         if(s.serverBooting, {
             ("Server busy (booting), retrying audio engine init...").postln;
@@ -428,7 +423,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
                         var out, src, trans, encode, ambient, eqed;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
@@ -449,14 +444,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Ambience processing
                         ambient = AmbiVerbSC.ar(encode,
                             mix: ambience,
-                            preDelay: 0,
+                            preDelay: preDelay,
                             crossoverFreq: 3000,
-                            lowRT: 0.2,
-                            highRT: 2,
-                            dispersion: 1,
-                            size: "Metallener Saal",
-                            modWidth: 0.2,
-                            modRate: 0.3,
+                            lowRT: lowRT,
+                            highRT: highRT,
+                            dispersion: dispersion,
+                            size: "Metallener Saal", // Room name is fixed at synth creation
+                            modWidth: modWidth,
+                            modRate: modRate,
                             coupRate: 0.5,
                             coupAmt: 3,
                             phaseRotRate: 0.4,
@@ -541,7 +536,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
                             var out, src, trans, encode, ambient, eqed;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
@@ -556,20 +551,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
                             eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                             eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
-                            eqed = BPeakEQ.ar(eqed, 16000, 1, eq7);   // Band 7
+                            eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
                             // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
                             encode = FoaEncode.ar(eqed, encoder);
                             // Ambience processing
                             ambient = AmbiVerbSC.ar(encode,
                                 mix: ambience,
-                                preDelay: 0,
+                                preDelay: preDelay,
                                 crossoverFreq: 3000,
-                                lowRT: 0.2,
-                                highRT: 2,
-                                dispersion: 1,
-                                size: "Metallener Saal",
-                                modWidth: 0.2,
-                                modRate: 0.3,
+                                lowRT: lowRT,
+                                highRT: highRT,
+                                dispersion: dispersion,
+                                size: "Metallener Saal", // Room name is fixed at synth creation
+                                modWidth: modWidth,
+                                modRate: modRate,
                                 coupRate: 0.5,
                                 coupAmt: 3,
                                 phaseRotRate: 0.4,
@@ -622,10 +617,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         });
     };
     tryBoot.value;
-    // Update previous channel counts and decoder key
+    // Update previous channel counts and decoder/encoder key
     ~prevInputs = inputs;
     ~prevOutputs = outputs;
     ~prevConfigKeyD = configKeyD;
+    ~prevConfigKeyE = configKeyE;
 };
 
 // --- Level Meter Section ---
@@ -957,6 +953,7 @@ win.front;
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 12))
     .action_({ |btn|
+        var roomNames, roomMap, roomMenu, params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
@@ -964,7 +961,178 @@ win.front;
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
-            // TODO: Implement Ambience overlay
+            // --- Remove any previous Ambience overlay and controls to prevent duplicates ---
+            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
+            // --- Initialize layout variables (fix nil error) ---
+            sliderWidth = 32; sliderHeight = 140; startX = 12; gap = 44;
+            // Create Ambience overlay directly in main window
+            ~ambienceOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+            UserView(~ambienceOverlay, Rect(0, 0, 320, 275))
+                .background_(Color.clear)
+                .drawFunc_({ |v|
+                    Pen.width = 0.5;
+                    Pen.color = Color.cyan;
+                    Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
+                    Pen.stroke;
+                });
+            StaticText(~ambienceOverlay, Rect(10, 5, 120, 22))
+                .string_("AMBIENCE")
+                .align_(\left)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 12).boldVariant)
+                .background_(Color.clear);
+            // Room selector (dropdown) with English names mapped to German
+            roomNames = [
+                "Small Room", "Medium Room", "Large Hall", "Cathedral", "Metal Hall", "Plate", "Chamber", "Bright", "Dark"
+            ];
+            roomMap = IdentityDictionary.newFrom([
+                "Small Room", "Kleiner Raum",
+                "Medium Room", "Mittlerer Raum",
+                "Large Hall", "Großer Saal",
+                "Cathedral", "Kathedrale",
+                "Metal Hall", "Metallener Saal",
+                "Plate", "Platte",
+                "Chamber", "Kammer",
+                "Bright", "Heller Raum",
+                "Dark", "Dunkler Raum"
+            ]);
+            roomMenu = PopUpMenu(~ambienceOverlay, Rect(140, 7, 170, 20))
+                .items_(roomNames)
+                .font_(Font("Helvetica", 11))
+                .background_(Color.black)
+                .stringColor_(Color.cyan)
+                .value_(0)
+                .action_({ |menu|
+                    if(synth.notNil) {
+                        var germanName = roomMap[roomNames[menu.value]];
+                        // --- Free and recreate synth with new room (size) argument, preserving ambience params ---
+                        var ambParams = [
+                            ~ambienceSliders[0].value, // Mix
+                            ~ambienceSliders[1].value, // PreDly
+                            ~ambienceSliders[2].value, // LoRT
+                            ~ambienceSliders[3].value, // HiRT
+                            ~ambienceSliders[4].value, // Disp
+                            ~ambienceSliders[5].value, // MWid
+                            ~ambienceSliders[6].value  // MRate
+                        ];
+                        synth.free;
+                        synth = Synth(
+                            \kernelEncodeDecode,
+                            [
+                                \buffer, sndbuf,
+                                \amp, voltmp,
+                                \ambience, ambParams[0].linlin(0, 1, 0, 0.2),
+                                \preDelay, ambParams[1].linlin(0,1,0,0.5),
+                                \lowRT, ambParams[2].linlin(0,1,0.1,2),
+                                \highRT, ambParams[3].linlin(0,1,0.2,4),
+                                \dispersion, ambParams[4].linlin(0,1,0.1,2),
+                                \modWidth, ambParams[5],
+                                \modRate, ambParams[6],
+                                \size, germanName
+                            ]
+                        );
+                    }
+                });
+            // Parameter labels and default values
+            sliderLabels = ["Reverb", "PreDly", "LoRT", "HiRT", "Disp", "MWid", "MRate"];
+            params = [
+                0.0, // Reverb (default OFF)
+                0.2, // PreDly
+                0.2, // LoRT
+                0.2, // HiRT
+                0.0, // Disp
+                0.0, // MWid
+                0.0  // MRate
+            ];
+            ~ambienceLastMix = 0.5; // Remember last nonzero mix value
+            ~ambienceSliders = List[];
+            ~ambienceValues = List[];
+            sliderLabels.do({ |label, i|
+                x = startX + (i * gap);
+                StaticText(~ambienceOverlay, Rect(x, 35, sliderWidth, 16))
+                    .string_(label)
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 10))
+                    .background_(Color.clear);
+                slider = Slider(~ambienceOverlay, Rect(x, 55, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .knobColor_(Color.cyan)
+                    .value_(params[i])
+                    .action_({ |sl|
+                        var val = (sl.value * 100).round(0.1);
+                        ~ambienceValues[i].string = val.asString ++ "%";
+                        if(synth.notNil) {
+                            switch(i,
+                                0, {
+                                    synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                                    // --- Sync ON/OFF button with Mix slider ---
+                                    if(sl.value > 0) {
+                                        ~ambienceOnOffBtn.value_(1);
+                                        ~ambienceLastMix = sl.value;
+                                    } {
+                                        ~ambienceOnOffBtn.value_(0);
+                                    }
+                                },
+                                1, { synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
+                                2, { synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
+                                3, { synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
+                                4, { synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
+                                5, { synth.set(\modWidth, sl.value); },
+                                6, { synth.set(\modRate, sl.value); }
+                            );
+                        }
+                    });
+                ~ambienceSliders.add(slider);
+                valDisp = StaticText(~ambienceOverlay, Rect(x, 200, sliderWidth, 16))
+                    .string_((params[i] * 100).asString ++ "%")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9))
+                    .background_(Color.clear);
+                ~ambienceValues.add(valDisp);
+            });
+            // --- ON/OFF toggle for Ambience (controls Mix sent to synth, but does NOT move slider) ---
+            ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([ ["ON", Color.cyan, Color.black], ["ON", Color.black, Color.cyan] ])
+                .font_(Font("Helvetica", 11))
+                .value_(0) // OFF by default
+                .action_({ |btn|
+                    if(btn.value == 1) {
+                        // ON: send Mix slider value to synth
+                        if(synth.notNil) { synth.set(\ambience, ~ambienceSliders[0].value.linlin(0, 1, 0, 0.2)); }
+                    } {
+                        // OFF: send 0 to synth (but do NOT move slider)
+                        if(synth.notNil) { synth.set(\ambience, 0); }
+                    }
+                });
+            // --- Mix slider action: always updates value label and, if ON, sends to synth ---
+            ~ambienceSliders[0].action_({ |sl|
+                var val = (sl.value * 100).round(0.1);
+                ~ambienceValues[0].string = val.asString ++ "%";
+                if(synth.notNil and: { ~ambienceOnOffBtn.value == 1 }) {
+                    synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                }
+            });
+            // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
+            ~ambienceOnOffBtn.value_(0); // OFF by default
+            ~ambienceSliders[0].value = 0; // Mix defaults to 0
+            // Close button
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([["CLOSE", Color.cyan, Color.black]])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~ambienceOverlay.remove;
+                    ~ambienceOverlay = nil;
+                    ~ambienceBtn.value_(0);
+                });
+            ~ambienceOverlay.front;
+            // Set synth size param to initial room
+            if(synth.notNil) {
+                synth.set(\size, roomMap[roomNames[roomMenu.value]]);
+            }
         } {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
         }
@@ -983,6 +1151,7 @@ win.front;
             ~ambienceBtn.value_(0);
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black.alpha_(0.5)); // More transparent overlay
+            // --- Single UserView: draw cyan border first, then layout graphics ---
             UserView(~layoutOverlay, Rect(0, 0, 320, 275))
                 .background_(Color.clear)
                 .drawFunc_({ |view|
@@ -990,12 +1159,16 @@ win.front;
                     var centerX = bounds.width / 2;
                     var centerY = bounds.height / 2;
                     var currentDecoderValue = ~dmenu.value;
-                    Pen.color = Color.black;
-                    Pen.addRect(Rect(0, 0, bounds.width, bounds.height));
-                    Pen.fill;
+                    // Draw cyan border
+                    Pen.width = 0.5;
+                    Pen.color = Color.cyan;
+                    Pen.addRect(Rect(0.25, 0.25, bounds.width - 0.5, bounds.height - 0.5));
+                    Pen.stroke;
+                    // Draw layout graphics
                     Pen.width = 2;
                     switch(currentDecoderValue,
                         0, {
+                            // Example: IRCAM headphones
                             var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
                             leftEarY = centerY + 25;
@@ -1014,6 +1187,7 @@ win.front;
                             Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 135, 10), Font("Helvetica", 12), Color.cyan);
                         },
                         1, {
+                            // Example: CIPIC headphones
                             var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
                             leftEarY = centerY + 25;
@@ -1032,6 +1206,7 @@ win.front;
                             Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 135, 10), Font("Helvetica", 12), Color.cyan);
                         },
                         2, {
+                            // Example: Quad Square
                             var squareSize = 140, halfSquare = squareSize / 2;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare, squareSize, squareSize)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10, 20, 20)); Pen.fill;
@@ -1043,119 +1218,86 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.stroke;
                             Pen.stringAtPoint("3", Point(centerX - halfSquare - 10 + squareSize + 7, centerY - halfSquare - 10 + squareSize + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                        },
-                        2, {
-                            var squareSize = 140, halfSquare = squareSize / 2;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare, squareSize, squareSize)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 10 + 7, centerY - halfSquare - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 10 + 7, centerY - halfSquare - 10 + squareSize + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 10 + squareSize + 7, centerY - halfSquare - 10 + squareSize + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(centerX - halfSquare - 10 + squareSize + 7, centerY - halfSquare - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
                             Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - 97, 10), Font("Helvetica", 12), Color.cyan);
-                        },
-                        3, {
-                            var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2);
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 10 + 7, rectTop - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft - 10 + 7, rectTop + rectHeight - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 10 + 7, rectTop + rectHeight - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 10 + 7, rectTop - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Point(centerX - 115, 10), Font("Helvetica", 12), Color.cyan);
-                        },
-                        4, {
-                            var rectWidth = 140, rectHeight = 105, rectLeft = centerX - (rectWidth / 2), totalHeight = rectHeight + 20, rectTop = centerY - (totalHeight / 2) + 10;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 10 + 7, rectTop - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft - 10 + 7, rectTop + rectHeight - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 10 + 7, rectTop + rectHeight - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 10 + 7, rectTop - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Wide Quadraphonic arrangement (x ≥ 1.33y)", Point(centerX - 114, 10), Font("Helvetica", 12), Color.cyan);
-                        },
-                        5, {
-                            var layoutSize = 140, layoutLeft = centerX - (layoutSize / 2), layoutTop = centerY - (layoutSize / 2), speakerSize = 20, frontLeftX = layoutLeft - 10, frontLeftY = layoutTop - 10, frontRightX = layoutLeft + layoutSize - 10, frontRightY = layoutTop - 10, centerX_speaker = layoutLeft + (layoutSize / 2) - 10, centerY_speaker = layoutTop - 10, surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10, surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10, subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(frontLeftX + 7, frontLeftY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(frontRightX + 7, frontRightY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX_speaker + 7, centerY_speaker + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(surroundLeftX + 7, surroundLeftY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("5", Point(surroundRightX + 7, surroundRightY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Point(centerX - 136, 10), Font("Helvetica", 12), Color.cyan);
-                        },
-                        6, {
-                            var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
-                            speakerPositions = Array.fill(8, { |i| var angle = startAngle + (i * angleStep); var x = centerX + (radius * cos(angle)) - 10; var y = centerY + (radius * sin(angle)) - 10; Point(x, y); });
-                            // Revert: draw solid black oval fill for octagon layout (no transparency)
-                            Pen.color = Color.black;
-                            Pen.addOval(Rect(centerX - radius, centerY - radius, radius * 2, radius * 2));
-                            Pen.fill;
-                            // Draw oval border
-                            Pen.color = Color.cyan;
-                            Pen.addOval(Rect(centerX - radius, centerY - radius, radius * 2, radius * 2));
-                            Pen.stroke;
-                            // Draw speaker boxes
-                            speakerPositions.do({ |pos, i|
-                                var speakerNum = ((i + 2) % 8) + 1;
-                                var angle = startAngle + (i * angleStep);
-                                var rotationAngle = angle + (pi / 2);
-                                Pen.push;
-                                Pen.translate(pos.x + 10, pos.y + 10);
-                                Pen.rotate(rotationAngle);
-                                Pen.translate(-10, -10);
-                                Pen.color = Color.black;
-                                Pen.addRect(Rect(0, 0, 20, 20));
-                                Pen.fill;
-                                Pen.color = Color.cyan;
-                                Pen.addRect(Rect(0, 0, 20, 20));
-                                Pen.stroke;
-                                Pen.stringAtPoint(speakerNum.asString, Point(7, 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                                Pen.pop;
-                            });
-                            Pen.stringAtPoint("[1] -22.5°, Speakers @ 45°", Point(centerX - 69, 10), Font("Helvetica", 12), Color.cyan);
                         }
+                        // Add more cases as needed for other decoders
                     );
                 });
             ~layoutOverlay.front;
         } {
-            if(~layoutOverlay.notNil) {
-                ~layoutOverlay.remove;
-                ~layoutOverlay = nil;
-            };
+            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
         }
     });
+
+// --- OUTPUT FADER (GRAPHICAL ONLY, GUIPrototype style) ---
+StaticText(mainView, Rect(544, 40, 24, 24))
+    .string_("dB")
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .font_(Font("Helvetica", 12));
+
+StaticText(mainView, Rect(520, 10, 72, 28))
+    .string_("OUTPUT")
+    .align_(\center)
+    .font_(Font("Helvetica", 14).boldVariant)
+    .stringColor_(Color.cyan);
+
+~outputSlider = Slider(mainView, Rect(544, 70, 24, 300))
+    .orientation_(\vertical)
+    .background_(Color.black)
+    .focusColor_(Color.clear)
+    .knobColor_(Color.cyan)
+    .action_({ |sl|
+        var db = sl.value.linlin(0, 1, -60, 0).round(1).asInteger;
+        ~outputValue.string_(db.asString); // No decimal
+        if(synth.notNil) {
+            var amp = 10.pow(db / 20);
+            synth.set(\amp, amp);
+        }
+    });
+
+~outputValue = StaticText(mainView, Rect(544, 380, 24, 24))
+    .string_("0")
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .font_(Font("Helvetica", 12));
+
+// Ensure output fader starts at top (0dB)
+~outputSlider.valueAction_(1.0); // valueAction_ triggers action and sets value to top
+
+// Tick marks for output fader (3px further from fader)
+UserView(mainView, Rect(537, 70, 4, 300))
+    .background_(Color.clear)
+    .drawFunc_({ |view|
+        Pen.color = Color.cyan;
+        Pen.width = 1;
+        // Major tick marks every 50 pixels
+        [0, 50, 100, 150, 200, 250, 300].do({ |y|
+            Pen.line(Point(0, y), Point(4, y));
+            Pen.stroke;
+        });
+        // Minor tick marks every 25 pixels (between majors)
+        [25, 75, 125, 175, 225, 275].do({ |y|
+            Pen.line(Point(1, y), Point(3, y));
+            Pen.stroke;
+        });
+    });
+UserView(mainView, Rect(571, 70, 4, 300))
+    .background_(Color.clear)
+    .drawFunc_({ |view|
+        Pen.color = Color.cyan;
+        Pen.width = 1;
+        // Major tick marks every 50 pixels
+        [0, 50, 100, 150, 200, 250, 300].do({ |y|
+            Pen.line(Point(0, y), Point(4, y));
+            Pen.stroke;
+        });
+        // Minor tick marks every 25 pixels (between majors)
+        [25, 75, 125, 175, 225, 275].do({ |y|
+            Pen.line(Point(1, y), Point(3, y));
+            Pen.stroke;
+        });
+    });
+
+// --- END OF FILE ---
 )

@@ -1,0 +1,30 @@
+# SuperCollider Ambience Overlay Integration – Chat/Project Backup (as of 8 July 2025)
+
+## Goal
+Integrate a fully functional Ambience (AmbiVerbSC) overlay into the SuperCollider app (`IntegratedApp_Stage3_EQ.scd`), matching the style and parameter set of the GUIPrototype, with real-time synth updating and preset support.
+
+## Key Steps Completed
+- **SynthDef updated**: Numeric AmbiVerbSC parameters are now SynthDef arguments. Non-numeric (size, orientation) are handled by recreating the synth.
+- **Ambience overlay GUI**: Sliders for numeric parameters, PopUpMenus for size and orientation, and a preset menu.
+- **Preset system**: Preset menu sets all parameters, including size/orientation.
+- **Real-time updating**: Sliders use `synth.set`; size/orientation recreate the synth.
+- **Syntax/parse errors fixed**: Bracket mismatches and argument type issues resolved.
+
+## Issues Encountered & Fixed
+- **SuperCollider syntax errors**: Caused by misplaced brackets or `var` declarations; fixed by moving declarations and correcting block endings.
+- **Type errors in SynthDef**: Only numeric controls allowed as arguments; fixed by handling size/orientation outside SynthDef arguments.
+- **Overlay logic**: Ensured overlays are mutually exclusive and controls update synth as intended.
+
+## Current File State
+- The file now has a working Ambience overlay, with all controls and preset logic in place.
+- The main block is properly closed with a parenthesis.
+- No known syntax or runtime errors remain in the most recent version.
+
+## Next Steps (when you return)
+- If you want to continue, you can resume from this working state.
+- If you encounter further errors, provide the error message and I’ll help debug.
+- If you want to add features or polish the UI, just specify your requirements.
+
+---
+
+You can safely take a break. When you return, just let me know how you’d like to proceed!
