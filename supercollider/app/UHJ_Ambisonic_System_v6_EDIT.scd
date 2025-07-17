@@ -1,17 +1,15 @@
-(
 var win, mainView,
-    // Input section variables (from MainApp2)
+    decoderChanged,
     isUpdating, lastInputCmd, linkFaders, lastInL, lastInR, minIn, maxIn, lastFaderGroup,
-    // Audio engine variables (from MainApp2)
     voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
-    // dB conversion variables and functions
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
-
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
+// --- Headtracker overlays ---
+~knobOverlay = nil; ~htBtnOverlay = nil;
 
 // --- Initial values for input section ---
 isUpdating = false;
@@ -322,32 +320,86 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         \OCTAGON -> { |a| inputs = 2; outputs = 8; configKeyD = \octagon; }
     ],
     globalAction: { |menu|
-        var encoder, decoder, trans, ambient, roton;
-        var decoderDict, encoderDict;
-        var decoderChanged;
-        ("Selected: " ++ menu.item).postln;
-        ("Encoder: " ++ configKeyE).postln;
-        ("Decoder: " ++ configKeyD).postln;
-        ("Outputs: " ++ outputs).postln;
-        ("Inputs: " ++ inputs).postln;
-        // --- Update Layout overlay if it's open ---
+        var idx, decoderNames, decoderName, htIsOff, isBinaural, shouldDim;
+        // --- Reset headtracking and quad panner settings on decoder change ---
+        if(~headtrackBtn.notNil) { ~headtrackBtn.value_(0); };
+        if(~rotateKnob.notNil) { ~rotateKnob.valueAction_(0.5); };
+        if(~tiltKnob.notNil) { ~tiltKnob.valueAction_(0.5); };
+        if(~tumbleKnob.notNil) { ~tumbleKnob.valueAction_(0.5); };
+        if(~xyPanner.notNil) {
+            ~xyPanner.x_(0.5); ~xyPanner.y_(0.5);
+            ~xyPannerPos = Point(0.5, 0.5);
+        };
+        idx = menu.value;
+        decoderNames = ["BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"];
+        decoderName = decoderNames[idx];
+        htIsOff = (~headtrackBtn.notNil and: { ~headtrackBtn.value == 0 });
+        isBinaural = (idx == 0) or: { idx == 1 };
+        shouldDim = (idx == 2 or: { idx == 3 } or: { idx == 4 } or: { idx == 5 } or: { idx == 6 });
+
+        // --- Overlay/enable logic for headtracker controls ---
+        if(~knobOverlay.notNil) { ~knobOverlay.remove; ~knobOverlay = nil; };
+        if(~htBtnOverlay.notNil) { ~htBtnOverlay.remove; ~htBtnOverlay = nil; };
+        if(~xyPannerOverlay.notNil) { ~xyPannerOverlay.remove; ~xyPannerOverlay = nil; };
+
+        if(isBinaural) {
+            ~headtrackBtn.enabled_(true);
+            ~headtrackResetBtn.enabled_(true);
+            if(htIsOff) {
+                ~rotateKnob.enabled_(false);
+                ~tiltKnob.enabled_(false);
+                ~tumbleKnob.enabled_(false);
+                ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+            } {
+                ~rotateKnob.enabled_(true);
+                ~tiltKnob.enabled_(true);
+                ~tumbleKnob.enabled_(true);
+            };
+        } {
+            ~headtrackBtn.enabled_(false);
+            ~headtrackResetBtn.enabled_(false);
+            ~rotateKnob.enabled_(false);
+            ~tiltKnob.enabled_(false);
+            ~tumbleKnob.enabled_(false);
+            ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
+            ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 80))
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
+        };
+        // ... existing code ...
+        // --- Quad panner logic ---
+        if((idx == 2) or: { idx == 3 } or: { idx == 4 }) {
+            ~xyPanner.enabled_(true);
+            if(~xyPannerOverlay.notNil) { ~xyPannerOverlay.remove; ~xyPannerOverlay = nil; };
+        } {
+            ~xyPanner.enabled_(false);
+            if(~xyPannerOverlay.notNil) { ~xyPannerOverlay.remove; ~xyPannerOverlay = nil; };
+            ~xyPannerOverlay = View(mainView, Rect(629, 299, 110, 145))
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
+        };
+
+        // --- Refresh layout overlay title and graphics if open ---
         if(~layoutOverlay.notNil) {
-            var decoderNames = ["BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"];
-            var decoderName = decoderNames[menu.value];
-            // Update the layout title
             ~layoutOverlay.children.do({ |child|
                 if(child.class == StaticText and: { child.string.beginsWith("LAYOUT -") }) {
                     child.string_("LAYOUT - " ++ decoderName);
                 };
             });
-            // Refresh the graphics canvas
             ~layoutOverlay.children.do({ |child|
                 if(child.class == UserView) { child.refresh; };
             });
         };
-        // --- Always reload audio engine and synth on decoder change ---
-        decoderChanged = (configKeyD != (~prevConfigKeyD ? configKeyD));
-        if(decoderChanged or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
+        // --- Audio engine reinitialization logic (must be last) ---
+        if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
             ~initAudioEngine.value();
             ~prevConfigKeyD = configKeyD;
         };
@@ -733,6 +785,101 @@ dbValue = cliToDbMaster.(lastInL);
     ~initAudioEngine.value();
 }.defer(0.5);
 
+// --- HEADTRACKER AND PANNER CONTROLS (from GUIPrototype) ---
+~rotateKnob = Knob(mainView, Rect(654, 60, 60, 60))
+    .valueAction_(0.5)
+    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+    .centered_(true)
+    .enabled_(false)
+    .action_({ |knob| ~rotateValue.string = knob.value.linlin(0, 1, -180, 180).round.asString; });
+
+~tiltKnob = Knob(mainView, Rect(654, 142, 60, 60))
+    .valueAction_(0.5)
+    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+    .centered_(true)
+    .enabled_(false)
+    .action_({ |knob| ~tiltValue.string = knob.value.linlin(0, 1, -180, 180).round.asString; });
+
+~tumbleKnob = Knob(mainView, Rect(654, 224, 60, 60))
+    .valueAction_(0.5)
+    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+    .centered_(true)
+    .enabled_(false)
+    .action_({ |knob| ~tumbleValue.string = knob.value.linlin(0, 1, -180, 180).round.asString; });
+
+~rotateValue = StaticText(mainView, Rect(719, 80, 55, 20)).font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+~tiltValue = StaticText(mainView, Rect(719, 162, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+~tumbleValue = StaticText(mainView, Rect(719, 244, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+
+~xyPanner = Slider2D(mainView, Rect(629, 334, 110, 110))
+    .x_(0.5).y_(0.5)
+    .knobColor_(Color.cyan)
+    .background_(Color.black)
+    .canFocus_(false)
+    .action_({ |sl| ~xyPannerPos = Point(sl.x, sl.y); });
+~xyPannerPos = Point(~xyPanner.x, ~xyPanner.y);
+
+// --- Additional GUI Layout ---
+// --- HEADTRACKER HEADING ---
+StaticText(mainView, Rect(618, 10, 140, 28))
+    .string_("HEADTRACKER")
+    .align_(\center)
+    .font_(Font("Helvetica", 14).boldVariant)
+    .stringColor_(Color.cyan);
+
+// --- CONTROL LABELS ---
+StaticText(mainView, Rect(594, 80, 55, 20)).string_("ROTATE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
+StaticText(mainView, Rect(594, 162, 55, 20)).string_("TILT").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
+StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
+
+// --- ON/OFF TOGGLE BUTTON ---
+~headtrackBtn = Button(mainView, Rect(742, 62, 40, 20))
+    .states_([["OFF", Color.cyan, Color.black], ["ON", Color.black, Color.cyan]])
+    .font_(Font("Helvetica", 12))
+    .action_({ |btn|
+        var on = btn.value == 1;
+        var idx = ~dmenu.value;
+        var isBinaural = (idx == 0) or: { idx == 1 };
+        // Remove overlays if present
+        if(~knobOverlay.notNil) { ~knobOverlay.remove; ~knobOverlay = nil; };
+        if(isBinaural) {
+            if(on) {
+                ~rotateKnob.enabled_(true);
+                ~tiltKnob.enabled_(true);
+                ~tumbleKnob.enabled_(true);
+            } {
+                ~rotateKnob.enabled_(false);
+                ~tiltKnob.enabled_(false);
+                ~tumbleKnob.enabled_(false);
+                ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+            }
+        }
+    })
+    .value_(0); // default OFF
+
+// --- RESET BUTTON ---
+~headtrackResetBtn = Button(mainView, Rect(742, 102, 40, 20))
+    .states_([["RESET", Color.cyan, Color.black]])
+    .font_(Font("Helvetica", 12))
+    .action_({
+~rotateKnob.valueAction_(0.5); ~rotateKnob.enabled_(false);
+~tiltKnob.valueAction_(0.5); ~tiltKnob.enabled_(false);
+~tumbleKnob.valueAction_(0.5); ~tumbleKnob.enabled_(false);
+    });
+
+// --- Now trigger the overlay/enable logic for the correct initial state ---
+~dmenu.globalAction.value(~dmenu);
+
+// --- QUAD PANNER LABEL ---
+StaticText(mainView, Rect(629, 299, 110, 22))
+    .string_("QUAD PANNER")
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .font_(Font("Helvetica", 14).boldVariant)
+    .background_(Color.clear);
 win.front;
 
 
@@ -1095,19 +1242,7 @@ win.front;
                 ~ambienceValues.add(valDisp);
             });
             // --- ON/OFF toggle for Ambience (controls Mix sent to synth, but does NOT move slider) ---
-            ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
-                .states_([ ["ON", Color.cyan, Color.black], ["ON", Color.black, Color.cyan] ])
-                .font_(Font("Helvetica", 11))
-                .value_(0) // OFF by default
-                .action_({ |btn|
-                    if(btn.value == 1) {
-                        // ON: send Mix slider value to synth
-                        if(synth.notNil) { synth.set(\ambience, ~ambienceSliders[0].value.linlin(0, 1, 0, 0.2)); }
-                    } {
-                        // OFF: send 0 to synth (but do NOT move slider)
-                        if(synth.notNil) { synth.set(\ambience, 0); }
-                    }
-                });
+            // (Removed stray .states_, .font_, .value_, .action_ lines that were not attached to a Button)
             // --- Mix slider action: always updates value label and, if ON, sends to synth ---
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
@@ -1117,8 +1252,8 @@ win.front;
                 }
             });
             // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
-            ~ambienceOnOffBtn.value_(0); // OFF by default
-            ~ambienceSliders[0].value = 0; // Mix defaults to 0
+            if(~ambienceOnOffBtn.notNil) { ~ambienceOnOffBtn.value_(0); };
+            if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
             // Close button
             Button(~ambienceOverlay, Rect(222, 230, 80, 28))
                 .states_([["CLOSE", Color.cyan, Color.black]])
@@ -1150,7 +1285,7 @@ win.front;
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
-                .background_(Color.black.alpha_(0.5)); // More transparent overlay
+                .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
             StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
                 .string_("LAYOUT - " ++ (["BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"][~dmenu.value ? 0]))
@@ -1170,39 +1305,37 @@ win.front;
                     Pen.color = Color.cyan;
                     Pen.addRect(Rect(0.25, 0.25, bounds.width - 0.5, bounds.height - 0.5));
                     Pen.stroke;
-                    // Draw layout graphics
                     Pen.width = 2;
                     switch(currentDecoderValue,
-                        0, {
-                            // Example: IRCAM headphones
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                        0, { // IRCAM Binaural
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
-                            leftEarY = centerY + 25;
+                            leftEarY = centerY + 25 + 25;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
-                            rightEarY = centerY + 25;
+                            rightEarY = centerY + 25 + 25;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
-                            Pen.moveTo(Point(centerX - arcRadius, centerY - 30)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
-                            Pen.moveTo(Point(centerX + arcRadius, centerY - 30)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Do NOT move the description text
                             Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 135, 32), Font("Helvetica", 12), Color.cyan);
                         },
-                        1, {
-                            // Example: CIPIC headphones
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                        1, { // CIPIC Binaural
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
-                            leftEarY = centerY + 25;
+                            leftEarY = centerY + 25 + 25;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
-                            rightEarY = centerY + 25;
+                            rightEarY = centerY + 25 + 25;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
-                            Pen.moveTo(Point(centerX - arcRadius, centerY - 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
-                            Pen.moveTo(Point(centerX + arcRadius, centerY - 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
@@ -1211,22 +1344,122 @@ win.front;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
                             Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 135, 32), Font("Helvetica", 12), Color.cyan);
                         },
-                        2, {
-                            // Example: Quad Square
+                        2, { // Quad Square
                             var squareSize = 140, halfSquare = squareSize / 2;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare, squareSize, squareSize)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 10 + 7, centerY - halfSquare - 10 + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 10 + 7, centerY - halfSquare - 10 + squareSize + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 10 + squareSize + 7, centerY - halfSquare - 10 + squareSize + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - 97, 10), Font("Helvetica", 12), Color.cyan);
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare + 25, squareSize, squareSize)); Pen.stroke;
+                            // Speaker 1
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 3, centerY - halfSquare - 9 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 2
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 3, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 3
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 4
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 9 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - 97, 32), Font("Helvetica", 12), Color.cyan); // description stays at y+25 as before
+                        },
+                        3, { // Quad Narrow
+                            var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2) + 25;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
+                            // Speaker 1
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 2
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 3
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 4
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Point(centerX - 115, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                        },
+                        4, { // Quad Wide
+                            var rectWidth = 140, rectHeight = 105, rectLeft = centerX - (rectWidth / 2), totalHeight = rectHeight + 20, rectTop = centerY - (totalHeight / 2) + 10 + 25;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
+                            // Speaker 1
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 2
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 3
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 4
+                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Wide Quadraphonic arrangement (x ≥ 1.33y)", Point(centerX - 114, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                        },
+                        5, { // Dolby 5.1
+                            var layoutSize = 140, layoutLeft = centerX - (layoutSize / 2), layoutTop = centerY - (layoutSize / 2) + 25, speakerSize = 20, frontLeftX = layoutLeft - 10, frontLeftY = layoutTop - 10, frontRightX = layoutLeft + layoutSize - 10, frontRightY = layoutTop - 10, centerX_speaker = layoutLeft + (layoutSize / 2) - 10, centerY_speaker = layoutTop - 10, surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10, surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10, subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize)); Pen.stroke;
+                            // Speaker 1: Front Left
+                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(frontLeftX + 7, frontLeftY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 2: Front Right
+                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(frontRightX + 7, frontRightY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 3: Center
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(centerX_speaker + 7, centerY_speaker + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 4: Surround Left
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(surroundLeftX + 7, surroundLeftY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Speaker 5: Surround Right
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("5", Point(surroundRightX + 7, surroundRightY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            // Subwoofer
+                            Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("SUB", Point(subwooferX + 25, subwooferY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Point(centerX - 136, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                        },
+                        6, { // Octagon
+                            var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
+                            speakerPositions = Array.fill(8, { |i|
+                                var angle = startAngle + (i * angleStep);
+                                var x = centerX + (radius * cos(angle)) - 10;
+                                var y = centerY + (radius * sin(angle)) - 10 + 25;
+                                Point(x, y);
+                            });
+                            Pen.color = Color.cyan; Pen.addOval(Rect(centerX - radius, centerY - radius + 25, radius * 2, radius * 2)); Pen.stroke;
+                            speakerPositions.do({ |pos, i|
+                                var speakerNum = ((i + 2) % 8) + 1;
+                                var angle = startAngle + (i * angleStep);
+                                var rotationAngle = angle + (pi / 2);
+                                Pen.push;
+                                Pen.translate(pos.x + 10, pos.y + 10);
+                                Pen.rotate(rotationAngle);
+                                Pen.translate(-10, -10);
+                                Pen.color = Color.black; Pen.addRect(Rect(0, 0, 20, 20)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.stroke;
+                                Pen.stringAtPoint(speakerNum.asString, Point(7, 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                                Pen.pop;
+                            });
+                            Pen.stringAtPoint("[1] -22.5°, Speakers @ 45°", Point(centerX - 69, 32), Font("Helvetica", 12), Color.cyan); // description stays
                         }
-                        // Add more cases as needed for other decoders
                     );
                 });
             ~layoutOverlay.front;
@@ -1306,4 +1539,3 @@ UserView(mainView, Rect(571, 70, 4, 300))
     });
 
 // --- END OF FILE ---
-)
