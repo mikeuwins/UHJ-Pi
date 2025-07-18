@@ -530,35 +530,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     // Start the synth
                     s.unmute;
-                    // Set ambience parameters from GUI if available
-                    var ambMix = (~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil })
-                        .if({ ~ambienceSliders[0].value }, { 0.0 });
-                    var ambPreDly = (~ambienceSliders.notNil and: { ~ambienceSliders[1].notNil })
-                        .if({ ~ambienceSliders[1].value }, { 0.2 });
-                    var ambLoRT = (~ambienceSliders.notNil and: { ~ambienceSliders[2].notNil })
-                        .if({ ~ambienceSliders[2].value }, { 0.2 });
-                    var ambHiRT = (~ambienceSliders.notNil and: { ~ambienceSliders[3].notNil })
-                        .if({ ~ambienceSliders[3].value }, { 0.2 });
-                    var ambDisp = (~ambienceSliders.notNil and: { ~ambienceSliders[4].notNil })
-                        .if({ ~ambienceSliders[4].value }, { 0.0 });
-                    var ambMWid = (~ambienceSliders.notNil and: { ~ambienceSliders[5].notNil })
-                        .if({ ~ambienceSliders[5].value }, { 0.0 });
-                    var ambMRate = (~ambienceSliders.notNil and: { ~ambienceSliders[6].notNil })
-                        .if({ ~ambienceSliders[6].value }, { 0.0 });
-                    var ambRoom = (roomMap.notNil and: { roomMenu.notNil })
-                        .if({ roomMap[roomNames[roomMenu.value]] }, { "Metallener Saal" }); // Metal Hall
-                    synth = Synth(\kernelEncodeDecode, [
-                        \buffer, sndbuf,
-                        \amp, voltmp,
-                        \ambience, ambMix.linlin(0, 1, 0, 0.2),
-                        \preDelay, ambPreDly.linlin(0,1,0,0.5),
-                        \lowRT, ambLoRT.linlin(0,1,0.1,2),
-                        \highRT, ambHiRT.linlin(0,1,0.2,4),
-                        \dispersion, ambDisp.linlin(0,1,0.1,2),
-                        \modWidth, ambMWid,
-                        \modRate, ambMRate,
-                        \size, ambRoom
-                    ]);
+                    synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
 
                     // Create level meter after synth is started
                     {
@@ -671,35 +643,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                         // Start the synth
                         s.unmute;
-                        // Set ambience parameters from GUI if available
-                        var ambMix = (~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil })
-                            .if({ ~ambienceSliders[0].value }, { 0.0 });
-                        var ambPreDly = (~ambienceSliders.notNil and: { ~ambienceSliders[1].notNil })
-                            .if({ ~ambienceSliders[1].value }, { 0.2 });
-                        var ambLoRT = (~ambienceSliders.notNil and: { ~ambienceSliders[2].notNil })
-                            .if({ ~ambienceSliders[2].value }, { 0.2 });
-                        var ambHiRT = (~ambienceSliders.notNil and: { ~ambienceSliders[3].notNil })
-                            .if({ ~ambienceSliders[3].value }, { 0.2 });
-                        var ambDisp = (~ambienceSliders.notNil and: { ~ambienceSliders[4].notNil })
-                            .if({ ~ambienceSliders[4].value }, { 0.0 });
-                        var ambMWid = (~ambienceSliders.notNil and: { ~ambienceSliders[5].notNil })
-                            .if({ ~ambienceSliders[5].value }, { 0.0 });
-                        var ambMRate = (~ambienceSliders.notNil and: { ~ambienceSliders[6].notNil })
-                            .if({ ~ambienceSliders[6].value }, { 0.0 });
-                        var ambRoom = (roomMap.notNil and: { roomMenu.notNil })
-                            .if({ roomMap[roomNames[roomMenu.value]] }, { "Metallener Saal" }); // Metal Hall
-                        synth = Synth(\kernelEncodeDecode, [
-                            \buffer, sndbuf,
-                            \amp, voltmp,
-                            \ambience, ambMix.linlin(0, 1, 0, 0.2),
-                            \preDelay, ambPreDly.linlin(0,1,0,0.5),
-                            \lowRT, ambLoRT.linlin(0,1,0.1,2),
-                            \highRT, ambHiRT.linlin(0,1,0.2,4),
-                            \dispersion, ambDisp.linlin(0,1,0.1,2),
-                            \modWidth, ambMWid,
-                            \modRate, ambMRate,
-                            \size, ambRoom
-                        ]);
+                        synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
 
                         // Create level meter after synth is started
                         {
@@ -1231,7 +1175,7 @@ win.front;
                                 \dispersion, ambParams[4].linlin(0,1,0.1,2),
                                 \modWidth, ambParams[5],
                                 \modRate, ambParams[6],
-                                \size, germanName
+                                \size, "Kleiner Raum" // Small Room
                             ]
                         );
                     }
@@ -1313,6 +1257,41 @@ win.front;
             // Close button
             Button(~ambienceOverlay, Rect(222, 230, 80, 28))
                 .states_([["CLOSE", Color.cyan, Color.black]])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~ambienceOverlay.remove;
+                    ~ambienceOverlay = nil;
+                    ~ambienceBtn.value_(0);
+                });
+            // Place RESET button before CLOSE button in the Ambience overlay:
+            Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([ ["RESET", Color.cyan, Color.black] ])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    var defaults = [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+                    if(~ambienceSliders.notNil) {
+                        ~ambienceSliders.do({ |slider, i|
+                            if(slider.notNil) { slider.value_(defaults[i]); }
+                        });
+                    };
+                    if(~ambienceValues.notNil) {
+                        ~ambienceValues.do({ |valDisp, i|
+                            if(valDisp.notNil) { valDisp.string_((defaults[i] * 100).asString ++ "%"); }
+                        });
+                    };
+                    // Update synth with defaults
+                    if(synth.notNil) {
+                        synth.set(\ambience, defaults[0].linlin(0, 1, 0, 0.2));
+                        synth.set(\preDelay, defaults[1].linlin(0,1,0,0.5));
+                        synth.set(\lowRT, defaults[2].linlin(0,1,0.1,2));
+                        synth.set(\highRT, defaults[3].linlin(0,1,0.2,4));
+                        synth.set(\dispersion, defaults[4].linlin(0,1,0.1,2));
+                        synth.set(\modWidth, defaults[5]);
+                        synth.set(\modRate, defaults[6]);
+                    }
+                });
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([ ["CLOSE", Color.cyan, Color.black] ])
                 .font_(Font("Helvetica", 11))
                 .action_({
                     ~ambienceOverlay.remove;

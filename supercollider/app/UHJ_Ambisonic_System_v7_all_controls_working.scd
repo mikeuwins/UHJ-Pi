@@ -1247,7 +1247,7 @@ win.front;
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
-                if(synth.notNil and: { ~ambienceOnOffBtn.value == 1 }) {
+                if(synth.notNil) {
                     synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 }
             });
@@ -1257,6 +1257,41 @@ win.front;
             // Close button
             Button(~ambienceOverlay, Rect(222, 230, 80, 28))
                 .states_([["CLOSE", Color.cyan, Color.black]])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~ambienceOverlay.remove;
+                    ~ambienceOverlay = nil;
+                    ~ambienceBtn.value_(0);
+                });
+            // Place RESET button before CLOSE button in the Ambience overlay:
+            Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([ ["RESET", Color.cyan, Color.black] ])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    var defaults = [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+                    if(~ambienceSliders.notNil) {
+                        ~ambienceSliders.do({ |slider, i|
+                            if(slider.notNil) { slider.value_(defaults[i]); }
+                        });
+                    };
+                    if(~ambienceValues.notNil) {
+                        ~ambienceValues.do({ |valDisp, i|
+                            if(valDisp.notNil) { valDisp.string_((defaults[i] * 100).asString ++ "%"); }
+                        });
+                    };
+                    // Update synth with defaults
+                    if(synth.notNil) {
+                        synth.set(\ambience, defaults[0].linlin(0, 1, 0, 0.2));
+                        synth.set(\preDelay, defaults[1].linlin(0,1,0,0.5));
+                        synth.set(\lowRT, defaults[2].linlin(0,1,0.1,2));
+                        synth.set(\highRT, defaults[3].linlin(0,1,0.2,4));
+                        synth.set(\dispersion, defaults[4].linlin(0,1,0.1,2));
+                        synth.set(\modWidth, defaults[5]);
+                        synth.set(\modRate, defaults[6]);
+                    }
+                });
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([ ["CLOSE", Color.cyan, Color.black] ])
                 .font_(Font("Helvetica", 11))
                 .action_({
                     ~ambienceOverlay.remove;
