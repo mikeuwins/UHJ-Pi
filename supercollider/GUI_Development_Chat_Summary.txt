@@ -1,30 +1,120 @@
-# SuperCollider Ambience Overlay Integration – Chat/Project Backup (as of 8 July 2025)
+# UHJ-Pi GUI Development Chat Summary
+## Knob360 Class Development and Integration
 
-## Goal
-Integrate a fully functional Ambience (AmbiVerbSC) overlay into the SuperCollider app (`IntegratedApp_Stage3_EQ.scd`), matching the style and parameter set of the GUIPrototype, with real-time synth updating and preset support.
+### Session Overview
+This chat session focused on creating a custom 360-degree rotary knob class for SuperCollider and integrating it into the UHJ Ambisonic System v14. The goal was to replace the existing knobs with full 360° rotation capability without visual gaps.
 
-## Key Steps Completed
-- **SynthDef updated**: Numeric AmbiVerbSC parameters are now SynthDef arguments. Non-numeric (size, orientation) are handled by recreating the synth.
-- **Ambience overlay GUI**: Sliders for numeric parameters, PopUpMenus for size and orientation, and a preset menu.
-- **Preset system**: Preset menu sets all parameters, including size/orientation.
-- **Real-time updating**: Sliders use `synth.set`; size/orientation recreate the synth.
-- **Syntax/parse errors fixed**: Bracket mismatches and argument type issues resolved.
+### Key Achievements
 
-## Issues Encountered & Fixed
-- **SuperCollider syntax errors**: Caused by misplaced brackets or `var` declarations; fixed by moving declarations and correcting block endings.
-- **Type errors in SynthDef**: Only numeric controls allowed as arguments; fixed by handling size/orientation outside SynthDef arguments.
-- **Overlay logic**: Ensured overlays are mutually exclusive and controls update synth as intended.
+#### 1. Custom Knob360 Class Development
+- **Created** `Knob360.sc` class in `supercollider/extensions/Knob360/classes/`
+- **Features:**
+  - Full 360° rotation without gaps
+  - Custom drawing with rounded pointer ends
+  - Proper mouse interaction (click and drag)
+  - Value mapping: 0.5 at 12 o'clock (north), 0 at 9 o'clock (west), 1 at 3 o'clock (east)
+  - Consistent with SuperCollider GUI conventions
 
-## Current File State
-- The file now has a working Ambience overlay, with all controls and preset logic in place.
-- The main block is properly closed with a parenthesis.
-- No known syntax or runtime errors remain in the most recent version.
+#### 2. Help Documentation
+- **Created** `Knob360.schelp` help file in `supercollider/extensions/Knob360/HelpSource/`
+- **Format:** Matches SuperCollider's SCDoc conventions
+- **Content:** Complete documentation with examples, methods, and usage instructions
 
-## Next Steps (when you return)
-- If you want to continue, you can resume from this working state.
-- If you encounter further errors, provide the error message and I’ll help debug.
-- If you want to add features or polish the UI, just specify your requirements.
+#### 3. Integration into UHJ App
+- **Updated** `UHJ_Ambisonic_System_v14_htknobs.scd` to use Knob360
+- **Replaced** headtracker knobs (rotate, tilt, tumble) with Knob360 instances
+- **Maintained** all existing functionality while improving user experience
+
+#### 4. Code Cleanup
+- **Removed** redundant files:
+  - `UHJ_Ambisonic_System_v14_simple.scd` (replaced by htknobs version)
+  - Various temporary/experimental files (MyRotaryView.sc, MyKnobRotary.sc, etc.)
+  - Unused extensions (Custom360Knob, QSliderCustom)
+- **Fixed** YAML parsing errors by removing problematic `wslib` quark
+
+### Technical Challenges Solved
+
+#### 1. SuperCollider Syntax Issues
+- **Problem:** Multiple syntax errors in class file development
+- **Solution:** Proper variable declarations, method syntax, and SuperCollider conventions
+
+#### 2. Value-Angle Mapping
+- **Problem:** Complex mapping between knob position and values
+- **Solution:** Implemented consistent mapping with 0.5 at north position
+
+#### 3. Mouse Interaction
+- **Problem:** Mouse behavior not matching visual position
+- **Solution:** Synchronized angle-to-value and value-to-angle conversions
+
+#### 4. Visual Appearance
+- **Problem:** Gap at bottom of knob, incorrect pointer style
+- **Solution:** Custom drawing with full circle and rounded pointer ends
+
+#### 5. Compilation Errors
+- **Problem:** YAML config parsing errors and missing quarks
+- **Solution:** Removed problematic `wslib` quark causing conflicts
+
+### File Structure Created
+
+```
+supercollider/
+├── extensions/
+│   └── Knob360/
+│       ├── classes/
+│       │   └── Knob360.sc
+│       └── HelpSource/
+│           └── Knob360.schelp
+└── app/
+    └── UHJ_Ambisonic_System_v14_htknobs.scd
+```
+
+### Key Code Features
+
+#### Knob360 Class
+- Subclasses `UserView` for custom drawing
+- Implements `mouseDownAction`, `mouseMoveAction`, `mouseUpAction`
+- Custom `drawFunc` for visual appearance
+- Proper setter methods (`value_`, `valueAction_`)
+- 360-degree angle mapping with no gaps
+
+#### Integration Code
+```supercollider
+~rotateKnob = Knob360(mainView, Rect(654, 60, 60, 60), 0.5, 0.0, 1.0)
+    .action_({ |knob|
+        var deg = knob.value.linlin(0, 1, -180, 180).round.asInteger;
+        ~rotateValue.string = (deg.asString ++ "°");
+        if(~synth.notNil) { ~synth.set(\rotation, deg.degrad); }
+    });
+```
+
+### User Experience Improvements
+
+1. **Smooth Rotation:** Full 360° movement without visual gaps
+2. **Intuitive Control:** Pointer starts at 12 o'clock with value 0.5
+3. **Consistent Behavior:** All three headtracker knobs use same class
+4. **Visual Polish:** Rounded pointer ends matching original design
+5. **Proper Documentation:** Complete help system integration
+
+### Final State
+- ✅ SuperCollider compiles without errors
+- ✅ Knob360 class works correctly with full 360° rotation
+- ✅ Help system functions properly
+- ✅ UHJ v14 app integrated and working
+- ✅ Clean codebase with no redundant files
+- ✅ All headtracker controls using improved Knob360 class
+
+### Lessons Learned
+1. SuperCollider class development requires strict syntax adherence
+2. Value-angle mapping needs careful synchronization
+3. Custom GUI elements benefit from proper documentation
+4. Code cleanup is essential for maintainability
+5. Quark conflicts can cause unexpected compilation issues
+
+### Next Steps (Optional)
+- Further visual refinements if needed
+- Additional knob customization options
+- Integration into other parts of the UHJ system
+- Packaging for distribution
 
 ---
-
-You can safely take a break. When you return, just let me know how you’d like to proceed!
+*Session completed successfully with fully functional 360-degree rotary knob implementation.*

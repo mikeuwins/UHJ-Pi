@@ -1,0 +1,135 @@
+TITLE:: Knob360
+summary:: 360-degree rotary knob UserView for SuperCollider GUIs
+categories:: GUI>Controls
+related:: Classes/QKnob, Classes/UserView, Classes/Knob
+
+DESCRIPTION::
+A Knob360 is a custom UserView-based rotary knob for SuperCollider GUIs that allows full 360° rotation with no gap. It is designed to visually and functionally match the standard QKnob, but with continuous rotation and customizable color styling. The pointer starts at the top (12 o'clock) for value 0.5, and the value mapping is smooth and intuitive.
+
+
+CLASSMETHODS::
+
+METHOD:: new
+Create a new Knob360 instance.
+
+ARGUMENT:: parent
+The parent view (usually a Window or CompositeView) to contain the knob.
+
+ARGUMENT:: bounds
+A Rect specifying the position and size of the knob.
+
+ARGUMENT:: value
+Initial value (default 0.0, range 0.0 to 1.0).
+
+ARGUMENT:: minval
+Minimum value (default 0.0).
+
+ARGUMENT:: maxval
+Maximum value (default 1.0).
+
+ARGUMENT:: action
+A function to be called when the value changes. The function receives the view and the new value as arguments.
+
+returns:: A reference to the newly created Knob360.
+
+
+INSTANCEMETHODS::
+
+METHOD:: colors
+Sets the color array for the knob. The array should be in the form: [background, unused, border, pointer]
+
+ARGUMENT:: c
+An Array of Color objects.
+
+returns:: The knob instance.
+
+METHOD:: maxval
+Sets the maximum value for the knob.
+
+ARGUMENT:: m
+The maximum value (default 1.0).
+
+returns:: The knob instance.
+
+METHOD:: value
+Sets the knob value (0.0 to 1.0).
+
+ARGUMENT:: v
+The new value for the knob.
+
+returns:: The knob instance.
+
+METHOD:: action
+Sets the action function to be called when the value changes.
+
+ARGUMENT:: a
+A function that receives the view and new value as arguments.
+
+returns:: The knob instance.
+
+METHOD:: minval
+Sets the minimum value for the knob.
+
+ARGUMENT:: m
+The minimum value (default 0.0).
+
+returns:: The knob instance.
+
+METHOD:: valueAction
+Sets the knob value and triggers the action function.
+
+ARGUMENT:: v
+The new value for the knob.
+
+returns:: The knob instance.
+
+METHOD:: doMouse
+Internal method that handles mouse interaction and value updates.
+
+ARGUMENT:: x
+Mouse x coordinate.
+
+ARGUMENT:: y
+Mouse y coordinate.
+
+ARGUMENT:: dx
+Delta x (calculated internally).
+
+ARGUMENT:: dy
+Delta y (calculated internally).
+
+ARGUMENT:: angle
+Calculated angle (internal use).
+
+returns:: None.
+
+METHOD:: color
+Sets the color array for the knob. The array should be in the form: [background, unused, border, pointer]
+
+ARGUMENT:: c
+An Array of Color objects.
+
+returns:: The knob instance.
+
+
+EXAMPLES::
+
+code::
+(
+w = Window("Knob360 Example", Rect(100, 100, 220, 220)).front;
+k = Knob360(w, Rect(10, 10, 200, 200), 0.5, 0.0, 1.0, { |view, val| ("Value: " ++ val).postln; })
+    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan]);
+)
+::
+
+code::
+// Use in a CompositeView with custom action
+(
+var win, mainView, knob;
+win = Window("Knob360 Demo", Rect(200, 200, 300, 300)).front;
+mainView = CompositeView(win, Rect(0, 0, 300, 300));
+knob = Knob360(mainView, Rect(50, 50, 200, 200), 0.5, 0.0, 1.0, { |view, val|
+    ("Knob value: " ++ val).postln;
+});
+)
+:: 

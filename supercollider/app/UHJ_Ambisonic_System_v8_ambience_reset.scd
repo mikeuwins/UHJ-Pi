@@ -1175,7 +1175,7 @@ win.front;
                                 \dispersion, ambParams[4].linlin(0,1,0.1,2),
                                 \modWidth, ambParams[5],
                                 \modRate, ambParams[6],
-                                \size, "Kleiner Raum" // Small Room
+                                \size, germanName
                             ]
                         );
                     }
@@ -1573,4 +1573,77 @@ UserView(mainView, Rect(571, 70, 4, 300))
         });
     });
 
+// --- HID Device Connection and Headtracker Integration (MainApp2 style) ---
+
+// Continuously try to connect to the headtracker device
+Tdef(\tryOpenHID, {
+    var keepLooking = true;
+    while({ keepLooking }) {
+        if(~myhid.notNil) {
+            if(~myhid.isOpen) { keepLooking = false; }
+        };
+        if(keepLooking) {
+            HID.findAvailable;
+            if(HID.findBy(0,0).size > 0) {
+                ~myhid = HID.open(0, 0);
+                if(~myhid.notNil) {
+                    ~myhid.closeAction = {
+                        "device closed".postln;
+                        Tdef(\tryOpenHID).reset.play;
+                    };
+                    keepLooking = false;
+                }{
+                    3.0.wait;
+                };
+            }{
+                3.0.wait;
+            }
+        }
+    }
+}).play;
+
+// Enable HID debugging for verbose output
+HID.debug = true;
+
+// --- HIDdef.usage handlers for headtracking ---
+HIDdef.usage(\hidRotation, { |val|
+    if(~rotateKnob.notNil and: { ~rotateKnob.enabled and: { ~rotateKnob.wasRemoved.not } }) {val).postln;
+    { ~rotateKnob.valueAction_(val.linlin(0, 1, 0, 1)); }.defer;
+}, \Z);
+
+HIDdef.usage(\hidTilt, { |val|
+    ("Tilt HID value: " ++ val).postln;
+    { ~tiltKnob.valueAction_(val.linlin(0, 1, 0, 1)); }.defer;
+    if(~tiltKnob.notNil and: { ~tiltKnob.enabled and: { ~tiltKnob.wasRemoved.not } }) {
+
+HIDdef.usage(\hidTumble, { |val|
+    ("Tumble HID value: " ++ val).postln;
+    { ~tumbleKnob.valueAction_(val.linlin(0, 1, 0, 1)); }.defer;
+}, \X);
+
+    if(~tumbleKnob.notNil and: { ~tumbleKnob.enabled and: { ~tumbleKnob.wasRemoved.not } }) {
+/* HIDdef.usage(\hidReset, { |val|
+    ("Reset HID value: " ++ val).postln;
+    if(val > 0.5) {
+        {
+            ~rotateKnob.valueAction_(0.5);
+            ~tiltKnob.valueAction_(0.5);
+            ~tumbleKnob.valueAction_(0.5);
+            if(synth.notNil) {
+                synth.set(\rotation, 0);
+                synth.set(\tilt, 0);
+                synth.set(\tumble, 0);
+            }
+        }.defer;
+    }
+}, 19); */
+
+// --- End HID integration ---(\tilt, 0);
+                synth.set(\tumble, 0);
+            }
+        }.defer;
+    }
+}, 19); */
+
+// --- End HID integration ---
 // --- END OF FILE ---

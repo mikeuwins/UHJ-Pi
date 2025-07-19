@@ -1,3 +1,9 @@
+// ============================================================================
+// UHJ AMBISONIC SYSTEM v14 - HEADTRACKER KNOBS WITH 360-DEGREE BEHAVIOR
+// ============================================================================
+
+// Using standard Knob class with custom 360-degree action handling
+
 var win, mainView,
     decoderChanged,
     isUpdating, lastInputCmd, linkFaders, lastInL, lastInR, minIn, maxIn, lastFaderGroup,
@@ -10,6 +16,8 @@ var win, mainView,
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
 // --- Headtracker overlays ---
 ~knobOverlay = nil; ~htBtnOverlay = nil;
+// --- AmbiVerbSC preset system variables ---
+~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
 // --- Initial values for input section ---
 isUpdating = false;
@@ -55,6 +63,11 @@ formatDbValue = { |dbValue|
 
 // --- Window setup with platform-specific positioning ---
 win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480)).background_(Color.black);
+// Ensure server and interpreter quit when window is closed
+win.onClose_({
+    if(s.serverRunning) { s.quit; };
+    0.exit;
+});
 
 // Position at visible top-left corner
 if(Platform.name == \osx, {
@@ -349,7 +362,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 ~rotateKnob.enabled_(false);
                 ~tiltKnob.enabled_(false);
                 ~tumbleKnob.enabled_(false);
-                ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -364,7 +377,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
             ~rotateKnob.enabled_(false);
             ~tiltKnob.enabled_(false);
             ~tumbleKnob.enabled_(false);
-            ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+            ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
@@ -475,8 +488,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                        var out, src, trans, encode, ambient, eqed;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                        var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
                         // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -501,7 +514,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             lowRT: lowRT,
                             highRT: highRT,
                             dispersion: dispersion,
-                            size: "Metallener Saal", // Room name is fixed at synth creation
+                            size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
                             modWidth: modWidth,
                             modRate: modRate,
                             coupRate: 0.5,
@@ -516,7 +529,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
-                        // Output handling - special case for 5.1 (add sub channel)
+                        if(outputs == 4, {
+                            // --- QUAD PANNER LOGIC (Balance2) ---
+                            // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
+                            frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
+                            rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
+                            quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
+                            quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
+                            out = [
+                                quadOutFront[0], // LF
+                                quadOutRear[0],  // LR
+                                quadOutRear[1],  // RR
+                                quadOutFront[1]  // RF
+                            ];
+                        });
                         if(outputs == 6, {
                             var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
                             Out.ar(0, out);
@@ -529,36 +555,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Start the synth
-                    s.unmute;
-                    // Set ambience parameters from GUI if available
-                    var ambMix = (~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil })
-                        .if({ ~ambienceSliders[0].value }, { 0.0 });
-                    var ambPreDly = (~ambienceSliders.notNil and: { ~ambienceSliders[1].notNil })
-                        .if({ ~ambienceSliders[1].value }, { 0.2 });
-                    var ambLoRT = (~ambienceSliders.notNil and: { ~ambienceSliders[2].notNil })
-                        .if({ ~ambienceSliders[2].value }, { 0.2 });
-                    var ambHiRT = (~ambienceSliders.notNil and: { ~ambienceSliders[3].notNil })
-                        .if({ ~ambienceSliders[3].value }, { 0.2 });
-                    var ambDisp = (~ambienceSliders.notNil and: { ~ambienceSliders[4].notNil })
-                        .if({ ~ambienceSliders[4].value }, { 0.0 });
-                    var ambMWid = (~ambienceSliders.notNil and: { ~ambienceSliders[5].notNil })
-                        .if({ ~ambienceSliders[5].value }, { 0.0 });
-                    var ambMRate = (~ambienceSliders.notNil and: { ~ambienceSliders[6].notNil })
-                        .if({ ~ambienceSliders[6].value }, { 0.0 });
-                    var ambRoom = (roomMap.notNil and: { roomMenu.notNil })
-                        .if({ roomMap[roomNames[roomMenu.value]] }, { "Metallener Saal" }); // Metal Hall
-                    synth = Synth(\kernelEncodeDecode, [
-                        \buffer, sndbuf,
-                        \amp, voltmp,
-                        \ambience, ambMix.linlin(0, 1, 0, 0.2),
-                        \preDelay, ambPreDly.linlin(0,1,0,0.5),
-                        \lowRT, ambLoRT.linlin(0,1,0.1,2),
-                        \highRT, ambHiRT.linlin(0,1,0.2,4),
-                        \dispersion, ambDisp.linlin(0,1,0.1,2),
-                        \modWidth, ambMWid,
-                        \modRate, ambMRate,
-                        \size, ambRoom
-                    ]);
+                    ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
 
                     // Create level meter after synth is started
                     {
@@ -616,8 +613,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                            var out, src, trans, encode, ambient, eqed;
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
                             // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -642,7 +639,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 lowRT: lowRT,
                                 highRT: highRT,
                                 dispersion: dispersion,
-                                size: "Metallener Saal", // Room name is fixed at synth creation
+                                size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
                                 modWidth: modWidth,
                                 modRate: modRate,
                                 coupRate: 0.5,
@@ -657,7 +654,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
-                            // Output handling - special case for 5.1 (add sub channel)
+                            if(outputs == 4, {
+                                // --- QUAD PANNER LOGIC (Balance2) ---
+                                // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
+                                frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
+                                rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
+                                quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
+                                quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
+                                out = [
+                                    quadOutFront[0], // LF
+                                    quadOutRear[0],  // LR
+                                    quadOutRear[1],  // RR
+                                    quadOutFront[1]  // RF
+                                ];
+                            });
                             if(outputs == 6, {
                                 var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
                                 Out.ar(0, out);
@@ -670,36 +680,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Start the synth
-                        s.unmute;
-                        // Set ambience parameters from GUI if available
-                        var ambMix = (~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil })
-                            .if({ ~ambienceSliders[0].value }, { 0.0 });
-                        var ambPreDly = (~ambienceSliders.notNil and: { ~ambienceSliders[1].notNil })
-                            .if({ ~ambienceSliders[1].value }, { 0.2 });
-                        var ambLoRT = (~ambienceSliders.notNil and: { ~ambienceSliders[2].notNil })
-                            .if({ ~ambienceSliders[2].value }, { 0.2 });
-                        var ambHiRT = (~ambienceSliders.notNil and: { ~ambienceSliders[3].notNil })
-                            .if({ ~ambienceSliders[3].value }, { 0.2 });
-                        var ambDisp = (~ambienceSliders.notNil and: { ~ambienceSliders[4].notNil })
-                            .if({ ~ambienceSliders[4].value }, { 0.0 });
-                        var ambMWid = (~ambienceSliders.notNil and: { ~ambienceSliders[5].notNil })
-                            .if({ ~ambienceSliders[5].value }, { 0.0 });
-                        var ambMRate = (~ambienceSliders.notNil and: { ~ambienceSliders[6].notNil })
-                            .if({ ~ambienceSliders[6].value }, { 0.0 });
-                        var ambRoom = (roomMap.notNil and: { roomMenu.notNil })
-                            .if({ roomMap[roomNames[roomMenu.value]] }, { "Metallener Saal" }); // Metal Hall
-                        synth = Synth(\kernelEncodeDecode, [
-                            \buffer, sndbuf,
-                            \amp, voltmp,
-                            \ambience, ambMix.linlin(0, 1, 0, 0.2),
-                            \preDelay, ambPreDly.linlin(0,1,0,0.5),
-                            \lowRT, ambLoRT.linlin(0,1,0.1,2),
-                            \highRT, ambHiRT.linlin(0,1,0.2,4),
-                            \dispersion, ambDisp.linlin(0,1,0.1,2),
-                            \modWidth, ambMWid,
-                            \modRate, ambMRate,
-                            \size, ambRoom
-                        ]);
+                        ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
 
                         // Create level meter after synth is started
                         {
@@ -841,50 +822,62 @@ dbValue = cliToDbMaster.(lastInL);
     ~initAudioEngine.value();
 }.defer(0.5);
 
-// --- HEADTRACKER AND PANNER CONTROLS (from GUIPrototype) ---
-~rotateKnob = Knob(mainView, Rect(654, 60, 60, 60))
-    .valueAction_(0.5)
-    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
-    .centered_(true)
-    .enabled_(false)
-    .action_({ |knob|
-        var angle = knob.value.linlin(0, 1, -pi, pi);
-        ~rotateValue.string = angle.round.asString;
-        if(synth.notNil) { synth.set(\rotation, angle); }
-    });
+// --- HEADTRACKER AND PANNER CONTROLS (with Standard Knobs) ---
+        // Create value display labels first
+        ~rotateValue = StaticText(mainView, Rect(719, 80, 55, 20)).font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+        ~tiltValue = StaticText(mainView, Rect(719, 162, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+        ~tumbleValue = StaticText(mainView, Rect(719, 244, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+        
+        // Knob360 with 360-degree behavior in action function
+        ~rotateKnob = Knob360(mainView, Rect(654, 60, 60, 60), 0.5, 0.0, 1.0)
+            .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+            .enabled_(false)
+            .action_({ |knob, val|
+                // 360-degree behavior: map 0-1 to -180 to +180 degrees
+                var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                ~rotateValue.string = (deg.asString ++ "°");
+                if(~synth.notNil) { ~synth.set(\rotation, deg.degrad); }
+            });
 
-~tiltKnob = Knob(mainView, Rect(654, 142, 60, 60))
-    .valueAction_(0.5)
-    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
-    .centered_(true)
-    .enabled_(false)
-    .action_({ |knob|
-        var angle = knob.value.linlin(0, 1, -pi, pi);
-        ~tiltValue.string = angle.round.asString;
-        if(synth.notNil) { synth.set(\tilt, angle); }
-    });
+        ~tiltKnob = Knob360(mainView, Rect(654, 142, 60, 60), 0.5, 0.0, 1.0)
+            .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+            .enabled_(false)
+            .action_({ |knob, val|
+                // 360-degree behavior: map 0-1 to -180 to +180 degrees
+                var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                ~tiltValue.string = (deg.asString ++ "°");
+                if(~synth.notNil) { ~synth.set(\tilt, deg.degrad); }
+            });
 
-~tumbleKnob = Knob(mainView, Rect(654, 224, 60, 60))
-    .valueAction_(0.5)
-    .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
-    .centered_(true)
-    .enabled_(false)
-    .action_({ |knob|
-        var angle = knob.value.linlin(0, 1, -pi, pi);
-        ~tumbleValue.string = angle.round.asString;
-        if(synth.notNil) { synth.set(\tumble, angle); }
-    });
+        ~tumbleKnob = Knob360(mainView, Rect(654, 224, 60, 60), 0.5, 0.0, 1.0)
+            .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+            .enabled_(false)
+            .action_({ |knob, val|
+                // 360-degree behavior: map 0-1 to -180 to +180 degrees
+                var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                ~tumbleValue.string = (deg.asString ++ "°");
+                if(~synth.notNil) { ~synth.set(\tumble, deg.degrad); }
+            });
 
-~rotateValue = StaticText(mainView, Rect(719, 80, 55, 20)).font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
-~tiltValue = StaticText(mainView, Rect(719, 162, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
-~tumbleValue = StaticText(mainView, Rect(719, 244, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
+// Value display labels already created above
 
 ~xyPanner = Slider2D(mainView, Rect(629, 334, 110, 110))
     .x_(0.5).y_(0.5)
     .knobColor_(Color.cyan)
     .background_(Color.black)
     .canFocus_(false)
-    .action_({ |sl| ~xyPannerPos = Point(sl.x, sl.y); });
+    .action_({ |sl|
+        // Equal-power law for left/right (x axis)
+        var angleLR = sl.x.linlin(0, 1, 0, pi/2); // 0..1 → 0..π/2
+        var quadLR = sin(angleLR) - cos(angleLR);  // -1..1 with equal power
+        // Equal-power law for front/rear (y axis)
+        var angleFR = sl.y.linlin(0, 1, 0, pi/2); // 0..1 → 0..π/2
+        var quadFR = sin(angleFR) - cos(angleFR);  // -1..1 with equal power
+        ~xyPannerPos = Point(sl.x, sl.y);
+        if(~synth.notNil) {
+            ~synth.set(\quadLR, quadLR, \quadFR, quadFR);
+        }
+    });
 ~xyPannerPos = Point(~xyPanner.x, ~xyPanner.y);
 
 // --- Additional GUI Layout ---
@@ -919,7 +912,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
                 ~rotateKnob.enabled_(false);
                 ~tiltKnob.enabled_(false);
                 ~tumbleKnob.enabled_(false);
-                ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -1099,9 +1092,9 @@ win.front;
                         if(~eqValues.notNil and: { ~eqValues[i].notNil }) {
                             ~eqValues[i].string = db.round(0.1).asString ++ "dB";
                         };
-                        if(synth.notNil) {
+                        if(~synth.notNil) {
                             var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                            synth.set(eqParams[i], db);
+                            ~synth.set(eqParams[i], db);
                         }
                     });
                 slider.toolTip = "EQ BAND " ++ (i+1).asString;
@@ -1136,9 +1129,9 @@ win.front;
                     ~eqSliders.do({ |slider, i|
                         slider.value_(0.5);
                         ~eqValues[i].string_("0.0dB");
-                        if(synth.notNil) {
+                        if(~synth.notNil) {
                             var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                            synth.set(eqParams[i], 0);
+                            ~synth.set(eqParams[i], 0);
                         }
                     });
                 });
@@ -1152,11 +1145,11 @@ win.front;
                 });
             ~eqOverlay.front;
             // --- On open, set synth EQ params to current slider values ---
-            if(synth.notNil) {
+            if(~synth.notNil) {
                 var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
                 ~eqSliders.do({ |slider, i|
                     var db = slider.value.linlin(0, 1, -12, 12);
-                    synth.set(eqParams[i], db);
+                    ~synth.set(eqParams[i], db);
                 });
             }
         } {
@@ -1164,11 +1157,210 @@ win.front;
             ~eqSliders = nil; ~eqValues = nil; ~eqPresetMenu = nil;
         }
     });
+// --- AmbiVerbSC Preset Loading Function ---
+~loadAmbiVerbSCPresets = {
+    var presetDir, presetFiles, presetData, presetNames, presetDict;
+    var extractParamValue, parsePresetFile, possiblePaths;
+
+    // Try to find AmbiVerbSC preset files using multiple possible locations
+    possiblePaths = [
+        Quarks.folder ++ "/AmbiVerbSC/Data/Presets/",
+        Quarks.folder ++ "/AmbiVerbSC/presets/",
+        Quarks.folder ++ "/AmbiVerbSC/Data/",
+        Platform.userExtensionDir ++ "/AmbiVerbSC/Data/Presets/",
+        Platform.userExtensionDir ++ "/AmbiVerbSC/presets/",
+        Platform.userExtensionDir ++ "/AmbiVerbSC/Data/",
+        Platform.systemExtensionDir ++ "/AmbiVerbSC/Data/Presets/",
+        Platform.systemExtensionDir ++ "/AmbiVerbSC/presets/",
+        Platform.systemExtensionDir ++ "/AmbiVerbSC/Data/"
+    ];
+
+    presetDir = nil;
+    presetFiles = [
+        "default.txt",
+        "high verb.txt",
+        "huge hall.txt",
+        "large hall.txt",
+        "low verb.txt",
+        "mod echo.txt",
+        "spatial delay.txt",
+        "time modulation .txt"
+    ];
+
+    // Function to extract parameter value from preset array
+    extractParamValue = { |array, paramName|
+        var index = array.indexOf(paramName);
+        if(index.notNil and: { index + 1 < array.size }) {
+            array[index + 1];
+        } {
+            nil;
+        };
+    };
+
+    // Function to parse a single preset file using AmbiVerbSC's method
+    parsePresetFile = { |filePath|
+        var presetData, params;
+
+        try {
+            // Use AmbiVerbSC's own method to read preset files
+            presetData = Object.readArchive(filePath);
+
+            if(presetData.notNil) {
+                // Extract the key parameters we need
+                params = Dictionary.newFrom([
+                    \roomName, presetData[\size] ? "Brahmssaal",
+                    \mix, presetData[\mix] ? 0,
+                    \preDelay, presetData[\preDelay] ? 0,
+                    \lowRT, presetData[\lowRT] ? 0.01,
+                    \highRT, presetData[\highRT] ? 0.01,
+                    \dispersion, presetData[\dispersion] ? 1,
+                    \modWidth, presetData[\modWidth] ? 0,
+                    \modRate, presetData[\modRate] ? 0.01,
+                    \coupRate, presetData[\coupRate] ? 0.001,
+                    \coupAmt, presetData[\coupAmt] ? 0,
+                    \phaseRotRate, presetData[\phaseRotRate] ? 0.001,
+                    \phaseRotAmt, presetData[\phaseRotAmt] ? 0,
+                    \phaseRotMix, presetData[\phaseRotMix] ? 1,
+                    \crossoverFreq, presetData[\crossoverFreq] ? 1216.46,
+                    \spread, presetData[\spread] ? 1,
+                    \orient, presetData[\orient] ? 'flu'
+                ]);
+            } {
+                params = Dictionary.new;
+            };
+        } { |error|
+            ("Error loading preset file: " ++ filePath ++ " - " ++ error).postln;
+            params = Dictionary.new;
+        };
+
+        params;
+    };
+
+    // Find the first valid path
+    possiblePaths.do({ |path|
+        if(presetDir.isNil and: { File.exists(path) }) {
+            presetDir = path;
+            ("Found AmbiVerbSC presets at: " ++ path).postln;
+        };
+    });
+
+    if(presetDir.isNil) {
+        ("AmbiVerbSC preset files not found in standard locations").postln;
+        ("Using built-in room presets instead").postln;
+
+        // Fallback to built-in room presets
+        presetNames = List.new;
+        presetDict = Dictionary.new;
+
+        // Create simple presets using known AmbiVerbSC room names
+        [
+            ["default", "Brahmssaal", [0, 0, 0.01, 0.01, 1, 0, 0.01]],
+            ["high verb", "Magna Auditorium", [0.63, 0, 0.01, 2.5, 0.76, 0.19, 0.037]],
+            ["huge hall", "Goldener Saal", [0.8, 0.1, 0.5, 3.0, 0.5, 0.1, 0.02]],
+            ["large hall", "Steinerner Saal", [0.6, 0.05, 0.3, 2.0, 0.8, 0.05, 0.01]],
+            ["low verb", "Holzerner Saal", [0.3, 0, 0.1, 1.0, 0.9, 0.02, 0.005]]
+        ].do({ |presetInfo|
+            var name = presetInfo[0];
+            var room = presetInfo[1];
+            var params = presetInfo[2];
+
+            presetNames.add(name);
+            presetDict[name] = Dictionary.newFrom([
+                \roomName, room,
+                \mix, params[0],
+                \preDelay, params[1],
+                \lowRT, params[2],
+                \highRT, params[3],
+                \dispersion, params[4],
+                \modWidth, params[5],
+                \modRate, params[6]
+            ]);
+            ("Created built-in preset: " ++ name ++ " (Room: " ++ room ++ ")").postln;
+        });
+
+        [presetNames, presetDict];
+    } {
+        presetNames = List.new;
+        presetDict = Dictionary.new;
+
+        presetFiles.do({ |fileName|
+            var filePath = presetDir ++ fileName;
+            var presetName = fileName.replace(".txt", "");
+            var presetData = parsePresetFile.(filePath);
+
+            if(presetData.notEmpty) {
+                presetNames.add(presetName);
+                presetDict[presetName] = presetData;
+                ("Loaded preset: " ++ presetName ++ " (Room: " ++ presetData[\roomName] ++ ")").postln;
+            };
+        });
+
+        [presetNames, presetDict];
+    };
+};
+
+// --- AmbiVerbSC Preset Recall Function ---
+~recallAmbiVerbSCPreset = { |presetName|
+    var presetData, roomName;
+
+    if(~ambiencePresetDict.notNil and: { ~ambiencePresetDict[presetName].notNil }) {
+        presetData = ~ambiencePresetDict[presetName];
+        roomName = presetData[\roomName];
+
+        // Ensure roomName is not nil
+        if(roomName.isNil) {
+            ("Warning: No room name found in preset " ++ presetName ++ ", using Brahmssaal").postln;
+            roomName = "Brahmssaal";
+        };
+
+        // Update sliders with preset values
+        if(~ambienceSliders.notNil) {
+            // Map preset values to slider ranges
+            ~ambienceSliders[0].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Mix
+            ~ambienceSliders[1].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // PreDelay
+            ~ambienceSliders[2].value_(presetData[\lowRT].linlin(0.01, 2, 0, 1)); // LowRT
+            ~ambienceSliders[3].value_(presetData[\highRT].linlin(0.01, 4, 0, 1)); // HighRT
+            ~ambienceSliders[4].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Dispersion
+            ~ambienceSliders[5].value_(presetData[\modWidth].linlin(0, 1, 0, 1)); // ModWidth
+            ~ambienceSliders[6].value_(presetData[\modRate].linlin(0, 1, 0, 1)); // ModRate
+
+            // Trigger slider actions to update synth
+            ~ambienceSliders.do({ |slider, i|
+                if(slider.action.notNil) {
+                    slider.action.value(slider);
+                };
+            });
+        };
+
+        // Update synth with new room and parameters
+        if(~synth.notNil) {
+            ~synth.free;
+            ~synth = Synth(
+                \kernelEncodeDecode,
+                [
+                    \buffer, sndbuf,
+                    \amp, voltmp,
+                    \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
+                    \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
+                    \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
+                    \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
+                    \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
+                    \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
+                    \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
+                    \size, roomName.asSymbol
+                ]
+            );
+        };
+
+        ("Applied preset: " ++ presetName ++ " (Room: " ++ roomName ++ ")").postln;
+    };
+};
+
 ~ambienceBtn = Button(mainView, Rect(287, 410, 100, 35))
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 12))
     .action_({ |btn|
-        var roomNames, roomMap, roomMenu, params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
+        var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
@@ -1196,57 +1388,24 @@ win.front;
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 12).boldVariant)
                 .background_(Color.clear);
-            // Room selector (dropdown) with English names mapped to German
-            roomNames = [
-                "Small Room", "Medium Room", "Large Hall", "Cathedral", "Metal Hall", "Plate", "Chamber", "Bright", "Dark"
-            ];
-            roomMap = IdentityDictionary.newFrom([
-                "Small Room", "Kleiner Raum",
-                "Medium Room", "Mittlerer Raum",
-                "Large Hall", "Großer Saal",
-                "Cathedral", "Kathedrale",
-                "Metal Hall", "Metallener Saal",
-                "Plate", "Platte",
-                "Chamber", "Kammer",
-                "Bright", "Heller Raum",
-                "Dark", "Dunkler Raum"
-            ]);
-            roomMenu = PopUpMenu(~ambienceOverlay, Rect(140, 7, 170, 20))
-                .items_(roomNames)
+
+            // Load AmbiVerbSC presets if not already loaded
+            if(~ambiencePresetNames.isNil) {
+                var presetData = ~loadAmbiVerbSCPresets.value();
+                ~ambiencePresetNames = presetData[0];
+                ~ambiencePresetDict = presetData[1];
+            };
+
+            // Preset selector (dropdown)
+            ~ambiencePresetMenu = PopUpMenu(~ambienceOverlay, Rect(140, 7, 170, 20))
+                .items_(["Default", "High Verb", "Huge Hall", "Large Hall", "Low Verb", "Mod Echo", "Spatial Delay", "Time Modulation"])
                 .font_(Font("Helvetica", 11))
                 .background_(Color.black)
                 .stringColor_(Color.cyan)
-                .value_(0)
+                .value_(0) // Default to first preset
                 .action_({ |menu|
-                    if(synth.notNil) {
-                        var germanName = roomMap[roomNames[menu.value]];
-                        // --- Free and recreate synth with new room (size) argument, preserving ambience params ---
-                        var ambParams = [
-                            ~ambienceSliders[0].value, // Mix
-                            ~ambienceSliders[1].value, // PreDly
-                            ~ambienceSliders[2].value, // LoRT
-                            ~ambienceSliders[3].value, // HiRT
-                            ~ambienceSliders[4].value, // Disp
-                            ~ambienceSliders[5].value, // MWid
-                            ~ambienceSliders[6].value  // MRate
-                        ];
-                        synth.free;
-                        synth = Synth(
-                            \kernelEncodeDecode,
-                            [
-                                \buffer, sndbuf,
-                                \amp, voltmp,
-                                \ambience, ambParams[0].linlin(0, 1, 0, 0.2),
-                                \preDelay, ambParams[1].linlin(0,1,0,0.5),
-                                \lowRT, ambParams[2].linlin(0,1,0.1,2),
-                                \highRT, ambParams[3].linlin(0,1,0.2,4),
-                                \dispersion, ambParams[4].linlin(0,1,0.1,2),
-                                \modWidth, ambParams[5],
-                                \modRate, ambParams[6],
-                                \size, germanName
-                            ]
-                        );
-                    }
+                    var selectedPreset = ~ambiencePresetNames[menu.value];
+                    ~recallAmbiVerbSCPreset.value(selectedPreset);
                 });
             // Parameter labels and default values
             sliderLabels = ["Reverb", "PreDly", "LoRT", "HiRT", "Disp", "MWid", "MRate"];
@@ -1279,10 +1438,10 @@ win.front;
                     .action_({ |sl|
                         var val = (sl.value * 100).round(0.1);
                         ~ambienceValues[i].string = val.asString ++ "%";
-                        if(synth.notNil) {
+                        if(~synth.notNil) {
                             switch(i,
                                 0, {
-                                    synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                                     // --- Sync ON/OFF button with Mix slider ---
                                     if(sl.value > 0) {
                                         ~ambienceOnOffBtn.value_(1);
@@ -1291,12 +1450,12 @@ win.front;
                                         ~ambienceOnOffBtn.value_(0);
                                     }
                                 },
-                                1, { synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
-                                2, { synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
-                                3, { synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
-                                4, { synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
-                                5, { synth.set(\modWidth, sl.value); },
-                                6, { synth.set(\modRate, sl.value); }
+                                1, { ~synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
+                                2, { ~synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
+                                3, { ~synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
+                                4, { ~synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
+                                5, { ~synth.set(\modWidth, sl.value); },
+                                6, { ~synth.set(\modRate, sl.value); }
                             );
                         }
                     });
@@ -1315,8 +1474,8 @@ win.front;
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
-                if(synth.notNil) {
-                    synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                if(~synth.notNil) {
+                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 }
             });
             // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
@@ -1331,10 +1490,29 @@ win.front;
                     ~ambienceOverlay = nil;
                     ~ambienceBtn.value_(0);
                 });
+            // Place RESET button before CLOSE button in the Ambience overlay:
+            Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([ ["RESET", Color.cyan, Color.black] ])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    // Reset to default preset
+                    if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
+                        ~ambiencePresetMenu.value_(0); // Select first preset
+                        ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
+                    }
+                });
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([ ["CLOSE", Color.cyan, Color.black] ])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~ambienceOverlay.remove;
+                    ~ambienceOverlay = nil;
+                    ~ambienceBtn.value_(0);
+                });
             ~ambienceOverlay.front;
-            // Set synth size param to initial room
-            if(synth.notNil) {
-                synth.set(\size, roomMap[roomNames[roomMenu.value]]);
+            // Apply default preset on overlay open
+            if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
+                ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
             }
         } {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
@@ -1557,9 +1735,9 @@ StaticText(mainView, Rect(520, 10, 72, 28))
     .action_({ |sl|
         var db = sl.value.linlin(0, 1, -60, 0).round(1).asInteger;
         ~outputValue.string_(db.asString); // No decimal
-        if(synth.notNil) {
+        if(~synth.notNil) {
             var amp = 10.pow(db / 20);
-            synth.set(\amp, amp);
+            ~synth.set(\amp, amp);
         }
     });
 
@@ -1606,4 +1784,70 @@ UserView(mainView, Rect(571, 70, 4, 300))
         });
     });
 
-// --- END OF FILE ---
+// ... existing code ...
+// --- Headtracker HID Integration (added as per MainApp2 model, always active) ---
+(
+Tdef( 'tryOpenHID' , {
+   var keepLooking = true;
+   while ( { keepLooking } ){
+      if ( ~myhid.notNil ){
+         if ( ~myhid.isOpen ){
+            keepLooking = false;
+         }
+      };
+      if ( keepLooking ){
+         HID.findAvailable;
+         if ( HID.findBy(0,0).size > 0 ){
+            ~myhid = HID.open(0,0);
+            if ( ~myhid.notNil ){
+               ~myhid.closeAction = {
+                    "device closed".postln;
+                    Tdef( \tryOpenHID ).reset.play;
+               };
+               keepLooking = false;
+            }{
+               3.0.wait;
+            };
+         }{
+            3.0.wait;
+         }
+      }
+   }
+} );
+);
+Tdef( 'tryOpenHID' ).play;
+
+// HID.debug = true;
+
+// Map HID usages to GUI knobs (always active, no gating)
+HIDdef.usage( \hidRotation, { |val|
+    {
+        //("Headtracker raw rotation: " ++ val).postln;  // <-- Add this line
+        if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
+            ~rotateKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \Z );
+
+HIDdef.usage( \hidTilt, { |val|
+    {
+        if(~tiltKnob.notNil and: { ~tiltKnob.enabled }) {
+            ~tiltKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \Y );
+
+HIDdef.usage( \hidTumble, { |val|
+    {
+        if(~tumbleKnob.notNil and: { ~tumbleKnob.enabled }) {
+            ~tumbleKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \X );
+// ... existing 

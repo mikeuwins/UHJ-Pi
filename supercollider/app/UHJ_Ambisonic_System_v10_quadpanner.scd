@@ -55,6 +55,11 @@ formatDbValue = { |dbValue|
 
 // --- Window setup with platform-specific positioning ---
 win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480)).background_(Color.black);
+// Ensure server and interpreter quit when window is closed
+win.onClose_({
+    if(s.serverRunning) { s.quit; };
+    0.exit;
+});
 
 // Position at visible top-left corner
 if(Platform.name == \osx, {
@@ -349,7 +354,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 ~rotateKnob.enabled_(false);
                 ~tiltKnob.enabled_(false);
                 ~tumbleKnob.enabled_(false);
-                ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -364,7 +369,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
             ~rotateKnob.enabled_(false);
             ~tiltKnob.enabled_(false);
             ~tumbleKnob.enabled_(false);
-            ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+            ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
@@ -475,8 +480,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                        var out, src, trans, encode, ambient, eqed;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                        var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
                         // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -516,7 +521,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
-                        // Output handling - special case for 5.1 (add sub channel)
+                        if(outputs == 4, {
+                            // --- QUAD PANNER LOGIC (Balance2) ---
+                            // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
+                            frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
+                            rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
+                            quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
+                            quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
+                            out = [
+                                quadOutFront[0], // LF
+                                quadOutRear[0],  // LR
+                                quadOutRear[1],  // RR
+                                quadOutFront[1]  // RF
+                            ];
+                        });
                         if(outputs == 6, {
                             var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
                             Out.ar(0, out);
@@ -529,36 +547,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Start the synth
-                    s.unmute;
-                    // Set ambience parameters from GUI if available
-                    var ambMix = (~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil })
-                        .if({ ~ambienceSliders[0].value }, { 0.0 });
-                    var ambPreDly = (~ambienceSliders.notNil and: { ~ambienceSliders[1].notNil })
-                        .if({ ~ambienceSliders[1].value }, { 0.2 });
-                    var ambLoRT = (~ambienceSliders.notNil and: { ~ambienceSliders[2].notNil })
-                        .if({ ~ambienceSliders[2].value }, { 0.2 });
-                    var ambHiRT = (~ambienceSliders.notNil and: { ~ambienceSliders[3].notNil })
-                        .if({ ~ambienceSliders[3].value }, { 0.2 });
-                    var ambDisp = (~ambienceSliders.notNil and: { ~ambienceSliders[4].notNil })
-                        .if({ ~ambienceSliders[4].value }, { 0.0 });
-                    var ambMWid = (~ambienceSliders.notNil and: { ~ambienceSliders[5].notNil })
-                        .if({ ~ambienceSliders[5].value }, { 0.0 });
-                    var ambMRate = (~ambienceSliders.notNil and: { ~ambienceSliders[6].notNil })
-                        .if({ ~ambienceSliders[6].value }, { 0.0 });
-                    var ambRoom = (roomMap.notNil and: { roomMenu.notNil })
-                        .if({ roomMap[roomNames[roomMenu.value]] }, { "Metallener Saal" }); // Metal Hall
-                    synth = Synth(\kernelEncodeDecode, [
-                        \buffer, sndbuf,
-                        \amp, voltmp,
-                        \ambience, ambMix.linlin(0, 1, 0, 0.2),
-                        \preDelay, ambPreDly.linlin(0,1,0,0.5),
-                        \lowRT, ambLoRT.linlin(0,1,0.1,2),
-                        \highRT, ambHiRT.linlin(0,1,0.2,4),
-                        \dispersion, ambDisp.linlin(0,1,0.1,2),
-                        \modWidth, ambMWid,
-                        \modRate, ambMRate,
-                        \size, ambRoom
-                    ]);
+                    ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
 
                     // Create level meter after synth is started
                     {
@@ -616,8 +605,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                            var out, src, trans, encode, ambient, eqed;
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
                             // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -657,7 +646,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
-                            // Output handling - special case for 5.1 (add sub channel)
+                            if(outputs == 4, {
+                                // --- QUAD PANNER LOGIC (Balance2) ---
+                                // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
+                                frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
+                                rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
+                                quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
+                                quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
+                                out = [
+                                    quadOutFront[0], // LF
+                                    quadOutRear[0],  // LR
+                                    quadOutRear[1],  // RR
+                                    quadOutFront[1]  // RF
+                                ];
+                            });
                             if(outputs == 6, {
                                 var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
                                 Out.ar(0, out);
@@ -670,36 +672,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Start the synth
-                        s.unmute;
-                        // Set ambience parameters from GUI if available
-                        var ambMix = (~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil })
-                            .if({ ~ambienceSliders[0].value }, { 0.0 });
-                        var ambPreDly = (~ambienceSliders.notNil and: { ~ambienceSliders[1].notNil })
-                            .if({ ~ambienceSliders[1].value }, { 0.2 });
-                        var ambLoRT = (~ambienceSliders.notNil and: { ~ambienceSliders[2].notNil })
-                            .if({ ~ambienceSliders[2].value }, { 0.2 });
-                        var ambHiRT = (~ambienceSliders.notNil and: { ~ambienceSliders[3].notNil })
-                            .if({ ~ambienceSliders[3].value }, { 0.2 });
-                        var ambDisp = (~ambienceSliders.notNil and: { ~ambienceSliders[4].notNil })
-                            .if({ ~ambienceSliders[4].value }, { 0.0 });
-                        var ambMWid = (~ambienceSliders.notNil and: { ~ambienceSliders[5].notNil })
-                            .if({ ~ambienceSliders[5].value }, { 0.0 });
-                        var ambMRate = (~ambienceSliders.notNil and: { ~ambienceSliders[6].notNil })
-                            .if({ ~ambienceSliders[6].value }, { 0.0 });
-                        var ambRoom = (roomMap.notNil and: { roomMenu.notNil })
-                            .if({ roomMap[roomNames[roomMenu.value]] }, { "Metallener Saal" }); // Metal Hall
-                        synth = Synth(\kernelEncodeDecode, [
-                            \buffer, sndbuf,
-                            \amp, voltmp,
-                            \ambience, ambMix.linlin(0, 1, 0, 0.2),
-                            \preDelay, ambPreDly.linlin(0,1,0,0.5),
-                            \lowRT, ambLoRT.linlin(0,1,0.1,2),
-                            \highRT, ambHiRT.linlin(0,1,0.2,4),
-                            \dispersion, ambDisp.linlin(0,1,0.1,2),
-                            \modWidth, ambMWid,
-                            \modRate, ambMRate,
-                            \size, ambRoom
-                        ]);
+                        ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
 
                         // Create level meter after synth is started
                         {
@@ -848,9 +821,9 @@ dbValue = cliToDbMaster.(lastInL);
     .centered_(true)
     .enabled_(false)
     .action_({ |knob|
-        var angle = knob.value.linlin(0, 1, -pi, pi);
-        ~rotateValue.string = angle.round.asString;
-        if(synth.notNil) { synth.set(\rotation, angle); }
+        var deg = knob.value.linlin(0, 1, -180, 180).round.asInteger;
+        ~rotateValue.string = (deg.asString ++ "°");
+        if(~synth.notNil) { ~synth.set(\rotation, deg.degrad); }
     });
 
 ~tiltKnob = Knob(mainView, Rect(654, 142, 60, 60))
@@ -859,9 +832,9 @@ dbValue = cliToDbMaster.(lastInL);
     .centered_(true)
     .enabled_(false)
     .action_({ |knob|
-        var angle = knob.value.linlin(0, 1, -pi, pi);
-        ~tiltValue.string = angle.round.asString;
-        if(synth.notNil) { synth.set(\tilt, angle); }
+        var deg = knob.value.linlin(0, 1, -180, 180).round.asInteger;
+        ~tiltValue.string = (deg.asString ++ "°");
+        if(~synth.notNil) { ~synth.set(\tilt, deg.degrad); }
     });
 
 ~tumbleKnob = Knob(mainView, Rect(654, 224, 60, 60))
@@ -870,9 +843,9 @@ dbValue = cliToDbMaster.(lastInL);
     .centered_(true)
     .enabled_(false)
     .action_({ |knob|
-        var angle = knob.value.linlin(0, 1, -pi, pi);
-        ~tumbleValue.string = angle.round.asString;
-        if(synth.notNil) { synth.set(\tumble, angle); }
+        var deg = knob.value.linlin(0, 1, -180, 180).round.asInteger;
+        ~tumbleValue.string = (deg.asString ++ "°");
+        if(~synth.notNil) { ~synth.set(\tumble, deg.degrad); }
     });
 
 ~rotateValue = StaticText(mainView, Rect(719, 80, 55, 20)).font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
@@ -884,7 +857,16 @@ dbValue = cliToDbMaster.(lastInL);
     .knobColor_(Color.cyan)
     .background_(Color.black)
     .canFocus_(false)
-    .action_({ |sl| ~xyPannerPos = Point(sl.x, sl.y); });
+    .action_({ |sl|
+    var quadLR = sl.x.linlin(0, 1, -1, 1);
+    var quadFR = sl.y.linlin(0, 1, -1, 1);
+    ~xyPannerPos = Point(sl.x, sl.y);
+    ("Panner action: quadLR=" ++ quadLR ++ ", quadFR=" ++ quadFR).postln;
+    if(~synth.notNil) {
+        "Sending to synth".postln;
+        ~synth.set(\quadLR, quadLR, \quadFR, quadFR);
+    }
+});
 ~xyPannerPos = Point(~xyPanner.x, ~xyPanner.y);
 
 // --- Additional GUI Layout ---
@@ -919,7 +901,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
                 ~rotateKnob.enabled_(false);
                 ~tiltKnob.enabled_(false);
                 ~tumbleKnob.enabled_(false);
-                ~knobOverlay = View(mainView, Rect(594, 60, 140, 224))
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -1099,9 +1081,9 @@ win.front;
                         if(~eqValues.notNil and: { ~eqValues[i].notNil }) {
                             ~eqValues[i].string = db.round(0.1).asString ++ "dB";
                         };
-                        if(synth.notNil) {
+                        if(~synth.notNil) {
                             var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                            synth.set(eqParams[i], db);
+                            ~synth.set(eqParams[i], db);
                         }
                     });
                 slider.toolTip = "EQ BAND " ++ (i+1).asString;
@@ -1136,9 +1118,9 @@ win.front;
                     ~eqSliders.do({ |slider, i|
                         slider.value_(0.5);
                         ~eqValues[i].string_("0.0dB");
-                        if(synth.notNil) {
+                        if(~synth.notNil) {
                             var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                            synth.set(eqParams[i], 0);
+                            ~synth.set(eqParams[i], 0);
                         }
                     });
                 });
@@ -1152,11 +1134,11 @@ win.front;
                 });
             ~eqOverlay.front;
             // --- On open, set synth EQ params to current slider values ---
-            if(synth.notNil) {
+            if(~synth.notNil) {
                 var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
                 ~eqSliders.do({ |slider, i|
                     var db = slider.value.linlin(0, 1, -12, 12);
-                    synth.set(eqParams[i], db);
+                    ~synth.set(eqParams[i], db);
                 });
             }
         } {
@@ -1218,7 +1200,7 @@ win.front;
                 .stringColor_(Color.cyan)
                 .value_(0)
                 .action_({ |menu|
-                    if(synth.notNil) {
+                    if(~synth.notNil) {
                         var germanName = roomMap[roomNames[menu.value]];
                         // --- Free and recreate synth with new room (size) argument, preserving ambience params ---
                         var ambParams = [
@@ -1230,8 +1212,8 @@ win.front;
                             ~ambienceSliders[5].value, // MWid
                             ~ambienceSliders[6].value  // MRate
                         ];
-                        synth.free;
-                        synth = Synth(
+                        ~synth.free;
+                        ~synth = Synth(
                             \kernelEncodeDecode,
                             [
                                 \buffer, sndbuf,
@@ -1279,10 +1261,10 @@ win.front;
                     .action_({ |sl|
                         var val = (sl.value * 100).round(0.1);
                         ~ambienceValues[i].string = val.asString ++ "%";
-                        if(synth.notNil) {
+                        if(~synth.notNil) {
                             switch(i,
                                 0, {
-                                    synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                                     // --- Sync ON/OFF button with Mix slider ---
                                     if(sl.value > 0) {
                                         ~ambienceOnOffBtn.value_(1);
@@ -1291,12 +1273,12 @@ win.front;
                                         ~ambienceOnOffBtn.value_(0);
                                     }
                                 },
-                                1, { synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
-                                2, { synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
-                                3, { synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
-                                4, { synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
-                                5, { synth.set(\modWidth, sl.value); },
-                                6, { synth.set(\modRate, sl.value); }
+                                1, { ~synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
+                                2, { ~synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
+                                3, { ~synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
+                                4, { ~synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
+                                5, { ~synth.set(\modWidth, sl.value); },
+                                6, { ~synth.set(\modRate, sl.value); }
                             );
                         }
                     });
@@ -1315,8 +1297,8 @@ win.front;
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
-                if(synth.notNil) {
-                    synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                if(~synth.notNil) {
+                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 }
             });
             // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
@@ -1331,10 +1313,45 @@ win.front;
                     ~ambienceOverlay = nil;
                     ~ambienceBtn.value_(0);
                 });
+            // Place RESET button before CLOSE button in the Ambience overlay:
+            Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([ ["RESET", Color.cyan, Color.black] ])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    var defaults = [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+                    if(~ambienceSliders.notNil) {
+                        ~ambienceSliders.do({ |slider, i|
+                            if(slider.notNil) { slider.value_(defaults[i]); }
+                        });
+                    };
+                    if(~ambienceValues.notNil) {
+                        ~ambienceValues.do({ |valDisp, i|
+                            if(valDisp.notNil) { valDisp.string_((defaults[i] * 100).asString ++ "%"); }
+                        });
+                    };
+                    // Update synth with defaults
+                    if(~synth.notNil) {
+                        ~synth.set(\ambience, defaults[0].linlin(0, 1, 0, 0.2));
+                        ~synth.set(\preDelay, defaults[1].linlin(0,1,0,0.5));
+                        ~synth.set(\lowRT, defaults[2].linlin(0,1,0.1,2));
+                        ~synth.set(\highRT, defaults[3].linlin(0,1,0.2,4));
+                        ~synth.set(\dispersion, defaults[4].linlin(0,1,0.1,2));
+                        ~synth.set(\modWidth, defaults[5]);
+                        ~synth.set(\modRate, defaults[6]);
+                    }
+                });
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([ ["CLOSE", Color.cyan, Color.black] ])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~ambienceOverlay.remove;
+                    ~ambienceOverlay = nil;
+                    ~ambienceBtn.value_(0);
+                });
             ~ambienceOverlay.front;
             // Set synth size param to initial room
-            if(synth.notNil) {
-                synth.set(\size, roomMap[roomNames[roomMenu.value]]);
+            if(~synth.notNil) {
+                ~synth.set(\size, roomMap[roomNames[roomMenu.value]]);
             }
         } {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
@@ -1557,9 +1574,9 @@ StaticText(mainView, Rect(520, 10, 72, 28))
     .action_({ |sl|
         var db = sl.value.linlin(0, 1, -60, 0).round(1).asInteger;
         ~outputValue.string_(db.asString); // No decimal
-        if(synth.notNil) {
+        if(~synth.notNil) {
             var amp = 10.pow(db / 20);
-            synth.set(\amp, amp);
+            ~synth.set(\amp, amp);
         }
     });
 
@@ -1606,4 +1623,70 @@ UserView(mainView, Rect(571, 70, 4, 300))
         });
     });
 
-// --- END OF FILE ---
+// ... existing code ...
+// --- Headtracker HID Integration (added as per MainApp2 model, always active) ---
+(
+Tdef( 'tryOpenHID' , {
+   var keepLooking = true;
+   while ( { keepLooking } ){
+      if ( ~myhid.notNil ){
+         if ( ~myhid.isOpen ){
+            keepLooking = false;
+         }
+      };
+      if ( keepLooking ){
+         HID.findAvailable;
+         if ( HID.findBy(0,0).size > 0 ){
+            ~myhid = HID.open(0,0);
+            if ( ~myhid.notNil ){
+               ~myhid.closeAction = {
+                    "device closed".postln;
+                    Tdef( \tryOpenHID ).reset.play;
+               };
+               keepLooking = false;
+            }{
+               3.0.wait;
+            };
+         }{
+            3.0.wait;
+         }
+      }
+   }
+} );
+);
+Tdef( 'tryOpenHID' ).play;
+
+// HID.debug = true;
+
+// Map HID usages to GUI knobs (always active, no gating)
+HIDdef.usage( \hidRotation, { |val|
+    {
+        //("Headtracker raw rotation: " ++ val).postln;  // <-- Add this line
+        if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
+            ~rotateKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \Z );
+
+HIDdef.usage( \hidTilt, { |val|
+    {
+        if(~tiltKnob.notNil and: { ~tiltKnob.enabled }) {
+            ~tiltKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \Y );
+
+HIDdef.usage( \hidTumble, { |val|
+    {
+        if(~tumbleKnob.notNil and: { ~tumbleKnob.enabled }) {
+            ~tumbleKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \X );
+// ... existing 
