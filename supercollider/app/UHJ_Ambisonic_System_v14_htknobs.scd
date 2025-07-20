@@ -229,8 +229,8 @@ mainView.mouseUpAction_({
         // Reset GUI to match defaults
         AppClock.sched(0.1, {
             // Reset fader values
-            lastInL = 86;
-            lastInR = 86;
+            lastInL = 112; // 0dB equivalent
+            lastInR = 112; // 0dB equivalent
             ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
             ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
             // Display in dB using logarithmic scaling
@@ -796,8 +796,8 @@ StaticText(~meterContainer, Rect(8, 110, 24, 14)) // halfway up (approx)
     .string_("dB");
 
 // Initialize input defaults (from MainApp2)
-lastInL = 86; // Default from phono-control -d
-lastInR = 86;
+lastInL = 112; // Default from phono-control -d (0dB equivalent)
+lastInR = 112; // Default from phono-control -d (0dB equivalent)
 ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
 ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
 // Display initial dB values using logarithmic scaling

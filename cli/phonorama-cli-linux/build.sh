@@ -4,7 +4,7 @@ echo "Cleaning previous builds..."
 rm -f phono-control
 
 echo "Building phono-control..."
-gcc -o phono-control phono-control-copilot-simplify.c -lhidapi-hidraw
+gcc -o phono-control phono-control-final.c -lhidapi-hidraw
 
 if [ $? -eq 0 ]; then
     echo "Build successful."

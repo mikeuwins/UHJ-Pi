@@ -40,8 +40,8 @@ typedef struct {
 // --- Set default configuration values ---
 void config_set_defaults(Config *cfg) {
     cfg->input_channel = 0x1;
-    cfg->input_l = 86;
-    cfg->input_r = 86;
+    cfg->input_l = 112;  // 0dB equivalent
+    cfg->input_r = 112;  // 0dB equivalent
     cfg->output_l = 145;
     cfg->output_r = 145;
     cfg->headphone_enabled = true;
