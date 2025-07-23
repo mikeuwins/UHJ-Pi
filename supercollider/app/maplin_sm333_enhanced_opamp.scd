@@ -265,7 +265,7 @@ s.waitForBoot {
     // MANUAL SETTINGS (remove // and adjust values):
      ~setSurroundLevel.(1.0);     // Surround level (0.0-1.0)
      ~setEffectLevel.(1.0);       // Effect level (0.0-1.0)
-    // ~setDelayTime.(0.025);       // Delay time (0.005-0.050)
+    // ~setDelayTime.(0.025)ok;       // Delay time (0.005-0.050)
     // ~setSaturation.(0.9);        // Op-amp saturation (0.0-1.0)
     // ~setBandwidth.(0.8);         // Frequency rolloff (0.0-1.0)
     // ~setNoiseLevel.(0.3);        // Thermal noise (0.0-1.0)

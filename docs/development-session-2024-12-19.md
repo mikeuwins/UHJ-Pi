@@ -70,10 +70,11 @@ SynthDef(\stereoToQuadConv, {
 
 #### **Final Implementation**
 - **Working Version**: `maplin_sm333_enhanced_opamp.scd`
-- **Philosophy**: Authentic circuit behavior, not "vintage effects"
-- **Features**: Clean, stable operation with proper level matching
+- **Philosophy**: Generic surround processor inspired by vintage designs
+- **Features**: Clean, stable operation with functional level matching
+- **⚠️ Important**: This is NOT an authentic SM-333 circuit emulation
 
-*For detailed technical documentation, see: `docs/maplin_sm333_emulation_research.md`*
+*For detailed technical documentation and corrections, see: `docs/maplin_sm333_emulation_research.md`*
 
 ## 🛠️ Technical Solutions Developed
 
@@ -141,11 +142,11 @@ SynthDef(\stereoToQuadConv, {
 ## 🎯 Key Outcomes
 
 ### **Technical Achievements**
-- ✅ **Authentic circuit emulation** based on original component analysis
+- ✅ **Generic surround processor** inspired by vintage designs (not authentic SM-333)
 - ✅ **Working convolution system** for IR-based processing
 - ✅ **Robust error handling** and file management
 - ✅ **Clean, maintainable code** structure
-- ✅ **Proper level matching** between speakers
+- ✅ **Functional level matching** between speakers
 
 ### **Development Process**
 - ✅ **Systematic problem-solving** approach
