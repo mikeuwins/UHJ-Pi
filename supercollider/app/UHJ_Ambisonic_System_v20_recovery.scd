@@ -1,8 +1,9 @@
-// ============================================================================
-// UHJ AMBISONIC SYSTEM v14 - HEADTRACKER KNOBS WITH 360-DEGREE BEHAVIOR
-// ============================================================================
+// ===================================================
+// UHJ AMBISONIC SYSTEM v20 - AMBISONIC UHJ TRANSCODER
+// ===================================================
 
 // Using standard Knob class with custom 360-degree action handling
+// Features automatic mouse/headtracker detection for intuitive control
 
 var win, mainView,
     decoderChanged,
@@ -18,6 +19,19 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil;
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
+
+// --- Ambience state preservation variables ---
+~ambienceState = Dictionary.newFrom([
+    \sliderValues, [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0],  // Default values
+    \presetIndex, 0,  // Default preset index
+    \lastMix, 0.5     // Remember last nonzero mix value
+]);
+
+// --- EQ state preservation variables ---
+~eqState = Dictionary.newFrom([
+    \sliderValues, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  // Default values (0dB)
+    \presetIndex, 0  // Default preset index
+]);
 
 // --- Initial values for input section ---
 isUpdating = false;
@@ -302,16 +316,16 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     Rect(180, 45, 140, 35),
     "",
     [
-        \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
-        \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; }
+        \UHJ -> { |a| configKeyE = \uhj; },
+        \SUPERSTEREO -> { |a| configKeyE = \superstereo; }
+
     ],
     globalAction: { |menu|
-        ("Selected encoder: " ++ menu.item).postln;
         // Always call audio engine init; it will reload only if needed
         ~initAudioEngine.value();
     },
     initVal: 0,
-    initAction: false,
+    initAction: true,
     labelWidth: 0,
     labelHeight: 0,
     layout: \horz,
@@ -439,6 +453,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 ~prevConfigKeyD = configKeyD;
 ~prevConfigKeyE = configKeyE;
 
+// --- Input Source Detection for Mouse vs Headtracker ---
+// Track whether the last input was from mouse or headtracker
+// This allows automatic behavior adjustment for intuitive mouse control
+~lastInputSource = \headtracker;  // Default to headtracker
+~mouseActive = false;  // Track if mouse is currently being used
 
 
 // Audio engine initialization function (from MainApp2)
@@ -449,6 +468,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     var needReboot;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
+    
+    // Debug: Show what changed
+    if(needReboot, {
+        // 
+        if(inputs != (~prevInputs ? inputs), { ("  - inputs changed").postln; });
+        if(outputs != (~prevOutputs ? outputs), { ("  - outputs changed").postln; });
+        if(configKeyD != (~prevConfigKeyD ? configKeyD), { ("  - decoder changed").postln; });
+        if(configKeyE != (~prevConfigKeyE ? configKeyE), { ("  - encoder changed from " ++ (~prevConfigKeyE ? "nil") ++ " to " ++ configKeyE).postln; });
+    });
     tryBoot = {
         if(s.serverBooting, {
             ("Server busy (booting), retrying audio engine init...").postln;
@@ -461,10 +489,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
+                    // Replace all amixer commands with a quiet version
+                    "amixer -c HD set PCM 126 > /dev/null 2>&1".unixCmd;
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
-                        \superstereo, FoaEncoderKernel.newSuper,
+                        \superstereo, FoaEncoderKernel.newSuper
                     ]);
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -482,10 +512,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     encoder = encoderDict.at(configKeyE ? \uhj);
                     decoder = decoderDict.at(configKeyD ? \binaural);
 
-                    ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
-
-                    // Load test audio file (same as MainApp2)
-                    sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                    // After setting encoder and decoder from their dictionaries, print their values for debugging
+                    encoder.postln;
+                    decoder.postln;
+                    //load test audio file
+                    //sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                    
 
                     s.sync(cond);
 
@@ -506,8 +538,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                         eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                         eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                        // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
+                        // Encode to ambisonic using selected encoder (all modes)
                         encode = FoaEncode.ar(eqed, encoder);
+                        
                         // Ambience processing
                         ambient = AmbiVerbSC.ar(encode,
                             mix: ambience,
@@ -527,7 +560,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             maxPreDelay: 10,
                             feedbackSpread: 1
                         );
-                        // Spatial transformations (rotation, tilt, tumble)
+                        // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -556,8 +589,34 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     s.sync(cond);
 
-                    // Start the synth
-                    ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
+                                                                    // Start the synth
+                        ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
+                      
+                    // Reapply current EQ settings to the new synth
+                    if(~eqSliders.notNil) {
+                        var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
+                        ~eqSliders.do({ |slider, i|
+                            if(slider.notNil and: { slider.value.notNil }) {
+                                var db = slider.value.linlin(0, 1, -12, 12);
+                                ~synth.set(eqParams[i], db);
+                            };
+                        });
+                    };
+                    
+                    // Reapply current ambience settings to the new synth
+                    if(~ambienceState[\sliderValues].notNil) {
+                        ~ambienceState[\sliderValues].do({ |value, i|
+                            switch(i,
+                                0, { ~synth.set(\ambience, value.linlin(0, 1, 0, 0.2)); },
+                                1, { ~synth.set(\preDelay, value.linlin(0,1,0,0.5)); },
+                                2, { ~synth.set(\lowRT, value.linlin(0,1,0.1,2)); },
+                                3, { ~synth.set(\highRT, value.linlin(0,1,0.2,4)); },
+                                4, { ~synth.set(\dispersion, value.linlin(0,1,0.1,2)); },
+                                5, { ~synth.set(\modWidth, value); },
+                                6, { ~synth.set(\modRate, value); }
+                            );
+                        });
+                    };
 
                     // Create level meter after synth is started
                     {
@@ -576,21 +635,25 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         });
                     }.defer(0.1);
 
-                    ("Audio synthesis started with level meter").postln;
+                    // Remove any print of configKeyD or decoder key
+                    // Remove the 'Audio synthesis started with level meter' message
                 });
             }, {
                 if(needReboot, {
+                    // ("REBOOTING SERVER due to encoder/decoder change").postln;
                     s.options.memSize = 65536;
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
+                        // Replace all amixer commands with a quiet version
+                        "amixer -c HD set PCM 126 > /dev/null 2>&1".unixCmd;
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
-                            \superstereo, FoaEncoderKernel.newSuper,
-                            \pseudosurround, FoaEncoderKernel.newPseudoSurround,
+                            \superstereo, FoaEncoderKernel.newSuper
+                            // PSEUDO option removed
                         ]);
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -607,15 +670,17 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Get selected encoder and decoder
                         encoder = encoderDict.at(configKeyE ? \uhj);
                         decoder = decoderDict.at(configKeyD ? \binaural);
-
-                        ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
-
+                        encoder.postln;
+                        decoder.postln;
                         // Load test audio file (same as MainApp2)
-                        sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                        // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+
+            
+                        
 
                         s.sync(cond);
 
-                        // Define the main audio processing SynthDef (adapted from MainApp2)
+                        // Define the main audio processing SynthDef
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
                             // Audio source - live input from hardware
@@ -632,9 +697,10 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                             eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                             eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                            // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
+                            // Encode to ambisonic using selected encoder (all modes)
                             encode = FoaEncode.ar(eqed, encoder);
-                            // Ambience processing
+                        
+                        // Ambience processing
                             ambient = AmbiVerbSC.ar(encode,
                                 mix: ambience,
                                 preDelay: preDelay,
@@ -653,7 +719,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 maxPreDelay: 10,
                                 feedbackSpread: 1
                             );
-                            // Spatial transformations (rotation, tilt, tumble)
+                            // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
@@ -680,10 +746,36 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             });
                         }).add;
 
-                        s.sync(cond);
-
                         // Start the synth
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
+                        
+                
+
+                        // Reapply current EQ settings to the new synth
+                        if(~eqSliders.notNil) {
+                            var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
+                            ~eqSliders.do({ |slider, i|
+                                if(slider.notNil and: { slider.value.notNil }) {
+                                    var db = slider.value.linlin(0, 1, -12, 12);
+                                    ~synth.set(eqParams[i], db);
+                                };
+                            });
+                        };
+                        
+                        // Reapply current ambience settings to the new synth
+                        if(~ambienceState[\sliderValues].notNil) {
+                            ~ambienceState[\sliderValues].do({ |value, i|
+                                switch(i,
+                                    0, { ~synth.set(\ambience, value.linlin(0, 1, 0, 0.2)); },
+                                    1, { ~synth.set(\preDelay, value.linlin(0,1,0,0.5)); },
+                                    2, { ~synth.set(\lowRT, value.linlin(0,1,0.1,2)); },
+                                    3, { ~synth.set(\highRT, value.linlin(0,1,0.2,4)); },
+                                    4, { ~synth.set(\dispersion, value.linlin(0,1,0.1,2)); },
+                                    5, { ~synth.set(\modWidth, value); },
+                                    6, { ~synth.set(\modRate, value); }
+                                );
+                            });
+                        };
 
                         // Create level meter after synth is started
                         {
@@ -701,8 +793,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                     .string_((i+1).asString);
                             });
                         }.defer(0.1);
-
-                        ("Audio synthesis started with level meter").postln;
                     });
                 });
             });
@@ -831,15 +921,33 @@ dbValue = cliToDbMaster.(lastInL);
         ~tiltValue = StaticText(mainView, Rect(719, 162, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
         ~tumbleValue = StaticText(mainView, Rect(719, 244, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
         
-        // Knob360 with 360-degree behavior in action function
+        // Knob360 with 360-degree behavior and automatic mouse/headtracker detection
         ~rotateKnob = Knob360(mainView, Rect(654, 60, 60, 60), 0.5, 0.0, 1.0)
             .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
             .enabled_(false)
             .action_({ |knob, val|
                 // 360-degree behavior: map 0-1 to -180 to +180 degrees
                 var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                
+                // Automatic mouse/headtracker behavior adjustment
+                if(~mouseActive, {
+                    // Mouse input: invert direction for intuitive control
+                    deg = deg.neg;
+                    ~lastInputSource = \mouse;
+                }, {
+                    // Headtracker input: keep normal direction
+                    ~lastInputSource = \headtracker;
+                });
+                
                 ~rotateValue.string = (deg.asString ++ "°");
                 if(~synth.notNil) { ~synth.set(\rotation, deg.degrad); }
+            })
+            .mouseDownAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = true;
+                ~lastInputSource = \mouse;
+            })
+            .mouseUpAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = false;
             });
 
         ~tiltKnob = Knob360(mainView, Rect(654, 142, 60, 60), 0.5, 0.0, 1.0)
@@ -848,8 +956,26 @@ dbValue = cliToDbMaster.(lastInL);
             .action_({ |knob, val|
                 // 360-degree behavior: map 0-1 to -180 to +180 degrees
                 var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                
+                // Automatic mouse/headtracker behavior adjustment
+                if(~mouseActive, {
+                    // Mouse input: invert direction for intuitive control
+                    deg = deg.neg;
+                    ~lastInputSource = \mouse;
+                }, {
+                    // Headtracker input: keep normal direction
+                    ~lastInputSource = \headtracker;
+                });
+                
                 ~tiltValue.string = (deg.asString ++ "°");
                 if(~synth.notNil) { ~synth.set(\tilt, deg.degrad); }
+            })
+            .mouseDownAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = true;
+                ~lastInputSource = \mouse;
+            })
+            .mouseUpAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = false;
             });
 
         ~tumbleKnob = Knob360(mainView, Rect(654, 224, 60, 60), 0.5, 0.0, 1.0)
@@ -858,8 +984,26 @@ dbValue = cliToDbMaster.(lastInL);
             .action_({ |knob, val|
                 // 360-degree behavior: map 0-1 to -180 to +180 degrees
                 var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                
+                // Automatic mouse/headtracker behavior adjustment
+                if(~mouseActive, {
+                    // Mouse input: invert direction for intuitive control
+                    deg = deg.neg;
+                    ~lastInputSource = \mouse;
+                }, {
+                    // Headtracker input: keep normal direction
+                    ~lastInputSource = \headtracker;
+                });
+                
                 ~tumbleValue.string = (deg.asString ++ "°");
                 if(~synth.notNil) { ~synth.set(\tumble, deg.degrad); }
+            })
+            .mouseDownAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = true;
+                ~lastInputSource = \mouse;
+            })
+            .mouseUpAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = false;
             });
 
 // Value display labels already created above
@@ -955,10 +1099,17 @@ win.front;
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
-            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
+            if(~eqOverlay.notNil) { 
+                ~saveEqState.value(); // Save state before removing EQ overlay
+                ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
+            };
+            if(~ambienceOverlay.notNil) { 
+                ~saveAmbienceState.value(); // Save state before removing ambience overlay
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
+            };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
             // Set other buttons to 0 (radio group)
-            ~ambienceBtn.value_(0);
+            ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
             // --- Remove any previous EQ overlay and controls to prevent duplicates ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; };
@@ -1142,11 +1293,16 @@ win.front;
                 .states_([["CLOSE", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
                 .action_({
+                    ~saveEqState.value(); // Save state before closing
                     ~eqOverlay.remove;
                     ~eqOverlay = nil;
                     ~eqBtn.value_(0);
                 });
             ~eqOverlay.front;
+            // Set EQ button to selected state
+            ~eqBtn.value_(1);
+            // --- Restore saved state on overlay open ---
+            ~restoreEqState.value();
             // --- On open, set synth EQ params to current slider values ---
             if(~synth.notNil) {
                 var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
@@ -1302,6 +1458,59 @@ win.front;
     };
 };
 
+// --- Ambience State Management Functions ---
+~saveAmbienceState = {
+    if(~ambienceSliders.notNil) {
+        ~ambienceState[\sliderValues] = ~ambienceSliders.collect({ |slider| slider.value });
+        ("Saved ambience state: " ++ ~ambienceState[\sliderValues]).postln;
+    };
+    if(~ambiencePresetMenu.notNil) {
+        ~ambienceState[\presetIndex] = ~ambiencePresetMenu.value;
+        ("Saved preset index: " ++ ~ambienceState[\presetIndex]).postln;
+    };
+};
+
+~restoreAmbienceState = {
+    if(~ambienceSliders.notNil and: { ~ambienceState[\sliderValues].notNil }) {
+        ("Restoring ambience state: " ++ ~ambienceState[\sliderValues]).postln;
+        ~ambienceSliders.do({ |slider, i|
+            var savedValue = ~ambienceState[\sliderValues][i] ? 0.0;
+            slider.value_(savedValue);
+            if(slider.action.notNil) {
+                slider.action.value(slider);
+            };
+        });
+    };
+    if(~ambiencePresetMenu.notNil and: { ~ambienceState[\presetIndex].notNil }) {
+        ("Restoring preset index: " ++ ~ambienceState[\presetIndex]).postln;
+        ~ambiencePresetMenu.value_(~ambienceState[\presetIndex]);
+    };
+};
+
+// --- EQ State Management Functions ---
+~saveEqState = {
+    if(~eqSliders.notNil) {
+        ~eqState[\sliderValues] = ~eqSliders.collect({ |slider| slider.value });
+    };
+    if(~eqPresetMenu.notNil) {
+        ~eqState[\presetIndex] = ~eqPresetMenu.value;
+    };
+};
+~restoreEqState = {
+    if(~eqSliders.notNil and: { ~eqState[\sliderValues].notNil }) {
+        ~eqSliders.do({ |slider, i|
+            var savedValue = ~eqState[\sliderValues][i] ? 0.5;
+            slider.value_(savedValue);
+            if(slider.action.notNil) {
+                slider.action.value(slider);
+            };
+        });
+    };
+    if(~eqPresetMenu.notNil and: { ~eqState[\presetIndex].notNil }) {
+        ~eqPresetMenu.value_(~eqState[\presetIndex]);
+    };
+};
+
 // --- AmbiVerbSC Preset Recall Function ---
 ~recallAmbiVerbSCPreset = { |presetName|
     var presetData, roomName;
@@ -1335,23 +1544,18 @@ win.front;
             });
         };
 
-        // Update synth with new room and parameters
+        // Update synth with new room and parameters (without breaking audio)
         if(~synth.notNil) {
-            ~synth.free;
-            ~synth = Synth(
-                \kernelEncodeDecode,
-                [
-                    \buffer, sndbuf,
-                    \amp, voltmp,
-                    \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
-                    \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
-                    \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
-                    \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
-                    \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
-                    \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
-                    \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
-                    \size, roomName.asSymbol
-                ]
+            // Use synth.set() instead of recreating to avoid signal break
+            ~synth.set(
+                \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
+                \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
+                \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
+                \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
+                \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
+                \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
+                \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
+                \size, roomName.asSymbol
             );
         };
 
@@ -1366,7 +1570,10 @@ win.front;
         var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
-            if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
+            if(~eqOverlay.notNil) { 
+                ~saveEqState.value(); // Save state before removing EQ overlay
+                ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
+            };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
@@ -1405,23 +1612,15 @@ win.front;
                 .font_(Font("Helvetica", 11))
                 .background_(Color.black)
                 .stringColor_(Color.cyan)
-                .value_(0) // Default to first preset
+                .value_(~ambienceState[\presetIndex] ? 0) // Use saved preset index
                 .action_({ |menu|
                     var selectedPreset = ~ambiencePresetNames[menu.value];
                     ~recallAmbiVerbSCPreset.value(selectedPreset);
                 });
-            // Parameter labels and default values
+            // Parameter labels and values (use saved state or defaults)
             sliderLabels = ["Reverb", "PreDly", "LoRT", "HiRT", "Disp", "MWid", "MRate"];
-            params = [
-                0.0, // Reverb (default OFF)
-                0.2, // PreDly
-                0.2, // LoRT
-                0.2, // HiRT
-                0.0, // Disp
-                0.0, // MWid
-                0.0  // MRate
-            ];
-            ~ambienceLastMix = 0.5; // Remember last nonzero mix value
+            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+            ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5; // Remember last nonzero mix value
             ~ambienceSliders = List[];
             ~ambienceValues = List[];
             sliderLabels.do({ |label, i|
@@ -1489,6 +1688,7 @@ win.front;
                 .states_([["CLOSE", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
                 .action_({
+                    ~saveAmbienceState.value(); // Save state before closing
                     ~ambienceOverlay.remove;
                     ~ambienceOverlay = nil;
                     ~ambienceBtn.value_(0);
@@ -1508,14 +1708,24 @@ win.front;
                 .states_([ ["CLOSE", Color.cyan, Color.black] ])
                 .font_(Font("Helvetica", 11))
                 .action_({
+                    ~saveAmbienceState.value(); // Save state before closing
                     ~ambienceOverlay.remove;
                     ~ambienceOverlay = nil;
                     ~ambienceBtn.value_(0);
                 });
             ~ambienceOverlay.front;
-            // Apply default preset on overlay open
-            if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
-                ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
+            // Set ambience button to selected state
+            ~ambienceBtn.value_(1);
+            // Restore saved state or apply default preset on overlay open
+            if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
+                ("Found saved state, restoring...").postln;
+                ~restoreAmbienceState.value(); // Restore saved slider values
+            } {
+                ("No saved state, applying default preset...").postln;
+                // Apply default preset if no saved state
+                if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
+                    ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
+                }
             }
         } {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
@@ -1528,8 +1738,14 @@ win.front;
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
-            if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
-            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
+            if(~eqOverlay.notNil) { 
+                ~saveEqState.value(); // Save state before removing EQ overlay
+                ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
+            };
+            if(~ambienceOverlay.notNil) { 
+                ~saveAmbienceState.value(); // Save state before removing ambience overlay
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
@@ -1798,13 +2014,13 @@ Tdef( 'tryOpenHID' , {
             keepLooking = false;
          }
       };
-      if ( keepLooking ){
-         HID.findAvailable;
-         if ( HID.findBy(0,0).size > 0 ){
+               if ( keepLooking ){
+            // HID.findAvailable; // Temporarily disabled for debugging
+            if ( HID.findBy(0,0).size > 0 ){
             ~myhid = HID.open(0,0);
             if ( ~myhid.notNil ){
                ~myhid.closeAction = {
-                    "device closed".postln;
+                    // "device closed".postln; // Temporarily disabled for debugging
                     Tdef( \tryOpenHID ).reset.play;
                };
                keepLooking = false;
@@ -1852,5 +2068,6 @@ HIDdef.usage( \hidTumble, { |val|
             );
         };
     }.defer;
-}, \X );
-// ... existing 
+}, \X ); 
+
+// ... existing code ...

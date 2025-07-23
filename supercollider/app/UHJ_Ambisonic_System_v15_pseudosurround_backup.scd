@@ -1,5 +1,5 @@
 // ============================================================================
-// UHJ AMBISONIC SYSTEM v14 - HEADTRACKER KNOBS WITH 360-DEGREE BEHAVIOR
+// UHJ AMBISONIC SYSTEM v15 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
@@ -303,7 +303,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     "",
     [
         \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
-        \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; }
+        \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; },
+                        \PSEUDO -> { |a| configKeyE = \pseudosurround; ("Encoder: PSEUDO SURROUND").postln; }
     ],
     globalAction: { |menu|
         ("Selected encoder: " ++ menu.item).postln;
@@ -439,7 +440,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 ~prevConfigKeyD = configKeyD;
 ~prevConfigKeyE = configKeyE;
 
-
+// --- Pseudo-Surround Encoder ---
+// Use ATK's built-in stereo encoder if available, otherwise create custom one
+// This provides a clean foundation for convolution-based spatialization
 
 // Audio engine initialization function (from MainApp2)
 ~initAudioEngine = {
@@ -465,6 +468,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
                         \superstereo, FoaEncoderKernel.newSuper,
+                        \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
                     ]);
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -486,6 +490,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     // Load test audio file (same as MainApp2)
                     sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                    
+                    // Load spatial impulse responses for pseudo-surround convolution
+                    // These would be B-format impulse responses for realistic spatialization
+                    ~spatialIRs = Array.fill(4, { |i|
+                        // Placeholder for spatial IR loading
+                        // In a full implementation, these would be loaded from files
+                        Buffer.alloc(s, 2048, 1); // Temporary buffer
+                    });
 
                     s.sync(cond);
 
@@ -506,8 +518,28 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                         eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                         eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                        // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
+                        // Encode to ambisonic using selected encoder
+                        if(configKeyE == \pseudosurround, {
+                            // Use convolution-based spatialization for pseudo-surround
+                            var basicEncode, convolvedEncode, dry, wet, mix = 0.7;
+                            
+                            // Basic encoding first
+                            basicEncode = FoaEncode.ar(eqed, encoder);
+                            
+                            // Apply convolution to each B-format component for spatialization
+                            convolvedEncode = [
+                                PartConv.ar(basicEncode[0], 2048, ~spatialIRs[0]), // W (omnidirectional)
+                                PartConv.ar(basicEncode[1], 2048, ~spatialIRs[1]), // X (front-back)
+                                PartConv.ar(basicEncode[2], 2048, ~spatialIRs[2]), // Y (left-right)
+                                PartConv.ar(basicEncode[3], 2048, ~spatialIRs[3])  // Z (up-down)
+                            ];
+                            
+                            // Mix dry (basic) and wet (convolved) signals
+                            encode = (basicEncode * (1 - mix)) + (convolvedEncode * mix);
+                        }, {
+                            // Standard encoding for UHJ and SuperStereo
                         encode = FoaEncode.ar(eqed, encoder);
+                        });
                         // Ambience processing
                         ambient = AmbiVerbSC.ar(encode,
                             mix: ambience,
@@ -527,7 +559,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             maxPreDelay: 10,
                             feedbackSpread: 1
                         );
-                        // Spatial transformations (rotation, tilt, tumble)
+                        // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -590,7 +622,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
                             \superstereo, FoaEncoderKernel.newSuper,
-                            \pseudosurround, FoaEncoderKernel.newPseudoSurround,
+                            \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
                         ]);
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -613,72 +645,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Load test audio file (same as MainApp2)
                         sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
 
-                        s.sync(cond);
-
-                        // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
-                            // Audio source - live input from hardware
-                            src = SoundIn.ar([0,1]);
-                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
-                            // Amplitude scaling
-                            src = src * \amp.kr(-6.dbamp);
-                            // --- 7-band graphic EQ before ambisonic encode ---
-                            eqed = src;
-                            eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
-                            eqed = BPeakEQ.ar(eqed, 160, 1, eq2);     // Band 2
-                            eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
-                            eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
-                            eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
-                            eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
-                            eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                            // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
-                            encode = FoaEncode.ar(eqed, encoder);
-                            // Ambience processing
-                            ambient = AmbiVerbSC.ar(encode,
-                                mix: ambience,
-                                preDelay: preDelay,
-                                crossoverFreq: 3000,
-                                lowRT: lowRT,
-                                highRT: highRT,
-                                dispersion: dispersion,
-                                size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
-                                modWidth: modWidth,
-                                modRate: modRate,
-                                coupRate: 0.5,
-                                coupAmt: 3,
-                                phaseRotRate: 0.4,
-                                phaseRotAmt: 6.2831853071796,
-                                orientation: 'flu',
-                                maxPreDelay: 10,
-                                feedbackSpread: 1
-                            );
-                            // Spatial transformations (rotation, tilt, tumble)
-                            trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
-                            // Decode using selected decoder
-                            out = FoaDecode.ar(trans, decoder);
-                            if(outputs == 4, {
-                                // --- QUAD PANNER LOGIC (Balance2) ---
-                                // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
-                                frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
-                                rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
-                                quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
-                                quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
-                                out = [
-                                    quadOutFront[0], // LF
-                                    quadOutRear[0],  // LR
-                                    quadOutRear[1],  // RR
-                                    quadOutFront[1]  // RF
-                                ];
-                            });
-                            if(outputs == 6, {
-                                var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
-                                Out.ar(0, out);
-                                Out.ar(5, lowpass);
-                            }, {
-                                Out.ar(0, out);
-                            });
-                        }).add;
+                        // Load spatial impulse responses for pseudo-surround convolution
+                        // These are B-format impulse responses for realistic spatialization
+                        ~spatialIRs = [
+                            // Load B-format impulse responses from the assets folder
+                            // W, X, Y, Z components for convolution spatialization
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_w.wav", 
+                                action: { |buf| ("Loaded W IR: " ++ buf.numFrames ++ " frames").postln; }),
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_x.wav", 
+                                action: { |buf| ("Loaded X IR: " ++ buf.numFrames ++ " frames").postln; }),
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_y.wav", 
+                                action: { |buf| ("Loaded Y IR: " ++ buf.numFrames ++ " frames").postln; }),
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_z.wav", 
+                                action: { |buf| ("Loaded Z IR: " ++ buf.numFrames ++ " frames").postln; })
+                        ];
 
                         s.sync(cond);
 

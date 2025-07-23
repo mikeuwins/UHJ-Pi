@@ -1,7 +1,7 @@
 {
-  "input_channel" : 8,
-  "input_l" : 60,
-  "input_r" : 100,
+  "input_channel" : 193,
+  "input_l" : 112,
+  "input_r" : 112,
   "output_l" : 145,
   "output_r" : 145,
   "headphone_enabled" : 1,

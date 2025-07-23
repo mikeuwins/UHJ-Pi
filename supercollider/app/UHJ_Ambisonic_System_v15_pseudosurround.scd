@@ -1,8 +1,9 @@
 // ============================================================================
-// UHJ AMBISONIC SYSTEM v14 - HEADTRACKER KNOBS WITH 360-DEGREE BEHAVIOR
+// UHJ AMBISONIC SYSTEM v15 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
+// Features automatic mouse/headtracker detection for intuitive control
 
 var win, mainView,
     decoderChanged,
@@ -18,6 +19,13 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil;
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
+
+// --- Ambience state preservation variables ---
+~ambienceState = Dictionary.newFrom([
+    \sliderValues, [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0],  // Default values
+    \presetIndex, 0,  // Default preset index
+    \lastMix, 0.5     // Remember last nonzero mix value
+]);
 
 // --- Initial values for input section ---
 isUpdating = false;
@@ -303,7 +311,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     "",
     [
         \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
-        \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; }
+        \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; },
+                        \PSEUDO -> { |a| configKeyE = \pseudosurround; ("Encoder: PSEUDO SURROUND").postln; }
     ],
     globalAction: { |menu|
         ("Selected encoder: " ++ menu.item).postln;
@@ -439,7 +448,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 ~prevConfigKeyD = configKeyD;
 ~prevConfigKeyE = configKeyE;
 
+// --- Input Source Detection for Mouse vs Headtracker ---
+// Track whether the last input was from mouse or headtracker
+// This allows automatic behavior adjustment for intuitive mouse control
+~lastInputSource = \headtracker;  // Default to headtracker
+~mouseActive = false;  // Track if mouse is currently being used
 
+// --- Pseudo-Surround Encoder ---
+// Use ATK's built-in stereo encoder if available, otherwise create custom one
+// This provides a clean foundation for convolution-based spatialization
 
 // Audio engine initialization function (from MainApp2)
 ~initAudioEngine = {
@@ -465,6 +482,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
                         \superstereo, FoaEncoderKernel.newSuper,
+                        \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
                     ]);
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -486,6 +504,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     // Load test audio file (same as MainApp2)
                     sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                    
+                    // Load spatial impulse responses for pseudo-surround convolution
+                    // These would be B-format impulse responses for realistic spatialization
+                    ~spatialIRs = Array.fill(4, { |i|
+                        // Placeholder for spatial IR loading
+                        // In a full implementation, these would be loaded from files
+                        Buffer.alloc(s, 2048, 1); // Temporary buffer
+                    });
 
                     s.sync(cond);
 
@@ -506,8 +532,28 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                         eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                         eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                        // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
+                        // Encode to ambisonic using selected encoder
+                        if(configKeyE == \pseudosurround, {
+                            // Use convolution-based spatialization for pseudo-surround
+                            var basicEncode, convolvedEncode, dry, wet, mix = 0.7;
+                            
+                            // Basic encoding first
+                            basicEncode = FoaEncode.ar(eqed, encoder);
+                            
+                            // Apply convolution to each B-format component for spatialization
+                            convolvedEncode = [
+                                PartConv.ar(basicEncode[0], 2048, ~spatialIRs[0]), // W (omnidirectional)
+                                PartConv.ar(basicEncode[1], 2048, ~spatialIRs[1]), // X (front-back)
+                                PartConv.ar(basicEncode[2], 2048, ~spatialIRs[2]), // Y (left-right)
+                                PartConv.ar(basicEncode[3], 2048, ~spatialIRs[3])  // Z (up-down)
+                            ];
+                            
+                            // Mix dry (basic) and wet (convolved) signals
+                            encode = (basicEncode * (1 - mix)) + (convolvedEncode * mix);
+                        }, {
+                            // Standard encoding for UHJ and SuperStereo
                         encode = FoaEncode.ar(eqed, encoder);
+                        });
                         // Ambience processing
                         ambient = AmbiVerbSC.ar(encode,
                             mix: ambience,
@@ -527,7 +573,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             maxPreDelay: 10,
                             feedbackSpread: 1
                         );
-                        // Spatial transformations (rotation, tilt, tumble)
+                        // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -590,7 +636,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
                             \superstereo, FoaEncoderKernel.newSuper,
-                            \pseudosurround, FoaEncoderKernel.newPseudoSurround,
+                            \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
                         ]);
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -613,72 +659,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Load test audio file (same as MainApp2)
                         sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
 
-                        s.sync(cond);
-
-                        // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
-                            // Audio source - live input from hardware
-                            src = SoundIn.ar([0,1]);
-                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
-                            // Amplitude scaling
-                            src = src * \amp.kr(-6.dbamp);
-                            // --- 7-band graphic EQ before ambisonic encode ---
-                            eqed = src;
-                            eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
-                            eqed = BPeakEQ.ar(eqed, 160, 1, eq2);     // Band 2
-                            eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
-                            eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
-                            eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
-                            eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
-                            eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                            // Encode to ambisonic using selected encoder (UHJ or SuperStereo)
-                            encode = FoaEncode.ar(eqed, encoder);
-                            // Ambience processing
-                            ambient = AmbiVerbSC.ar(encode,
-                                mix: ambience,
-                                preDelay: preDelay,
-                                crossoverFreq: 3000,
-                                lowRT: lowRT,
-                                highRT: highRT,
-                                dispersion: dispersion,
-                                size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
-                                modWidth: modWidth,
-                                modRate: modRate,
-                                coupRate: 0.5,
-                                coupAmt: 3,
-                                phaseRotRate: 0.4,
-                                phaseRotAmt: 6.2831853071796,
-                                orientation: 'flu',
-                                maxPreDelay: 10,
-                                feedbackSpread: 1
-                            );
-                            // Spatial transformations (rotation, tilt, tumble)
-                            trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
-                            // Decode using selected decoder
-                            out = FoaDecode.ar(trans, decoder);
-                            if(outputs == 4, {
-                                // --- QUAD PANNER LOGIC (Balance2) ---
-                                // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
-                                frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
-                                rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
-                                quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
-                                quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
-                                out = [
-                                    quadOutFront[0], // LF
-                                    quadOutRear[0],  // LR
-                                    quadOutRear[1],  // RR
-                                    quadOutFront[1]  // RF
-                                ];
-                            });
-                            if(outputs == 6, {
-                                var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
-                                Out.ar(0, out);
-                                Out.ar(5, lowpass);
-                            }, {
-                                Out.ar(0, out);
-                            });
-                        }).add;
+                        // Load spatial impulse responses for pseudo-surround convolution
+                        // These are B-format impulse responses for realistic spatialization
+                        ~spatialIRs = [
+                            // Load B-format impulse responses from the assets folder
+                            // W, X, Y, Z components for convolution spatialization
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_w.wav", 
+                                action: { |buf| ("Loaded W IR: " ++ buf.numFrames ++ " frames").postln; }),
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_x.wav", 
+                                action: { |buf| ("Loaded X IR: " ++ buf.numFrames ++ " frames").postln; }),
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_y.wav", 
+                                action: { |buf| ("Loaded Y IR: " ++ buf.numFrames ++ " frames").postln; }),
+                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_z.wav", 
+                                action: { |buf| ("Loaded Z IR: " ++ buf.numFrames ++ " frames").postln; })
+                        ];
 
                         s.sync(cond);
 
@@ -831,15 +825,33 @@ dbValue = cliToDbMaster.(lastInL);
         ~tiltValue = StaticText(mainView, Rect(719, 162, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
         ~tumbleValue = StaticText(mainView, Rect(719, 244, 55, 20)) .font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
         
-        // Knob360 with 360-degree behavior in action function
+        // Knob360 with 360-degree behavior and automatic mouse/headtracker detection
         ~rotateKnob = Knob360(mainView, Rect(654, 60, 60, 60), 0.5, 0.0, 1.0)
             .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
             .enabled_(false)
             .action_({ |knob, val|
                 // 360-degree behavior: map 0-1 to -180 to +180 degrees
                 var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                
+                // Automatic mouse/headtracker behavior adjustment
+                if(~mouseActive, {
+                    // Mouse input: invert direction for intuitive control
+                    deg = deg.neg;
+                    ~lastInputSource = \mouse;
+                }, {
+                    // Headtracker input: keep normal direction
+                    ~lastInputSource = \headtracker;
+                });
+                
                 ~rotateValue.string = (deg.asString ++ "°");
                 if(~synth.notNil) { ~synth.set(\rotation, deg.degrad); }
+            })
+            .mouseDownAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = true;
+                ~lastInputSource = \mouse;
+            })
+            .mouseUpAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = false;
             });
 
         ~tiltKnob = Knob360(mainView, Rect(654, 142, 60, 60), 0.5, 0.0, 1.0)
@@ -848,8 +860,26 @@ dbValue = cliToDbMaster.(lastInL);
             .action_({ |knob, val|
                 // 360-degree behavior: map 0-1 to -180 to +180 degrees
                 var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                
+                // Automatic mouse/headtracker behavior adjustment
+                if(~mouseActive, {
+                    // Mouse input: invert direction for intuitive control
+                    deg = deg.neg;
+                    ~lastInputSource = \mouse;
+                }, {
+                    // Headtracker input: keep normal direction
+                    ~lastInputSource = \headtracker;
+                });
+                
                 ~tiltValue.string = (deg.asString ++ "°");
                 if(~synth.notNil) { ~synth.set(\tilt, deg.degrad); }
+            })
+            .mouseDownAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = true;
+                ~lastInputSource = \mouse;
+            })
+            .mouseUpAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = false;
             });
 
         ~tumbleKnob = Knob360(mainView, Rect(654, 224, 60, 60), 0.5, 0.0, 1.0)
@@ -858,8 +888,26 @@ dbValue = cliToDbMaster.(lastInL);
             .action_({ |knob, val|
                 // 360-degree behavior: map 0-1 to -180 to +180 degrees
                 var deg = val.linlin(0, 1, -180, 180).round.asInteger;
+                
+                // Automatic mouse/headtracker behavior adjustment
+                if(~mouseActive, {
+                    // Mouse input: invert direction for intuitive control
+                    deg = deg.neg;
+                    ~lastInputSource = \mouse;
+                }, {
+                    // Headtracker input: keep normal direction
+                    ~lastInputSource = \headtracker;
+                });
+                
                 ~tumbleValue.string = (deg.asString ++ "°");
                 if(~synth.notNil) { ~synth.set(\tumble, deg.degrad); }
+            })
+            .mouseDownAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = true;
+                ~lastInputSource = \mouse;
+            })
+            .mouseUpAction_({ |view, x, y, mod, button, count|
+                ~mouseActive = false;
             });
 
 // Value display labels already created above
@@ -955,7 +1003,10 @@ win.front;
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
-            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
+            if(~ambienceOverlay.notNil) { 
+                ~saveAmbienceState.value(); // Save state before removing ambience overlay
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
+            };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
             // Set other buttons to 0 (radio group)
             ~ambienceBtn.value_(0);
@@ -1302,6 +1353,35 @@ win.front;
     };
 };
 
+// --- Ambience State Management Functions ---
+~saveAmbienceState = {
+    if(~ambienceSliders.notNil) {
+        ~ambienceState[\sliderValues] = ~ambienceSliders.collect({ |slider| slider.value });
+        ("Saved ambience state: " ++ ~ambienceState[\sliderValues]).postln;
+    };
+    if(~ambiencePresetMenu.notNil) {
+        ~ambienceState[\presetIndex] = ~ambiencePresetMenu.value;
+        ("Saved preset index: " ++ ~ambienceState[\presetIndex]).postln;
+    };
+};
+
+~restoreAmbienceState = {
+    if(~ambienceSliders.notNil and: { ~ambienceState[\sliderValues].notNil }) {
+        ("Restoring ambience state: " ++ ~ambienceState[\sliderValues]).postln;
+        ~ambienceSliders.do({ |slider, i|
+            var savedValue = ~ambienceState[\sliderValues][i] ? 0.0;
+            slider.value_(savedValue);
+            if(slider.action.notNil) {
+                slider.action.value(slider);
+            };
+        });
+    };
+    if(~ambiencePresetMenu.notNil and: { ~ambienceState[\presetIndex].notNil }) {
+        ("Restoring preset index: " ++ ~ambienceState[\presetIndex]).postln;
+        ~ambiencePresetMenu.value_(~ambienceState[\presetIndex]);
+    };
+};
+
 // --- AmbiVerbSC Preset Recall Function ---
 ~recallAmbiVerbSCPreset = { |presetName|
     var presetData, roomName;
@@ -1335,23 +1415,18 @@ win.front;
             });
         };
 
-        // Update synth with new room and parameters
+        // Update synth with new room and parameters (without breaking audio)
         if(~synth.notNil) {
-            ~synth.free;
-            ~synth = Synth(
-                \kernelEncodeDecode,
-                [
-                    \buffer, sndbuf,
-                    \amp, voltmp,
-                    \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
-                    \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
-                    \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
-                    \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
-                    \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
-                    \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
-                    \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
-                    \size, roomName.asSymbol
-                ]
+            // Use synth.set() instead of recreating to avoid signal break
+            ~synth.set(
+                \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
+                \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
+                \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
+                \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
+                \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
+                \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
+                \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
+                \size, roomName.asSymbol
             );
         };
 
@@ -1405,23 +1480,15 @@ win.front;
                 .font_(Font("Helvetica", 11))
                 .background_(Color.black)
                 .stringColor_(Color.cyan)
-                .value_(0) // Default to first preset
+                .value_(~ambienceState[\presetIndex] ? 0) // Use saved preset index
                 .action_({ |menu|
                     var selectedPreset = ~ambiencePresetNames[menu.value];
                     ~recallAmbiVerbSCPreset.value(selectedPreset);
                 });
-            // Parameter labels and default values
+            // Parameter labels and values (use saved state or defaults)
             sliderLabels = ["Reverb", "PreDly", "LoRT", "HiRT", "Disp", "MWid", "MRate"];
-            params = [
-                0.0, // Reverb (default OFF)
-                0.2, // PreDly
-                0.2, // LoRT
-                0.2, // HiRT
-                0.0, // Disp
-                0.0, // MWid
-                0.0  // MRate
-            ];
-            ~ambienceLastMix = 0.5; // Remember last nonzero mix value
+            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+            ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5; // Remember last nonzero mix value
             ~ambienceSliders = List[];
             ~ambienceValues = List[];
             sliderLabels.do({ |label, i|
@@ -1489,6 +1556,7 @@ win.front;
                 .states_([["CLOSE", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
                 .action_({
+                    ~saveAmbienceState.value(); // Save state before closing
                     ~ambienceOverlay.remove;
                     ~ambienceOverlay = nil;
                     ~ambienceBtn.value_(0);
@@ -1508,14 +1576,22 @@ win.front;
                 .states_([ ["CLOSE", Color.cyan, Color.black] ])
                 .font_(Font("Helvetica", 11))
                 .action_({
+                    ~saveAmbienceState.value(); // Save state before closing
                     ~ambienceOverlay.remove;
                     ~ambienceOverlay = nil;
                     ~ambienceBtn.value_(0);
                 });
             ~ambienceOverlay.front;
-            // Apply default preset on overlay open
-            if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
-                ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
+            // Restore saved state or apply default preset on overlay open
+            if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
+                ("Found saved state, restoring...").postln;
+                ~restoreAmbienceState.value(); // Restore saved slider values
+            } {
+                ("No saved state, applying default preset...").postln;
+                // Apply default preset if no saved state
+                if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
+                    ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
+                }
             }
         } {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
@@ -1529,7 +1605,10 @@ win.front;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
-            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
+            if(~ambienceOverlay.notNil) { 
+                ~saveAmbienceState.value(); // Save state before removing ambience overlay
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
