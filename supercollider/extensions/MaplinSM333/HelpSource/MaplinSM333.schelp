@@ -1,0 +1,187 @@
+TITLE:: MaplinSM333
+summary:: B-Format Ambisonic Spatial Enhancement Processor
+categories:: UGens>Ambisonic
+related:: Classes/FoaEncode, Classes/FoaDecode, Classes/AmbiVerbSC
+
+DESCRIPTION::
+MaplinSM333 is a B-format ambisonic spatial enhancement processor that simulates the Maplin SM-333 Surround Sound Matrix in the ambisonic domain. It works directly with B-format signals (WXYZ) and is compatible with any ambisonic encoder input, making it suitable for use with UHJ, Superstereo, or other ambisonic encoders.
+
+The processor enhances spatial difference signals by applying multi-stage all-pass filtering, frequency-dependent delays, and subtle saturation to create a vintage surround sound effect. It primarily works on the directional components (X, Y) while preserving the omnidirectional character of the W component.
+
+The effect can be used as an optional spatial enhancement stage in any ambisonic processing chain, providing vintage-style surround sound enhancement without the channel mismatch issues of traditional stereo-to-quad conversion.
+
+
+CLASSMETHODS::
+
+METHOD:: ar
+Main audio rate processing method.
+
+ARGUMENT:: input
+A 4-element array containing B-format components [W, X, Y, Z].
+
+ARGUMENT:: surround
+Surround enhancement level (0.0 to 1.0, default 0.8).
+
+ARGUMENT:: effect
+Effect intensity level (0.0 to 1.0, default 0.8).
+
+ARGUMENT:: delay
+Delay time control (0.0 to 1.0, maps to 5-50ms, default 0.4).
+
+ARGUMENT:: active
+Bypass/Active control (0.0 = bypass, 1.0 = active, default 1).
+
+ARGUMENT:: saturation
+Op-amp saturation amount (0.0 to 1.0, default 0.15).
+
+ARGUMENT:: noise
+Thermal noise level (0.0 to 1.0, default 0.1).
+
+ARGUMENT:: bandwidth
+Bandwidth limiting control (0.0 to 1.0, default 0.5).
+
+ARGUMENT:: bbdNoise
+BBD (Bucket Brigade Device) noise level (0.0 to 1.0, default 0.1).
+
+returns:: A 4-element array of processed B-format signals [W, X, Y, Z].
+
+METHOD:: balanced
+Convenience method with balanced preset configuration.
+
+ARGUMENT:: input
+A 4-element array containing B-format components [W, X, Y, Z].
+
+returns:: A 4-element array of processed B-format signals with balanced settings.
+
+METHOD:: maximum
+Convenience method with maximum effect preset configuration.
+
+ARGUMENT:: input
+A 4-element array containing B-format components [W, X, Y, Z].
+
+returns:: A 4-element array of processed B-format signals with maximum effect settings.
+
+METHOD:: subtle
+Convenience method with subtle effect preset configuration.
+
+ARGUMENT:: input
+A 4-element array containing B-format components [W, X, Y, Z].
+
+returns:: A 4-element array of processed B-format signals with subtle effect settings.
+
+
+EXAMPLES::
+
+code::
+// Basic usage in a SynthDef
+(
+SynthDef(\maplinExample, { |in, out|
+    var bformat, processed;
+    
+    // Create B-format from stereo input
+    bformat = FoaEncode.ar(SoundIn.ar([0, 1]), FoaEncoderKernel.newUHJ);
+    
+    // Apply Maplin processing
+    processed = MaplinSM333.ar(bformat, 
+        surround: 0.8, 
+        effect: 0.8, 
+        delay: 0.4, 
+        active: 1
+    );
+    
+    // Decode to stereo
+    Out.ar(out, FoaDecode.ar(processed, FoaDecoderKernel.newListen));
+}).add;
+)
+
+// Start the synth
+Synth(\maplinExample);
+::
+
+code::
+// Using preset configurations
+(
+SynthDef(\maplinPresets, { |in, out, preset = 0|
+    var bformat, processed;
+    
+    bformat = FoaEncode.ar(SoundIn.ar([0, 1]), FoaEncoderKernel.newUHJ);
+    
+    // Select preset based on control
+    processed = Select.kr(preset, [
+        MaplinSM333.balanced(bformat),
+        MaplinSM333.maximum(bformat),
+        MaplinSM333.subtle(bformat)
+    ]);
+    
+    Out.ar(out, FoaDecode.ar(processed, FoaDecoderKernel.newListen));
+}).add;
+)
+
+// Start with different presets
+Synth(\maplinPresets, [\preset, 0]); // Balanced
+Synth(\maplinPresets, [\preset, 1]); // Maximum
+Synth(\maplinPresets, [\preset, 2]); // Subtle
+::
+
+code::
+// Integration with existing ambisonic chain
+(
+SynthDef(\fullAmbisonicChain, { |in, out, maplinActive = 1, maplinSurround = 0.8|
+    var bformat, eqed, maplinProcessed, ambient, decoded;
+    
+    // Encode to B-format
+    bformat = FoaEncode.ar(SoundIn.ar([0, 1]), FoaEncoderKernel.newUHJ);
+    
+    // Apply EQ (example)
+    eqed = bformat.collect({ |channel, i|
+        BPeakEQ.ar(channel, 1000, 1, 3.dbamp);
+    });
+    
+    // Apply Maplin processing (can be bypassed)
+    maplinProcessed = MaplinSM333.ar(eqed, 
+        surround: maplinSurround,
+        active: maplinActive
+    );
+    
+    // Add ambience
+    ambient = AmbiVerbSC.ar(maplinProcessed, mix: 0.3);
+    
+    // Decode to stereo
+    decoded = FoaDecode.ar(ambient, FoaDecoderKernel.newListen);
+    
+    Out.ar(out, decoded);
+}).add;
+)
+
+// Start with Maplin active
+Synth(\fullAmbisonicChain, [\maplinActive, 1, \maplinSurround, 0.8]);
+::
+
+code::
+// Real-time parameter control
+(
+var synth, window, controls;
+synth = Synth(\maplinExample);
+
+window = Window("MaplinSM333 Controls", Rect(100, 100, 300, 200)).front;
+controls = CompositeView(window, Rect(10, 10, 280, 180));
+
+// Surround control
+EZSlider(controls, Rect(10, 10, 260, 20), "Surround", \amp.asSpec, 
+    { |slider| synth.set(\surround, slider.value) }, 0.8);
+
+// Effect control  
+EZSlider(controls, Rect(10, 40, 260, 20), "Effect", \amp.asSpec,
+    { |slider| synth.set(\effect, slider.value) }, 0.8);
+
+// Delay control
+EZSlider(controls, Rect(10, 70, 260, 20), "Delay", \amp.asSpec,
+    { |slider| synth.set(\delay, slider.value) }, 0.4);
+
+// Active/Bypass toggle
+Button(controls, Rect(10, 100, 80, 30))
+    .states_([["BYPASS", Color.red, Color.black], ["ACTIVE", Color.green, Color.black]])
+    .action_({ |btn| synth.set(\active, btn.value) })
+    .value_(1);
+)
+:: 

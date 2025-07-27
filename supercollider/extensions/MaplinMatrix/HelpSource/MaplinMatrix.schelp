@@ -1,0 +1,163 @@
+TITLE:: MaplinMatrix
+summary:: Stereo-to-Quad Matrix Processor
+categories:: UGens>Multichannel
+related:: Classes/FoaEncoderMatrix, Classes/Balance2
+
+DESCRIPTION::
+MaplinMatrix converts stereo input to a 4-channel quad output using matrix processing. The algorithm is based on the Maplin SM-333 hardware unit circuit analysis.
+
+Processing includes:
+- Sum/difference matrix
+- Multi-stage allpass filtering
+- Frequency-dependent delays
+- BBD (Bucket Brigade Device) emulation
+- Thermal noise and saturation modeling
+
+CLASSMETHODS::
+
+METHOD:: ar
+Converts stereo input to quad output.
+
+ARGUMENT:: leftIn
+Left channel audio input.
+
+ARGUMENT:: rightIn  
+Right channel audio input.
+
+ARGUMENT:: surroundLevel
+Rear channel level (0.0 to 1.0, default 0.8).
+
+ARGUMENT:: effectLevel
+Matrix effect intensity (0.0 to 1.0, default 0.8).
+
+ARGUMENT:: delayTime
+Delay time control (0.0 to 1.0, maps to 5-50ms, default 0.4).
+
+ARGUMENT:: active
+Processing bypass (0 = bypass, 1 = active, default 1).
+When bypassed, returns [leftIn, rightIn, 0, 0].
+
+returns:: Array of 4 channels [frontLeft, frontRight, rearLeft, rearRight].
+
+METHOD:: gui
+Opens a control interface for MaplinMatrix parameters. Does not create audio processing - you must create your own synth.
+
+ARGUMENT:: synth
+The synth to control (optional). Must have surroundLevel, effectLevel, delayTime, and active parameters.
+
+returns:: The GUI window for external control.
+
+EXAMPLES::
+
+code::
+// Basic stereo to quad conversion
+(
+{
+    var stereo, quad;
+    stereo = [SinOsc.ar(440), SinOsc.ar(880)] * 0.3;
+    quad = MaplinMatrix.ar(stereo[0], stereo[1]);
+    quad; // 4 channels out
+}.play;
+)
+
+// With parameter control
+(
+var synth = {
+    var input = [SinOsc.ar(440), SinOsc.ar(880)] * 0.3;
+    MaplinMatrix.ar(
+        leftIn: input[0],
+        rightIn: input[1],
+        surroundLevel: \surroundLevel.kr(0.8),
+        effectLevel: \effectLevel.kr(0.8), 
+        delayTime: \delayTime.kr(0.4),
+        active: \active.kr(1)
+    );
+}.play;
+
+// Parameter changes
+synth.set(\surroundLevel, 1.0);
+synth.set(\effectLevel, 0.5);
+synth.set(\active, 0); // bypass
+)
+
+// Encoding to B-format
+(
+{
+    var stereo, quad, bFormat;
+    stereo = [SinOsc.ar(440), SinOsc.ar(880)] * 0.3;
+    quad = MaplinMatrix.ar(stereo[0], stereo[1]);
+    bFormat = FoaEncode.ar(quad, FoaEncoderMatrix.newQuad);
+    FoaDecode.ar(bFormat, FoaDecoderKernel.newListen(1053));
+}.play;
+)
+
+// GUI with user-created synth
+(
+// Create your own synth
+var synth = {
+    var input, output;
+    input = SoundIn.ar([0, 1]);
+    output = MaplinMatrix.ar(input[0], input[1], 
+        surroundLevel: \surroundLevel.kr(0.8),
+        effectLevel: \effectLevel.kr(0.8),
+        delayTime: \delayTime.kr(0.4),
+        active: \active.kr(1)
+    );
+    Out.ar(0, output);
+}.play;
+
+// Open GUI to control the synth
+var gui = MaplinMatrix.gui(synth);
+)
+
+// GUI without synth (controls only)
+(
+var gui = MaplinMatrix.gui();  // No synth - just interface
+)
+
+// GUI with metering (requires OSC messages from synth)
+(
+var synth = {
+    var input, output;
+    input = SoundIn.ar([0, 1]);
+    output = MaplinMatrix.ar(input[0], input[1], 
+        surroundLevel: \surroundLevel.kr(0.8),
+        effectLevel: \effectLevel.kr(0.8),
+        delayTime: \delayTime.kr(0.4),
+        active: \active.kr(1)
+    );
+    
+    // Send meter data to GUI (optional)
+    SendReply.kr(Impulse.kr(30), '/inputMeter', [
+        Amplitude.kr(input[0]), Amplitude.kr(input[1])
+    ]);
+    SendReply.kr(Impulse.kr(30), '/outputMeter', [
+        Amplitude.kr(output[0]), Amplitude.kr(output[1]), 
+        Amplitude.kr(output[2]), Amplitude.kr(output[3])
+    ]);
+    
+    Out.ar(0, output);
+}.play;
+
+var gui = MaplinMatrix.gui(synth);
+)
+::
+
+SECTION:: Technical Details
+
+The matrix processing implements:
+
+LIST::
+## Sum/difference extraction from stereo input
+## Phase shifting using cascaded allpass filters
+## Frequency band splitting (low/mid/high)
+## Per-band delay processing
+## BBD noise and bandwidth limiting
+## Output scaling and saturation
+::
+
+Parameter ranges:
+- surroundLevel: 0.0 = no rear output, 1.0 = rear matches front level
+- effectLevel: 0.0 = minimal processing, 1.0 = full matrix effect
+- delayTime: 0.0 = 5ms delay, 1.0 = 50ms delay
+- active: 0 = bypass (stereo + silence), 1 = process 

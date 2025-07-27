@@ -1,6 +1,6 @@
-// ===================================================
-// UHJ AMBISONIC SYSTEM v20 - AMBISONIC UHJ TRANSCODER
-// ===================================================
+// ============================================================================
+// UHJ AMBISONIC SYSTEM v15 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
+// ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
@@ -29,8 +29,8 @@ var win, mainView,
 
 // --- EQ state preservation variables ---
 ~eqState = Dictionary.newFrom([
-    \sliderValues, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  // Default values (0dB)
-    \presetIndex, 0  // Default preset index
+    \sliderValues, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  // Default values (0dB = 0.5)
+    \presetIndex, 0   // Default preset index
 ]);
 
 // --- Initial values for input section ---
@@ -316,16 +316,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     Rect(180, 45, 140, 35),
     "",
     [
-        \UHJ -> { |a| configKeyE = \uhj; },
-        \SUPERSTEREO -> { |a| configKeyE = \superstereo; }
-
+        \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
+        \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; },
+        \PSEUDO -> { |a| configKeyE = \pseudosurround; ("Encoder: PSEUDO SURROUND").postln; }
     ],
     globalAction: { |menu|
+        ("Selected encoder: " ++ menu.item).postln;
+        // Save current synth parameters before reinitializing
+        ~saveSynthParams.value();
         // Always call audio engine init; it will reload only if needed
         ~initAudioEngine.value();
     },
     initVal: 0,
-    initAction: true,
+    initAction: false,
     labelWidth: 0,
     labelHeight: 0,
     layout: \horz,
@@ -427,6 +430,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         };
         // --- Audio engine reinitialization logic (must be last) ---
         if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
+            // Save current synth parameters before reinitializing
+            ~saveSynthParams.value();
             ~initAudioEngine.value();
             ~prevConfigKeyD = configKeyD;
         };
@@ -459,6 +464,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 ~lastInputSource = \headtracker;  // Default to headtracker
 ~mouseActive = false;  // Track if mouse is currently being used
 
+// --- Pseudo-Surround Encoder ---
+// Use ATK's built-in stereo encoder if available, otherwise create custom one
+// This provides a clean foundation for convolution-based spatialization
 
 // Audio engine initialization function (from MainApp2)
 ~initAudioEngine = {
@@ -468,15 +476,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     var needReboot;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
-    
-    // Debug: Show what changed
-    if(needReboot, {
-        // 
-        if(inputs != (~prevInputs ? inputs), { ("  - inputs changed").postln; });
-        if(outputs != (~prevOutputs ? outputs), { ("  - outputs changed").postln; });
-        if(configKeyD != (~prevConfigKeyD ? configKeyD), { ("  - decoder changed").postln; });
-        if(configKeyE != (~prevConfigKeyE ? configKeyE), { ("  - encoder changed from " ++ (~prevConfigKeyE ? "nil") ++ " to " ++ configKeyE).postln; });
-    });
     tryBoot = {
         if(s.serverBooting, {
             ("Server busy (booting), retrying audio engine init...").postln;
@@ -489,12 +488,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
-                    // Replace all amixer commands with a quiet version
-                    "amixer -c HD set PCM 126 > /dev/null 2>&1".unixCmd;
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
-                        \superstereo, FoaEncoderKernel.newSuper
+                        \superstereo, FoaEncoderKernel.newSuper,
+                        \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
                     ]);
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -512,12 +510,18 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     encoder = encoderDict.at(configKeyE ? \uhj);
                     decoder = decoderDict.at(configKeyD ? \binaural);
 
-                    // After setting encoder and decoder from their dictionaries, print their values for debugging
-                    encoder.postln;
-                    decoder.postln;
-                    //load test audio file
-                    //sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                    ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
+
+                    // Load test audio file (same as MainApp2)
+                    sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
                     
+                    // Load spatial impulse responses for pseudo-surround convolution
+                    // These would be B-format impulse responses for realistic spatialization
+                    ~spatialIRs = Array.fill(4, { |i|
+                        // Placeholder for spatial IR loading
+                        // In a full implementation, these would be loaded from files
+                        Buffer.alloc(s, 2048, 1); // Temporary buffer
+                    });
 
                     s.sync(cond);
 
@@ -538,7 +542,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                         eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                         eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                        // Encode to ambisonic using selected encoder (all modes)
+                        
+                        // Encode to ambisonic using selected encoder
                         encode = FoaEncode.ar(eqed, encoder);
                         
                         // Ambience processing
@@ -589,34 +594,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     s.sync(cond);
 
-                                                                    // Start the synth
-                        ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
-                      
-                    // Reapply current EQ settings to the new synth
-                    if(~eqSliders.notNil) {
-                        var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                        ~eqSliders.do({ |slider, i|
-                            if(slider.notNil and: { slider.value.notNil }) {
-                                var db = slider.value.linlin(0, 1, -12, 12);
-                                ~synth.set(eqParams[i], db);
-                            };
-                        });
-                    };
+                    // Start the synth
+                    ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
                     
-                    // Reapply current ambience settings to the new synth
-                    if(~ambienceState[\sliderValues].notNil) {
-                        ~ambienceState[\sliderValues].do({ |value, i|
-                            switch(i,
-                                0, { ~synth.set(\ambience, value.linlin(0, 1, 0, 0.2)); },
-                                1, { ~synth.set(\preDelay, value.linlin(0,1,0,0.5)); },
-                                2, { ~synth.set(\lowRT, value.linlin(0,1,0.1,2)); },
-                                3, { ~synth.set(\highRT, value.linlin(0,1,0.2,4)); },
-                                4, { ~synth.set(\dispersion, value.linlin(0,1,0.1,2)); },
-                                5, { ~synth.set(\modWidth, value); },
-                                6, { ~synth.set(\modRate, value); }
-                            );
-                        });
-                    };
+                    // Restore saved parameters to new synth
+                    ~restoreSynthParams.value();
 
                     // Create level meter after synth is started
                     {
@@ -635,25 +617,21 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         });
                     }.defer(0.1);
 
-                    // Remove any print of configKeyD or decoder key
-                    // Remove the 'Audio synthesis started with level meter' message
+                    ("Audio synthesis started with level meter").postln;
                 });
             }, {
                 if(needReboot, {
-                    // ("REBOOTING SERVER due to encoder/decoder change").postln;
                     s.options.memSize = 65536;
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
-                        // Replace all amixer commands with a quiet version
-                        "amixer -c HD set PCM 126 > /dev/null 2>&1".unixCmd;
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
-                            \superstereo, FoaEncoderKernel.newSuper
-                            // PSEUDO option removed
+                            \superstereo, FoaEncoderKernel.newSuper,
+                            \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
                         ]);
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -670,17 +648,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Get selected encoder and decoder
                         encoder = encoderDict.at(configKeyE ? \uhj);
                         decoder = decoderDict.at(configKeyD ? \binaural);
-                        encoder.postln;
-                        decoder.postln;
-                        // Load test audio file (same as MainApp2)
-                        // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
 
-            
-                        
+                        ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
+
+                        // Load test audio file (same as MainApp2)
+                        sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
 
                         s.sync(cond);
 
-                        // Define the main audio processing SynthDef
+                        // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
                             // Audio source - live input from hardware
@@ -697,10 +673,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                             eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                             eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
-                            // Encode to ambisonic using selected encoder (all modes)
+                            // Encode to ambisonic using selected encoder (UHJ, SuperStereo, or PseudoSurround)
                             encode = FoaEncode.ar(eqed, encoder);
-                        
-                        // Ambience processing
+                            // Ambience processing
                             ambient = AmbiVerbSC.ar(encode,
                                 mix: ambience,
                                 preDelay: preDelay,
@@ -719,7 +694,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 maxPreDelay: 10,
                                 feedbackSpread: 1
                             );
-                            // Spatial transformations (rotation, tilt, tumble) - apply to all modes
+                            // Spatial transformations (rotation, tilt, tumble)
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
@@ -746,36 +721,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             });
                         }).add;
 
+                        s.sync(cond);
+
                         // Start the synth
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
                         
-                
-
-                        // Reapply current EQ settings to the new synth
-                        if(~eqSliders.notNil) {
-                            var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                            ~eqSliders.do({ |slider, i|
-                                if(slider.notNil and: { slider.value.notNil }) {
-                                    var db = slider.value.linlin(0, 1, -12, 12);
-                                    ~synth.set(eqParams[i], db);
-                                };
-                            });
-                        };
-                        
-                        // Reapply current ambience settings to the new synth
-                        if(~ambienceState[\sliderValues].notNil) {
-                            ~ambienceState[\sliderValues].do({ |value, i|
-                                switch(i,
-                                    0, { ~synth.set(\ambience, value.linlin(0, 1, 0, 0.2)); },
-                                    1, { ~synth.set(\preDelay, value.linlin(0,1,0,0.5)); },
-                                    2, { ~synth.set(\lowRT, value.linlin(0,1,0.1,2)); },
-                                    3, { ~synth.set(\highRT, value.linlin(0,1,0.2,4)); },
-                                    4, { ~synth.set(\dispersion, value.linlin(0,1,0.1,2)); },
-                                    5, { ~synth.set(\modWidth, value); },
-                                    6, { ~synth.set(\modRate, value); }
-                                );
-                            });
-                        };
+                        // Restore saved parameters to new synth
+                        ~restoreSynthParams.value();
 
                         // Create level meter after synth is started
                         {
@@ -793,6 +745,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                     .string_((i+1).asString);
                             });
                         }.defer(0.1);
+
+                        ("Audio synthesis started with level meter").postln;
                     });
                 });
             });
@@ -1099,17 +1053,13 @@ win.front;
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
-            if(~eqOverlay.notNil) { 
-                ~saveEqState.value(); // Save state before removing EQ overlay
-                ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
-            };
             if(~ambienceOverlay.notNil) { 
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
             // Set other buttons to 0 (radio group)
-            ~eqBtn.value_(0);
+            ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
             // --- Remove any previous EQ overlay and controls to prevent duplicates ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; };
@@ -1299,9 +1249,7 @@ win.front;
                     ~eqBtn.value_(0);
                 });
             ~eqOverlay.front;
-            // Set EQ button to selected state
-            ~eqBtn.value_(1);
-            // --- Restore saved state on overlay open ---
+            // --- Restore EQ state after controls are created ---
             ~restoreEqState.value();
             // --- On open, set synth EQ params to current slider values ---
             if(~synth.notNil) {
@@ -1491,13 +1439,17 @@ win.front;
 ~saveEqState = {
     if(~eqSliders.notNil) {
         ~eqState[\sliderValues] = ~eqSliders.collect({ |slider| slider.value });
+        ("Saved EQ state: " ++ ~eqState[\sliderValues]).postln;
     };
     if(~eqPresetMenu.notNil) {
         ~eqState[\presetIndex] = ~eqPresetMenu.value;
+        ("Saved EQ preset index: " ++ ~eqState[\presetIndex]).postln;
     };
 };
+
 ~restoreEqState = {
     if(~eqSliders.notNil and: { ~eqState[\sliderValues].notNil }) {
+        ("Restoring EQ state: " ++ ~eqState[\sliderValues]).postln;
         ~eqSliders.do({ |slider, i|
             var savedValue = ~eqState[\sliderValues][i] ? 0.5;
             slider.value_(savedValue);
@@ -1507,7 +1459,76 @@ win.front;
         });
     };
     if(~eqPresetMenu.notNil and: { ~eqState[\presetIndex].notNil }) {
+        ("Restoring EQ preset index: " ++ ~eqState[\presetIndex]).postln;
         ~eqPresetMenu.value_(~eqState[\presetIndex]);
+    };
+};
+
+// --- Synth Parameter State Management (for encoder/decoder changes) ---
+~saveSynthParams = {
+    var currentEqValues, currentAmbienceValues;
+    
+    ("Debug: Saving synth params. ~eqSliders = " ++ ~eqSliders ++ ", ~ambienceSliders = " ++ ~ambienceSliders).postln;
+    
+    // Always use stored state values - these are maintained by the GUI save/restore functions
+    // Convert EQ slider values (0-1) to dB values (-12 to +12)
+    if(~eqState[\sliderValues].notNil) {
+        currentEqValues = ~eqState[\sliderValues].collect({ |sliderVal|
+            if(sliderVal.notNil) {
+                sliderVal.linlin(0, 1, -12, 12);
+            } {
+                0; // Default if value is nil
+            };
+        });
+        ~eqState[\synthParams] = currentEqValues;
+        ("Saved synth EQ params: " ++ currentEqValues).postln;
+    } {
+        // Use default flat EQ if no stored values
+        ~eqState[\synthParams] = [0, 0, 0, 0, 0, 0, 0];
+        ("Using default EQ params").postln;
+    };
+    
+    // Use stored ambience values directly (they're already in synth parameter format)
+    if(~ambienceState[\sliderValues].notNil) {
+        ~ambienceState[\synthParams] = ~ambienceState[\sliderValues];
+        ("Saved synth ambience params: " ++ ~ambienceState[\sliderValues]).postln;
+    } {
+        // Use default ambience settings if no stored values
+        ~ambienceState[\synthParams] = [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+        ("Using default ambience params").postln;
+    };
+};
+
+~restoreSynthParams = {
+    // Restore EQ parameters to new synth
+    if(~synth.notNil and: { ~eqState[\synthParams].notNil }) {
+        var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
+        ~eqState[\synthParams].do({ |dbValue, i|
+            if(dbValue.notNil and: { i < eqParams.size }) {
+                ~synth.set(eqParams[i], dbValue);
+            };
+        });
+        ("Restored synth EQ params: " ++ ~eqState[\synthParams]).postln;
+    };
+    
+    // Restore ambience parameters to new synth
+    if(~synth.notNil and: { ~ambienceState[\synthParams].notNil }) {
+        var params = ~ambienceState[\synthParams];
+        if(params.size >= 7) {
+            // Convert slider values (0-1) to synth parameter ranges (matching GUI slider actions)
+            ~synth.set(
+                \ambience, (params[0] ? 0).linlin(0, 1, 0, 0.2),    // Mix: 0-20%
+                \preDelay, params[1] ? 0,                            // PreDelay: direct value
+                \lowRT, (params[2] ? 0.2).linlin(0, 1, 0.2, 4),     // LowRT: 0.2-4s  
+                \highRT, (params[3] ? 2).linlin(0, 1, 0.2, 4),      // HighRT: 0.2-4s
+                \dispersion, params[4] ? 1,                          // Dispersion: direct value
+                \modWidth, params[5] ? 0.2,                          // ModWidth: direct value
+                \modRate, params[6] ? 0.3                            // ModRate: direct value
+            );
+            ("Restored synth ambience params (converted): mix=" ++ (params[0] ? 0).linlin(0, 1, 0, 0.2) ++ ", others=" ++ params[1..6]).postln;
+        } {
+            ("Warning: ambience params array too small: " ++ params).postln;
+        };
     };
 };
 
@@ -1714,8 +1735,6 @@ win.front;
                     ~ambienceBtn.value_(0);
                 });
             ~ambienceOverlay.front;
-            // Set ambience button to selected state
-            ~ambienceBtn.value_(1);
             // Restore saved state or apply default preset on overlay open
             if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
                 ("Found saved state, restoring...").postln;
@@ -2014,13 +2033,13 @@ Tdef( 'tryOpenHID' , {
             keepLooking = false;
          }
       };
-               if ( keepLooking ){
-            // HID.findAvailable; // Temporarily disabled for debugging
-            if ( HID.findBy(0,0).size > 0 ){
+      if ( keepLooking ){
+         HID.findAvailable;
+         if ( HID.findBy(0,0).size > 0 ){
             ~myhid = HID.open(0,0);
             if ( ~myhid.notNil ){
                ~myhid.closeAction = {
-                    // "device closed".postln; // Temporarily disabled for debugging
+                    "device closed".postln;
                     Tdef( \tryOpenHID ).reset.play;
                };
                keepLooking = false;
@@ -2068,6 +2087,5 @@ HIDdef.usage( \hidTumble, { |val|
             );
         };
     }.defer;
-}, \X ); 
-
-// ... existing code ...
+}, \X );
+// ... existing 

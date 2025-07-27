@@ -11,12 +11,17 @@ var win, mainView,
     voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
-~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil;
-~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil;
+~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~maplinOverlay = nil;
+~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
+// --- Maplin overlay variables ---
+~maplinSurroundKnob = nil; ~maplinEffectKnob = nil; ~maplinDelayKnob = nil; ~maplinActiveBtn = nil;
+~maplinSurroundValue = nil; ~maplinEffectValue = nil; ~maplinDelayValue = nil;
 // --- Headtracker overlays ---
-~knobOverlay = nil; ~htBtnOverlay = nil;
+~knobOverlay = nil; ~htBtnOverlay = nil;                                                                                                                                                                                                                                                                                                                
+// --- Maplin button overlay ---
+~maplinBtnOverlay = nil;
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -29,9 +34,19 @@ var win, mainView,
 
 // --- EQ state preservation variables ---
 ~eqState = Dictionary.newFrom([
-    \sliderValues, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  // Default values (0dB)
-    \presetIndex, 0  // Default preset index
+    \sliderValues, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],  // Default values (0dB = 0.5)
+    \presetIndex, 0   // Default preset index
 ]);
+
+// --- Maplin state preservation variables ---
+~maplinState = Dictionary.newFrom([
+    \surround, 0.8,   // Surround level
+    \effect, 0.8,     // Effect level
+    \delay, 0.4,      // Delay amount
+    \active, 0        // Active/bypass (default OFF)
+]);
+
+
 
 // --- Initial values for input section ---
 isUpdating = false;
@@ -43,7 +58,7 @@ maxIn = 127;
 lastFaderGroup = \none;
 
 // Audio engine initial values
-voltmp = 0.5;
+voltmp = 1.0; // 0dB = 1.0 amplitude
 
 // Encoder/Decoder configuration defaults
 configKeyE = \uhj;      // Default encoder: UHJ
@@ -105,11 +120,11 @@ mainView = CompositeView(win, Rect(0, 0, 800, 480)).background_(Color.black);
 StaticText(mainView, Rect(48, 10, 120, 28))
     .string_("INPUT")
     .align_(\center)
-    .font_(Font("Helvetica", 14).boldVariant)
+    .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
-StaticText(mainView, Rect(70, 40, 24, 24)).string_("L").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 12));
-StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 12));
+StaticText(mainView, Rect(70, 40, 24, 24)).string_("L").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
+StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
 
 // Input faders with MainApp2's smart linking logic
 ~leftSlider = Slider(mainView, Rect(70, 70, 24, 300))
@@ -164,11 +179,11 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
         }
     });
 
-~leftValue = StaticText(mainView, Rect(65, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 12));
-~rightValue = StaticText(mainView, Rect(115, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 12));
+~leftValue = StaticText(mainView, Rect(65, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
+~rightValue = StaticText(mainView, Rect(115, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
 
 // Add "dB" label between the faders, vertically aligned with the values
-StaticText(mainView, Rect(95, 380, 24, 24)).string_("dB").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 12));
+StaticText(mainView, Rect(95, 380, 24, 24)).string_("dB").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
 
 // Visual tick marks between faders using proper drawn lines
 UserView(mainView, Rect(98, 70, 18, 300))
@@ -203,7 +218,7 @@ mainView.mouseUpAction_({
 // Source selector buttons with MainApp2's CLI integration
 ~lineBtn = Button(mainView, Rect(18, 70, 40, 20))
     .states_([["LINE", Color.cyan, Color.black], ["LINE", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({ |btn|
         if(btn.value == 1) {
             ~mmBtn.value_(0);
@@ -214,7 +229,7 @@ mainView.mouseUpAction_({
 
 ~mmBtn = Button(mainView, Rect(18, 110, 40, 20))
     .states_([["MM", Color.cyan, Color.black], ["MM", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({ |btn|
         if(btn.value == 1) {
             ~lineBtn.value_(0);
@@ -225,7 +240,7 @@ mainView.mouseUpAction_({
 
 ~mcBtn = Button(mainView, Rect(18, 150, 40, 20))
     .states_([["MC", Color.cyan, Color.black], ["MC", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({ |btn|
         if(btn.value == 1) {
             ~lineBtn.value_(0);
@@ -237,7 +252,7 @@ mainView.mouseUpAction_({
 // RESET, MON, MUTE, LINK buttons with MainApp2 functionality
 ~resetBtn = Button(mainView, Rect(18, 270, 40, 20))
     .states_([["RESET", Color.cyan, Color.black]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({ |btn|
         ("phono-control -d").unixCmd;
         // Reset GUI to match defaults
@@ -264,7 +279,7 @@ mainView.mouseUpAction_({
 
 ~monBtn = Button(mainView, Rect(18, 310, 40, 20))
     .states_([["MON", Color.cyan, Color.black], ["MON", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({ |btn|
         var cmd = if(btn.value == 1) { "phono-control -M" } { "phono-control -m" };
         cmd.unixCmd;
@@ -272,7 +287,7 @@ mainView.mouseUpAction_({
 
 ~muteBtn = Button(mainView, Rect(76, 410, 60, 35))
     .states_([["MUTE", Color.cyan, Color.black], ["MUTE", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 13))
     .action_({ |btn|
         if(btn.value == 1) {
             // Muting: remember the last input command
@@ -293,7 +308,7 @@ mainView.mouseUpAction_({
 
 ~linkBtn = Button(mainView, Rect(18, 350, 40, 20))
     .states_([["LINK", Color.cyan, Color.black], ["LINK", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .value_(linkFaders.asInteger)
     .action_({ |btn| linkFaders = btn.value == 1; });
 
@@ -301,13 +316,13 @@ mainView.mouseUpAction_({
 StaticText(mainView, Rect(180, 10, 140, 28))
     .string_("ENCODER")
     .align_(\center)
-    .font_(Font("Helvetica", 14).boldVariant)
+    .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
 StaticText(mainView, Rect(360, 10, 140, 28))
     .string_("DECODER")
     .align_(\center)
-    .font_(Font("Helvetica", 14).boldVariant)
+    .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
 // Encoder menu (Input format selection)
@@ -318,10 +333,47 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     [
         \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
         \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; },
-                        \PSEUDO -> { |a| configKeyE = \pseudosurround; ("Encoder: PSEUDO SURROUND").postln; }
+        \MAPLIN -> { |a| configKeyE = \maplin; ("Encoder: MAPLIN").postln; }
     ],
     globalAction: { |menu|
+        // Update maplinMode on existing synth if it exists
+        if(~synth.notNil) {
+            ~synth.set(\maplinMode, if(configKeyE == \maplin, 1, 0));
+            ("Updated maplinMode to: " ++ if(configKeyE == \maplin, 1, 0)).postln;
+        };
+        
+        // Show/hide SM-333 button overlay based on encoder selection
+        if(~maplinBtn.notNil) {
+            if(configKeyE == \maplin) {
+                // Remove overlay to enable button
+                ("Enabling SM-333 button for MAPLIN mode").postln;
+                if(~maplinBtnOverlay.notNil) {
+                    ~maplinBtnOverlay.remove;
+                    ~maplinBtnOverlay = nil;
+                    ("SM-333 button overlay removed").postln;
+                };
+            } {
+                // Close maplin overlay if it's open when switching away from maplin encoder
+                ("Disabling SM-333 button for non-MAPLIN mode").postln;
+                if(~maplinOverlay.notNil) {
+                    ~saveMaplinState.value();
+                    ~maplinOverlay.remove;
+                    ~maplinOverlay = nil;
+                    ~maplinBtn.value_(0);
+                };
+                // Add overlay to dim button (only if not already present)
+                if(~maplinBtnOverlay.isNil) {
+                    ~maplinBtnOverlay = View(mainView, Rect(290, 410, 100, 35))
+                        .background_(Color.black.alpha_(0.7))
+                        .alpha_(1.0)
+                        .front;
+                    ("SM-333 button overlay added").postln;
+                };
+            };
+        };
         ("Selected encoder: " ++ menu.item).postln;
+        // Save current synth parameters before reinitializing
+        ~saveSynthParams.value();
         // Always call audio engine init; it will reload only if needed
         ~initAudioEngine.value();
     },
@@ -428,6 +480,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         };
         // --- Audio engine reinitialization logic (must be last) ---
         if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
+            // Save current synth parameters before reinitializing
+            ~saveSynthParams.value();
             ~initAudioEngine.value();
             ~prevConfigKeyD = configKeyD;
         };
@@ -441,10 +495,10 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 );
 
 // Style the menus to match the GUI prototype
-~emenu.font = Font("Helvetica", 12);
+~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
 
-~dmenu.font = Font("Helvetica", 12);
+~dmenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~dmenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
 
 // --- Track previous channel counts for safe decoder switching ---
@@ -484,11 +538,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
+                    // Set audio card volume after server boot
+                    ("amixer -c HD set PCM 80%").unixCmd;
+                    
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
                         \superstereo, FoaEncoderKernel.newSuper,
-                        \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
+                        \maplin, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
                     ]);
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -522,13 +579,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
-                        var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
+                        var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
                         // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
                         // Amplitude scaling
-                        src = src * \amp.kr(-6.dbamp);
+                        src = src * \amp.kr(0.dbamp); // 0dB default
                         // --- 7-band graphic EQ before ambisonic encode ---
                         eqed = src;
                         eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
@@ -538,28 +595,22 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
                         eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                         eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
+                        
+                        // Pre-processing for maplin encoder: stereo to quad via MaplinMatrix
+                        maplinQuad = MaplinMatrix.ar(
+                            eqed[0], eqed[1],
+                            surroundLevel: maplinSurround,
+                            effectLevel: maplinEffect,
+                            delayTime: maplinDelay,
+                            active: maplinActive
+                        );
+                        
+                        // Select input for encoding: quad (if maplin) or stereo (others)
+                        encodeInput = Select.ar(maplinMode, [eqed, maplinQuad]);
+                        
                         // Encode to ambisonic using selected encoder
-                        if(configKeyE == \pseudosurround, {
-                            // Use convolution-based spatialization for pseudo-surround
-                            var basicEncode, convolvedEncode, dry, wet, mix = 0.7;
-                            
-                            // Basic encoding first
-                            basicEncode = FoaEncode.ar(eqed, encoder);
-                            
-                            // Apply convolution to each B-format component for spatialization
-                            convolvedEncode = [
-                                PartConv.ar(basicEncode[0], 2048, ~spatialIRs[0]), // W (omnidirectional)
-                                PartConv.ar(basicEncode[1], 2048, ~spatialIRs[1]), // X (front-back)
-                                PartConv.ar(basicEncode[2], 2048, ~spatialIRs[2]), // Y (left-right)
-                                PartConv.ar(basicEncode[3], 2048, ~spatialIRs[3])  // Z (up-down)
-                            ];
-                            
-                            // Mix dry (basic) and wet (convolved) signals
-                            encode = (basicEncode * (1 - mix)) + (convolvedEncode * mix);
-                        }, {
-                            // Standard encoding for UHJ and SuperStereo
-                        encode = FoaEncode.ar(eqed, encoder);
-                        });
+                        encode = FoaEncode.ar(encodeInput, encoder);
+                        
                         // Ambience processing
                         ambient = AmbiVerbSC.ar(encode,
                             mix: ambience,
@@ -584,7 +635,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
                         if(outputs == 4, {
-                            // --- QUAD PANNER LOGIC (Balance2) ---
+                            // --- Q-PANNER LOGIC (Balance2) ---
                             // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
                             frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
                             rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
@@ -609,16 +660,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Start the synth
-                    ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
-
-                    // Reapply current EQ settings to the new synth
-                    if(~eqSliders.notNil) {
-                        var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                        ~eqSliders.do({ |slider, i|
-                            var db = slider.value.linlin(0, 1, -12, 12);
-                            ~synth.set(eqParams[i], db);
-                        });
-                    };
+                    ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
+                        \maplinSurround, ~maplinState[\surround], 
+                        \maplinEffect, ~maplinState[\effect],
+                        \maplinDelay, ~maplinState[\delay], 
+                        \maplinActive, ~maplinState[\active],
+                        \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                    
+                    // Restore saved parameters to new synth
+                    ~restoreSynthParams.value();
 
                     // Create level meter after synth is started
                     {
@@ -647,11 +697,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
+                        // Set audio card volume after server reboot
+                        ("amixer -c HD set PCM 80%").unixCmd;
+                        
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
                             \superstereo, FoaEncoderKernel.newSuper,
-                            \pseudosurround, FoaEncoderMatrix.newStereo,  // Use ATK's built-in stereo encoder
+                            \maplin, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
                         ]);
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
@@ -674,34 +727,98 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Load test audio file (same as MainApp2)
                         sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
 
-                        // Load spatial impulse responses for pseudo-surround convolution
-                        // These are B-format impulse responses for realistic spatialization
-                        ~spatialIRs = [
-                            // Load B-format impulse responses from the assets folder
-                            // W, X, Y, Z components for convolution spatialization
-                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_w.wav", 
-                                action: { |buf| ("Loaded W IR: " ++ buf.numFrames ++ " frames").postln; }),
-                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_x.wav", 
-                                action: { |buf| ("Loaded X IR: " ++ buf.numFrames ++ " frames").postln; }),
-                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_y.wav", 
-                                action: { |buf| ("Loaded Y IR: " ++ buf.numFrames ++ " frames").postln; }),
-                            Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_z.wav", 
-                                action: { |buf| ("Loaded Z IR: " ++ buf.numFrames ++ " frames").postln; })
-                        ];
+                        s.sync(cond);
+
+                        // Define the main audio processing SynthDef (adapted from MainApp2)
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
+                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                            // Audio source - live input from hardware
+                            src = SoundIn.ar([0,1]);
+                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
+                            // Amplitude scaling
+                            src = src * \amp.kr(0.dbamp); // 0dB default
+                            // --- 7-band graphic EQ before ambisonic encode ---
+                            eqed = src;
+                            eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
+                            eqed = BPeakEQ.ar(eqed, 160, 1, eq2);     // Band 2
+                            eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
+                            eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
+                            eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
+                            eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
+                            eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
+                            
+                            // Pre-processing for maplin encoder: stereo to quad via MaplinMatrix
+                            maplinQuad = MaplinMatrix.ar(
+                                eqed[0], eqed[1],
+                                surroundLevel: maplinSurround,
+                                effectLevel: maplinEffect,
+                                delayTime: maplinDelay,
+                                active: maplinActive
+                            );
+                            
+                            // Select input for encoding: quad (if maplin) or stereo (others)
+                            encodeInput = Select.ar(maplinMode, [eqed, maplinQuad]);
+                            
+                            // Encode to ambisonic using selected encoder
+                            encode = FoaEncode.ar(encodeInput, encoder);
+                            // Ambience processing
+                            ambient = AmbiVerbSC.ar(encode,
+                                mix: ambience,
+                                preDelay: preDelay,
+                                crossoverFreq: 3000,
+                                lowRT: lowRT,
+                                highRT: highRT,
+                                dispersion: dispersion,
+                                size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
+                                modWidth: modWidth,
+                                modRate: modRate,
+                                coupRate: 0.5,
+                                coupAmt: 3,
+                                phaseRotRate: 0.4,
+                                phaseRotAmt: 6.2831853071796,
+                                orientation: 'flu',
+                                maxPreDelay: 10,
+                                feedbackSpread: 1
+                            );
+                            // Spatial transformations (rotation, tilt, tumble)
+                            trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
+                            // Decode using selected decoder
+                            out = FoaDecode.ar(trans, decoder);
+                            if(outputs == 4, {
+                                // --- Q-PANNER LOGIC (Balance2) ---
+                                // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
+                                frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
+                                rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
+                                quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
+                                quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
+                                out = [
+                                    quadOutFront[0], // LF
+                                    quadOutRear[0],  // LR
+                                    quadOutRear[1],  // RR
+                                    quadOutFront[1]  // RF
+                                ];
+                            });
+                            if(outputs == 6, {
+                                var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
+                                Out.ar(0, out);
+                                Out.ar(5, lowpass);
+                            }, {
+                                Out.ar(0, out);
+                            });
+                        }).add;
 
                         s.sync(cond);
 
                         // Start the synth
-                        ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp]);
-
-                        // Reapply current EQ settings to the new synth
-                        if(~eqSliders.notNil) {
-                            var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
-                            ~eqSliders.do({ |slider, i|
-                                var db = slider.value.linlin(0, 1, -12, 12);
-                                ~synth.set(eqParams[i], db);
-                            });
-                        };
+                        ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
+                            \maplinSurround, ~maplinState[\surround], 
+                            \maplinEffect, ~maplinState[\effect],
+                            \maplinDelay, ~maplinState[\delay], 
+                            \maplinActive, ~maplinState[\active],
+                            \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                        
+                        // Restore saved parameters to new synth
+                        ~restoreSynthParams.value();
 
                         // Create level meter after synth is started
                         {
@@ -735,7 +852,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 };
 
 // --- Level Meter Section ---
-~meterView = View(mainView, Rect(180, 107, 320, 275)).background_(Color.cyan(0.2, 0.4));
+~meterView = View(mainView, Rect(180, 107, 320, 275)).background_(Color.clear);
 
 // Add a thin border around the meter view
 ~meterBorder = UserView(~meterView, Rect(0, 0, 320, 275))
@@ -960,7 +1077,7 @@ dbValue = cliToDbMaster.(lastInL);
 StaticText(mainView, Rect(618, 10, 140, 28))
     .string_("HEADTRACKER")
     .align_(\center)
-    .font_(Font("Helvetica", 14).boldVariant)
+    .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
 // --- CONTROL LABELS ---
@@ -971,7 +1088,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
 // --- ON/OFF TOGGLE BUTTON ---
 ~headtrackBtn = Button(mainView, Rect(742, 62, 40, 20))
     .states_([["OFF", Color.cyan, Color.black], ["ON", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({ |btn|
         var on = btn.value == 1;
         var idx = ~dmenu.value;
@@ -999,7 +1116,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
 // --- RESET BUTTON ---
 ~headtrackResetBtn = Button(mainView, Rect(742, 102, 40, 20))
     .states_([["RESET", Color.cyan, Color.black]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 10))
     .action_({
 ~rotateKnob.valueAction_(0.5); ~rotateKnob.enabled_(false);
 ~tiltKnob.valueAction_(0.5); ~tiltKnob.enabled_(false);
@@ -1009,12 +1126,12 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
 // --- Now trigger the overlay/enable logic for the correct initial state ---
 ~dmenu.globalAction.value(~dmenu);
 
-// --- QUAD PANNER LABEL ---
+// --- Q-PANNER LABEL ---
 StaticText(mainView, Rect(629, 299, 110, 22))
-    .string_("QUAD PANNER")
+    .string_("Q-PANNER")
     .align_(\center)
     .stringColor_(Color.cyan)
-    .font_(Font("Helvetica", 14).boldVariant)
+    .font_(Font("LCD 5x7 Segment Monospace", 14))
     .background_(Color.clear);
 win.front;
 
@@ -1022,23 +1139,24 @@ win.front;
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---
 ~eqBtn = Button(mainView, Rect(180, 410, 100, 35))
     .states_([ ["EQ", Color.cyan, Color.black], ["EQ", Color.black, Color.cyan] ])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 13))
     .action_({ |btn|
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
-            if(~eqOverlay.notNil) { 
-                ~saveEqState.value(); // Save state before removing EQ overlay
-                ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
-            };
             if(~ambienceOverlay.notNil) { 
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~maplinOverlay.notNil) { 
+                ~saveMaplinState.value(); // Save state before removing maplin overlay
+                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
-            ~eqBtn.value_(0);
+            ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
+            ~maplinBtn.value_(0);
             // --- Remove any previous EQ overlay and controls to prevent duplicates ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; };
             ~eqSliders = nil; ~eqValues = nil; ~eqPresetMenu = nil;
@@ -1056,7 +1174,7 @@ win.front;
                 .string_("GRAPHIC EQ")
                 .align_(\left)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 12).boldVariant)
+                .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
             // Only built-in presets by default (use symbols for names and keys)
             ~eqPresetNames = [\Flat, \Vocal, \BassBoost, \TrebleBoost, \RIAA];
@@ -1227,9 +1345,7 @@ win.front;
                     ~eqBtn.value_(0);
                 });
             ~eqOverlay.front;
-            // Set EQ button to selected state
-            ~eqBtn.value_(1);
-            // --- Restore saved state on overlay open ---
+            // --- Restore EQ state after controls are created ---
             ~restoreEqState.value();
             // --- On open, set synth EQ params to current slider values ---
             if(~synth.notNil) {
@@ -1419,13 +1535,17 @@ win.front;
 ~saveEqState = {
     if(~eqSliders.notNil) {
         ~eqState[\sliderValues] = ~eqSliders.collect({ |slider| slider.value });
+        ("Saved EQ state: " ++ ~eqState[\sliderValues]).postln;
     };
     if(~eqPresetMenu.notNil) {
         ~eqState[\presetIndex] = ~eqPresetMenu.value;
+        ("Saved EQ preset index: " ++ ~eqState[\presetIndex]).postln;
     };
 };
+
 ~restoreEqState = {
     if(~eqSliders.notNil and: { ~eqState[\sliderValues].notNil }) {
+        ("Restoring EQ state: " ++ ~eqState[\sliderValues]).postln;
         ~eqSliders.do({ |slider, i|
             var savedValue = ~eqState[\sliderValues][i] ? 0.5;
             slider.value_(savedValue);
@@ -1435,7 +1555,147 @@ win.front;
         });
     };
     if(~eqPresetMenu.notNil and: { ~eqState[\presetIndex].notNil }) {
+        ("Restoring EQ preset index: " ++ ~eqState[\presetIndex]).postln;
         ~eqPresetMenu.value_(~eqState[\presetIndex]);
+    };
+};
+
+// --- MAPLIN SM-333 CONTROL FUNCTIONS ---
+~setMaplinSurround = { |level=0.8|
+    if(~synth.notNil) { ~synth.set(\maplinSurround, level); };
+    ~maplinState[\surround] = level;
+    ("Maplin surround level: " ++ (level * 100).round(1) ++ "%").postln;
+};
+
+~setMaplinEffect = { |level=0.8|
+    if(~synth.notNil) { ~synth.set(\maplinEffect, level); };
+    ~maplinState[\effect] = level;
+    ("Maplin effect level: " ++ (level * 100).round(1) ++ "%").postln;
+};
+
+~setMaplinDelay = { |time=0.4|
+    var delayMs = time.linlin(0, 1, 5, 50);
+    if(~synth.notNil) { ~synth.set(\maplinDelay, time); };
+    ~maplinState[\delay] = time;
+    ("Maplin delay time: " ++ delayMs.round(1) ++ "ms").postln;
+};
+
+~setMaplinActive = { |active=true|
+    if(~synth.notNil) { ~synth.set(\maplinActive, if(active, 1, 0)); };
+    ~maplinState[\active] = if(active, 1, 0);
+    ("Maplin processing: " ++ if(active, "ACTIVE", "BYPASSED")).postln;
+};
+
+// --- MAPLIN PRESET FUNCTIONS ---
+~maplinPresetBalanced = {
+    ~setMaplinSurround.(0.8);
+    ~setMaplinEffect.(0.8);
+    ~setMaplinDelay.(0.4);  // ~25ms
+    "Maplin balanced preset applied".postln;
+};
+
+~maplinPresetMax = {
+    ~setMaplinSurround.(1.0);
+    ~setMaplinEffect.(1.0);
+    ~setMaplinDelay.(1.0);  // ~50ms
+    "Maplin maximum preset applied".postln;
+};
+
+// --- MAPLIN STATE MANAGEMENT FUNCTIONS ---
+~saveMaplinState = {
+    if(~maplinSurroundKnob.notNil) {
+        ~maplinState[\surround] = ~maplinSurroundKnob.value;
+        ~maplinState[\effect] = ~maplinEffectKnob.value;
+        ~maplinState[\delay] = ~maplinDelayKnob.value;
+        ("Saved Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay]).postln;
+    };
+};
+
+~restoreMaplinState = {
+    if(~maplinSurroundKnob.notNil) {
+        ~maplinSurroundKnob.value_(~maplinState[\surround] ? 0.8);
+        ~maplinEffectKnob.value_(~maplinState[\effect] ? 0.8);
+        ~maplinDelayKnob.value_(~maplinState[\delay] ? 0.4);
+        
+        // Update value displays
+        ~maplinSurroundValue.string_((~maplinState[\surround] * 100).round(1).asString ++ "%");
+        ~maplinEffectValue.string_((~maplinState[\effect] * 100).round(1).asString ++ "%");
+        ~maplinDelayValue.string_((~maplinState[\delay].linlin(0, 1, 5, 50).round(1).asString ++ " ms"));
+        
+        // Trigger actions to update synth
+        if(~maplinSurroundKnob.action.notNil) { ~maplinSurroundKnob.action.value(~maplinSurroundKnob); };
+        if(~maplinEffectKnob.action.notNil) { ~maplinEffectKnob.action.value(~maplinEffectKnob); };
+        if(~maplinDelayKnob.action.notNil) { ~maplinDelayKnob.action.value(~maplinDelayKnob); };
+        
+        ("Restored Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay]).postln;
+    };
+};
+
+// --- Synth Parameter State Management (for encoder/decoder changes) ---
+~saveSynthParams = {
+    var currentEqValues, currentAmbienceValues;
+    
+    ("Debug: Saving synth params. ~eqSliders = " ++ ~eqSliders ++ ", ~ambienceSliders = " ++ ~ambienceSliders).postln;
+    
+    // Always use stored state values - these are maintained by the GUI save/restore functions
+    // Convert EQ slider values (0-1) to dB values (-12 to +12)
+    if(~eqState[\sliderValues].notNil) {
+        currentEqValues = ~eqState[\sliderValues].collect({ |sliderVal|
+            if(sliderVal.notNil) {
+                sliderVal.linlin(0, 1, -12, 12);
+            } {
+                0; // Default if value is nil
+            };
+        });
+        ~eqState[\synthParams] = currentEqValues;
+        ("Saved synth EQ params: " ++ currentEqValues).postln;
+    } {
+        // Use default flat EQ if no stored values
+        ~eqState[\synthParams] = [0, 0, 0, 0, 0, 0, 0];
+        ("Using default EQ params").postln;
+    };
+    
+    // Use stored ambience values directly (they're already in synth parameter format)
+    if(~ambienceState[\sliderValues].notNil) {
+        ~ambienceState[\synthParams] = ~ambienceState[\sliderValues];
+        ("Saved synth ambience params: " ++ ~ambienceState[\sliderValues]).postln;
+    } {
+        // Use default ambience settings if no stored values
+        ~ambienceState[\synthParams] = [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+        ("Using default ambience params").postln;
+    };
+};
+
+~restoreSynthParams = {
+    // Restore EQ parameters to new synth
+    if(~synth.notNil and: { ~eqState[\synthParams].notNil }) {
+        var eqParams = [\eq1, \eq2, \eq3, \eq4, \eq5, \eq6, \eq7];
+        ~eqState[\synthParams].do({ |dbValue, i|
+            if(dbValue.notNil and: { i < eqParams.size }) {
+                ~synth.set(eqParams[i], dbValue);
+            };
+        });
+        ("Restored synth EQ params: " ++ ~eqState[\synthParams]).postln;
+    };
+    
+    // Restore ambience parameters to new synth
+    if(~synth.notNil and: { ~ambienceState[\synthParams].notNil }) {
+        var params = ~ambienceState[\synthParams];
+        if(params.size >= 7) {
+            // Convert slider values (0-1) to synth parameter ranges (matching GUI slider actions)
+            ~synth.set(
+                \ambience, (params[0] ? 0).linlin(0, 1, 0, 0.2),    // Mix: 0-20%
+                \preDelay, params[1] ? 0,                            // PreDelay: direct value
+                \lowRT, (params[2] ? 0.2).linlin(0, 1, 0.2, 4),     // LowRT: 0.2-4s  
+                \highRT, (params[3] ? 2).linlin(0, 1, 0.2, 4),      // HighRT: 0.2-4s
+                \dispersion, params[4] ? 1,                          // Dispersion: direct value
+                \modWidth, params[5] ? 0.2,                          // ModWidth: direct value
+                \modRate, params[6] ? 0.3                            // ModRate: direct value
+            );
+            ("Restored synth ambience params (converted): mix=" ++ (params[0] ? 0).linlin(0, 1, 0, 0.2) ++ ", others=" ++ params[1..6]).postln;
+        } {
+            ("Warning: ambience params array too small: " ++ params).postln;
+        };
     };
 };
 
@@ -1491,9 +1751,9 @@ win.front;
     };
 };
 
-~ambienceBtn = Button(mainView, Rect(287, 410, 100, 35))
+~ambienceBtn = Button(mainView, Rect(399, 410, 100, 35))
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 13))
     .action_({ |btn|
         var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
@@ -1503,9 +1763,14 @@ win.front;
                 ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~maplinOverlay.notNil) { 
+                ~saveMaplinState.value(); // Save state before removing maplin overlay
+                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
+            ~maplinBtn.value_(0);
             // --- Remove any previous Ambience overlay and controls to prevent duplicates ---
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
             // --- Initialize layout variables (fix nil error) ---
@@ -1524,7 +1789,7 @@ win.front;
                 .string_("AMBIENCE")
                 .align_(\left)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 12).boldVariant)
+                .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
 
             // Load AmbiVerbSC presets if not already loaded
@@ -1657,9 +1922,9 @@ win.front;
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
         }
     });
-~layoutBtn = Button(mainView, Rect(394, 410, 100, 35))
+~layoutBtn = Button(mainView, Rect(508, 410, 100, 35))
     .states_([["LAYOUT", Color.cyan, Color.black], ["LAYOUT", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 12))
+    .font_(Font("Helvetica", 13))
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
@@ -1672,9 +1937,14 @@ win.front;
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
+            if(~maplinOverlay.notNil) { 
+                ~saveMaplinState.value(); // Save state before removing maplin overlay
+                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
+            ~maplinBtn.value_(0);
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -1682,7 +1952,7 @@ win.front;
                 .string_("LAYOUT - " ++ (["BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"][~dmenu.value ? 0]))
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 12).boldVariant)
+                .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
             UserView(~layoutOverlay, Rect(0, 0, 320, 275))
                 .background_(Color.clear)
@@ -1710,12 +1980,12 @@ win.front;
                             Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Do NOT move the description text
-                            Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 135, 32), Font("Helvetica", 12), Color.cyan);
+                            Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 135, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         1, { // CIPIC Binaural
                             var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
@@ -1729,11 +1999,11 @@ win.front;
                             Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 135, 32), Font("Helvetica", 12), Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 135, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         2, { // Quad Square
                             var squareSize = 140, halfSquare = squareSize / 2;
@@ -1741,20 +2011,20 @@ win.front;
                             // Speaker 1
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 3, centerY - halfSquare - 9 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 3, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 2
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 3, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 3, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 3
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 4
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 9 + 25), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - 97, 32), Font("Helvetica", 12), Color.cyan); // description stays at y+25 as before
+                            Pen.stringAtPoint("4", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - 97, 32), Font("Helvetica", 13), Color.cyan); // description stays at y+25 as before
                         },
                         3, { // Quad Narrow
                             var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2) + 25;
@@ -1762,20 +2032,20 @@ win.front;
                             // Speaker 1
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 2
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 3
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 4
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Point(centerX - 115, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Point(centerX - 115, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         },
                         4, { // Quad Wide
                             var rectWidth = 140, rectHeight = 105, rectLeft = centerX - (rectWidth / 2), totalHeight = rectHeight + 20, rectTop = centerY - (totalHeight / 2) + 10 + 25;
@@ -1783,20 +2053,20 @@ win.front;
                             // Speaker 1
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 2
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 3
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("3", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 4
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 12).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Wide Quadraphonic arrangement (x ≥ 1.33y)", Point(centerX - 114, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Wide Quadraphonic arrangement (x ≥ 1.33y)", Point(centerX - 114, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         },
                         5, { // Dolby 5.1
                             var layoutSize = 140, layoutLeft = centerX - (layoutSize / 2), layoutTop = centerY - (layoutSize / 2) + 25, speakerSize = 20, frontLeftX = layoutLeft - 10, frontLeftY = layoutTop - 10, frontRightX = layoutLeft + layoutSize - 10, frontRightY = layoutTop - 10, centerX_speaker = layoutLeft + (layoutSize / 2) - 10, centerY_speaker = layoutTop - 10, surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10, surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10, subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
@@ -1804,28 +2074,28 @@ win.front;
                             // Speaker 1: Front Left
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(frontLeftX + 7, frontLeftY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(frontLeftX + 7, frontLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(frontRightX + 7, frontRightY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(frontRightX + 7, frontRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 3: Center
                             Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX_speaker + 7, centerY_speaker + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("3", Point(centerX_speaker + 7, centerY_speaker + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 4: Surround Left
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(surroundLeftX + 7, surroundLeftY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("4", Point(surroundLeftX + 7, surroundLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Speaker 5: Surround Right
                             Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("5", Point(surroundRightX + 7, surroundRightY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("5", Point(surroundRightX + 7, surroundRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             // Subwoofer
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX + 25, subwooferY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Point(centerX - 136, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                            Pen.stringAtPoint("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Point(centerX - 136, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         },
                         6, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
@@ -1846,10 +2116,10 @@ win.front;
                                 Pen.translate(-10, -10);
                                 Pen.color = Color.black; Pen.addRect(Rect(0, 0, 20, 20)); Pen.fill;
                                 Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.stroke;
-                                Pen.stringAtPoint(speakerNum.asString, Point(7, 1), Font("Helvetica", 12).boldVariant, Color.cyan);
+                                Pen.stringAtPoint(speakerNum.asString, Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                                 Pen.pop;
                             });
-                            Pen.stringAtPoint("[1] -22.5°, Speakers @ 45°", Point(centerX - 69, 32), Font("Helvetica", 12), Color.cyan); // description stays
+                            Pen.stringAtPoint("[1] -22.5°, Speakers @ 45°", Point(centerX - 69, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         }
                     );
                 });
@@ -1859,17 +2129,203 @@ win.front;
         }
     });
 
+// --- MAPLIN SM-333 OVERLAY BUTTON ---
+~maplinBtn = Button(mainView, Rect(290, 410, 100, 35))
+    .states_([["SM-333", Color.cyan, Color.black], ["SM-333", Color.black, Color.cyan]])
+    .font_(Font("Helvetica", 13))
+    .action_({ |btn|
+        if(btn.value == 1) {
+            // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
+            if(~eqOverlay.notNil) { 
+                ~saveEqState.value(); // Save state before removing EQ overlay
+                ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
+            };
+            if(~ambienceOverlay.notNil) { 
+                ~saveAmbienceState.value(); // Save state before removing ambience overlay
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
+            };
+            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            // Set other buttons to 0 (radio group)
+            ~eqBtn.value_(0);
+            ~ambienceBtn.value_(0);
+            ~layoutBtn.value_(0);
+
+            // Create Maplin overlay
+            ~maplinOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+
+            // Border
+            UserView(~maplinOverlay, Rect(0, 0, 320, 275))
+                .background_(Color.clear)
+                .drawFunc_({ |v|
+                    Pen.width = 0.5;
+                    Pen.color = Color.cyan;
+                    Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
+                    Pen.stroke;
+                });
+
+            // Title
+            StaticText(~maplinOverlay, Rect(10, 5, 200, 22))
+                .string_("MAPLIN SM-333")
+                .align_(\left)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13).boldVariant)
+                .background_(Color.clear);
+
+            // Labels above knobs
+            StaticText(~maplinOverlay, Rect(18, 80, 80, 20))
+                .string_("SURROUND")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13).boldVariant)
+                .background_(Color.clear);
+            
+            StaticText(~maplinOverlay, Rect(120, 80, 80, 20))
+                .string_("EFFECT")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13).boldVariant)
+                .background_(Color.clear);
+            
+            StaticText(~maplinOverlay, Rect(222, 80, 80, 20))
+                .string_("DELAY")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13).boldVariant)
+                .background_(Color.clear);
+            
+            // Three control knobs
+            ~maplinSurroundKnob = Knob(~maplinOverlay, Rect(18, 110, 80, 80))
+                .value_(~maplinState[\surround] ? 0.8)
+                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .action_({ |knob| 
+                    ~setMaplinSurround.(knob.value);
+                    ~maplinSurroundValue.string_((knob.value * 100).round(1).asString ++ "%");
+                });
+            
+            ~maplinEffectKnob = Knob(~maplinOverlay, Rect(120, 110, 80, 80))
+                .value_(~maplinState[\effect] ? 0.8)
+                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .action_({ |knob| 
+                    ~setMaplinEffect.(knob.value);
+                    ~maplinEffectValue.string_((knob.value * 100).round(1).asString ++ "%");
+                });
+            
+            ~maplinDelayKnob = Knob(~maplinOverlay, Rect(222, 110, 80, 80))
+                .value_(~maplinState[\delay] ? 0.4)
+                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .action_({ |knob| 
+                    ~setMaplinDelay.(knob.value);
+                    ~maplinDelayValue.string_((knob.value.linlin(0, 1, 5, 50).round(1).asString ++ " ms"));
+                });
+            
+            // Value displays below knobs
+            ~maplinSurroundValue = StaticText(~maplinOverlay, Rect(18, 200, 80, 18))
+                .string_("80%")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13))
+                .background_(Color.clear);
+            
+            ~maplinEffectValue = StaticText(~maplinOverlay, Rect(120, 200, 80, 18))
+                .string_("80%")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13))
+                .background_(Color.clear);
+            
+            ~maplinDelayValue = StaticText(~maplinOverlay, Rect(222, 200, 80, 18))
+                .string_("25 ms")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13))
+                .background_(Color.clear);
+
+            // On/Off button
+            ~maplinActiveBtn = Button(~maplinOverlay, Rect(18, 40, 80, 28))
+                .states_([
+                    ["ON", Color.black, Color.cyan],
+                    ["OFF", Color.cyan, Color.black]
+                ])
+                .action_({ |button|
+                    ~setMaplinActive.(button.value == 0);
+                })
+                .font_(Font("Helvetica", 11))
+                .value_(1); // Default to OFF (button state 1 = OFF)
+
+            // Preset buttons
+            Button(~maplinOverlay, Rect(120, 40, 80, 28))
+                .states_([["BALANCED", Color.cyan, Color.black]])
+                .action_({
+                    ~maplinPresetBalanced.();
+                    ~maplinSurroundKnob.value_(0.8);
+                    ~maplinEffectKnob.value_(0.8);
+                    ~maplinDelayKnob.value_(0.4);
+                    ~maplinSurroundValue.string_("80%");
+                    ~maplinEffectValue.string_("80%");
+                    ~maplinDelayValue.string_("25 ms");
+                })
+                .font_(Font("Helvetica", 11))
+                .background_(Color.black);
+
+            Button(~maplinOverlay, Rect(222, 40, 80, 28))
+                .states_([["MAXIMUM", Color.cyan, Color.black]])
+                .action_({
+                    ~maplinPresetMax.();
+                    ~maplinSurroundKnob.value_(1.0);
+                    ~maplinEffectKnob.value_(1.0);
+                    ~maplinDelayKnob.value_(1.0);
+                    ~maplinSurroundValue.string_("100%");
+                    ~maplinEffectValue.string_("100%");
+                    ~maplinDelayValue.string_("50 ms");
+                })
+                .font_(Font("Helvetica", 11))
+                .background_(Color.black);
+
+            // Close button
+            Button(~maplinOverlay, Rect(222, 230, 80, 28))
+                .states_([["CLOSE", Color.cyan, Color.black]])
+                .font_(Font("Helvetica", 11))
+                .action_({
+                    ~saveMaplinState.value(); // Save state before closing
+                    ~maplinOverlay.remove;
+                    ~maplinOverlay = nil;
+                    ~maplinBtn.value_(0);
+                });
+
+            ~maplinOverlay.front;
+            ~maplinBtn.value_(1);
+            
+            // Restore saved state after overlay is created
+            ~restoreMaplinState.value();
+
+        } {
+            if(~maplinOverlay.notNil) {
+                ~maplinOverlay.remove;
+                ~maplinOverlay = nil;
+            };
+        }
+    });
+
+// Set initial SM-333 button state based on current encoder
+if(configKeyE != \maplin) {
+    // Add overlay to dim button if not in maplin mode
+    ~maplinBtnOverlay = View(mainView, Rect(290, 410, 100, 35))
+        .background_(Color.black.alpha_(0.7))
+        .alpha_(1.0)
+        .front;
+};
+
 // --- OUTPUT FADER (GRAPHICAL ONLY, GUIPrototype style) ---
 StaticText(mainView, Rect(544, 40, 24, 24))
     .string_("dB")
     .align_(\center)
     .stringColor_(Color.cyan)
-    .font_(Font("Helvetica", 12));
+    .font_(Font("Helvetica", 13));
 
 StaticText(mainView, Rect(520, 10, 72, 28))
     .string_("OUTPUT")
     .align_(\center)
-    .font_(Font("Helvetica", 14).boldVariant)
+    .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
 ~outputSlider = Slider(mainView, Rect(544, 70, 24, 300))
@@ -1890,10 +2346,10 @@ StaticText(mainView, Rect(520, 10, 72, 28))
     .string_("0")
     .align_(\center)
     .stringColor_(Color.cyan)
-    .font_(Font("Helvetica", 12));
+    .font_(Font("Helvetica", 13));
 
-// Ensure output fader starts at top (0dB)
-~outputSlider.valueAction_(1.0); // valueAction_ triggers action and sets value to top
+// Ensure output fader starts at top (0dB) to match SynthDef default
+~outputSlider.valueAction_(1.0); // Set to 0dB position (top)
 
 // Tick marks for output fader (3px further from fader)
 UserView(mainView, Rect(537, 70, 4, 300))
