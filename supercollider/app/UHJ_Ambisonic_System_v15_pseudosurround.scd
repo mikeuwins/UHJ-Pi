@@ -312,7 +312,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     [
         \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
         \SUPERSTEREO -> { |a| configKeyE = \superstereo; ("Encoder: SUPERSTEREO").postln; },
-                        \PSEUDO -> { |a| configKeyE = \pseudosurround; ("Encoder: PSEUDO SURROUND").postln; }
+        \PSEUDO -> { |a| configKeyE = \pseudosurround; ("Encoder: PSEUDO SURROUND").postln; }
     ],
     globalAction: { |menu|
         ("Selected encoder: " ++ menu.item).postln;
@@ -673,6 +673,73 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             Buffer.read(s, "~/UHJ-Pi/assets/impulse-responses/b-format/test_ir_z.wav", 
                                 action: { |buf| ("Loaded Z IR: " ++ buf.numFrames ++ " frames").postln; })
                         ];
+
+                        s.sync(cond);
+
+                        // Define the main audio processing SynthDef (adapted from MainApp2)
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0|
+                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear;
+                            // Audio source - live input from hardware
+                            src = SoundIn.ar([0,1]);
+                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
+                            // Amplitude scaling
+                            src = src * \amp.kr(-6.dbamp);
+                            // --- 7-band graphic EQ before ambisonic encode ---
+                            eqed = src;
+                            eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
+                            eqed = BPeakEQ.ar(eqed, 160, 1, eq2);     // Band 2
+                            eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
+                            eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
+                            eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
+                            eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
+                            eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
+                            // Encode to ambisonic using selected encoder (UHJ, SuperStereo, or PseudoSurround)
+                            encode = FoaEncode.ar(eqed, encoder);
+                            // Ambience processing
+                            ambient = AmbiVerbSC.ar(encode,
+                                mix: ambience,
+                                preDelay: preDelay,
+                                crossoverFreq: 3000,
+                                lowRT: lowRT,
+                                highRT: highRT,
+                                dispersion: dispersion,
+                                size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
+                                modWidth: modWidth,
+                                modRate: modRate,
+                                coupRate: 0.5,
+                                coupAmt: 3,
+                                phaseRotRate: 0.4,
+                                phaseRotAmt: 6.2831853071796,
+                                orientation: 'flu',
+                                maxPreDelay: 10,
+                                feedbackSpread: 1
+                            );
+                            // Spatial transformations (rotation, tilt, tumble)
+                            trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
+                            // Decode using selected decoder
+                            out = FoaDecode.ar(trans, decoder);
+                            if(outputs == 4, {
+                                // --- QUAD PANNER LOGIC (Balance2) ---
+                                // out[0]=LF, out[1]=LR, out[2]=RR, out[3]=RF
+                                frontStereo = Balance2.ar(out[0], out[3], quadLR); // LF, RF
+                                rearStereo  = Balance2.ar(out[1], out[2], quadLR); // LR, RR
+                                quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
+                                quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
+                                out = [
+                                    quadOutFront[0], // LF
+                                    quadOutRear[0],  // LR
+                                    quadOutRear[1],  // RR
+                                    quadOutFront[1]  // RF
+                                ];
+                            });
+                            if(outputs == 6, {
+                                var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
+                                Out.ar(0, out);
+                                Out.ar(5, lowpass);
+                            }, {
+                                Out.ar(0, out);
+                            });
+                        }).add;
 
                         s.sync(cond);
 
