@@ -2454,28 +2454,31 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-UserView(mainView, Rect(770, 450, 20, 20))
+UserView(mainView, Rect(770, 450, 30, 30))  // Made larger: 30x30 instead of 20x20
     .background_(Color.clear)
     .drawFunc_({ |view|
         var bounds = view.bounds;
         var centerX = bounds.width / 2;
         var centerY = bounds.height / 2;
-        var radius = 7;
+        var radius = 10;  // Made larger: 10 instead of 7
         
         // Draw power symbol (circle with gap at top, vertical line in gap)
         Pen.color = Color.cyan;
-        Pen.width = 1.5;
+        Pen.width = 2;  // Made thicker: 2 instead of 1.5
         
         // Draw circle with gap at top (356° arc, gap centered at top)
         Pen.addArc(Point(centerX, centerY), radius, 268.degrad, 356.degrad);
         Pen.stroke;
         
         // Draw vertical line that sits in the gap
-        Pen.moveTo(Point(centerX, centerY - radius - 2));
+        Pen.moveTo(Point(centerX, centerY - radius - 3));  // Adjusted for larger radius
         Pen.lineTo(Point(centerX, centerY));
         Pen.stroke;
     })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        // Debug output to see if button is being clicked
+        ("Power button clicked at: " ++ x ++ ", " ++ y).postln;
+        
         // Simple server quit to prevent Pi freeze
         {
             "Power button pressed - quitting server".postln;
