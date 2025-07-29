@@ -2456,41 +2456,5 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-UserView(mainView, Rect(770, 450, 20, 20))
-    .background_(Color.clear)
-    .drawFunc_({ |view|
-        var bounds = view.bounds;
-        var centerX = bounds.width / 2;
-        var centerY = bounds.height / 2;
-        var radius = 7;
-        
-        // Draw power symbol (circle with gap at top, vertical line in gap)
-        Pen.color = Color.cyan;
-        Pen.width = 1.5;
-        
-        // Draw circle with gap at top (356° arc, gap centered at top)
-        Pen.addArc(Point(centerX, centerY), radius, 268.degrad, 356.degrad);
-        Pen.stroke;
-        
-        // Draw vertical line that sits in the gap
-        Pen.moveTo(Point(centerX, centerY - radius - 2));
-        Pen.lineTo(Point(centerX, centerY));
-        Pen.stroke;
-    })
-    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Clean shutdown for EGLFS compatibility
-        {
-            // Quit SuperCollider server if running
-            if(s.serverRunning) { 
-                s.quit; 
-            };
-            
-            // Wait for server to quit
-            0.2.wait;
-            
-            // Exit the interpreter cleanly (removed window close for EGLFS)
-            AppClock.sched(0.3, {
-                thisProcess.shutdown;
-            });
-        }.fork;
-    });
+// REMOVED - causing EGLFS freeze issues
+// Use Pi's physical power button to restart system
