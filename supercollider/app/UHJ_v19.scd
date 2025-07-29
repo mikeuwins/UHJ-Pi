@@ -2456,21 +2456,16 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-~powerBtn = UserView(mainView, Rect(770, 450, 25, 25))  // Custom-drawn power symbol
+UserView(mainView, Rect(770, 450, 20, 20))
     .background_(Color.clear)
     .drawFunc_({ |view|
         var bounds = view.bounds;
         var centerX = bounds.width / 2;
         var centerY = bounds.height / 2;
-        var radius = 8;
+        var radius = 7;
         
         // Draw power symbol (circle with gap at top, vertical line in gap)
-        // Use different color based on pressed state
-        if(~powerBtnPressed == true, {
-            Pen.color = Color.white;  // Bright when pressed
-        }, {
-            Pen.color = Color.cyan;   // Normal when not pressed
-        });
+        Pen.color = Color.cyan;
         Pen.width = 1.5;
         
         // Draw circle with gap at top (356° arc, gap centered at top)
@@ -2483,23 +2478,24 @@ HIDdef.usage( \hidTumble, { |val|
         Pen.stroke;
     })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Visual feedback - button pressed
-        ~powerBtnPressed = true;
-        ~powerBtn.refresh;
-        
-        // Debug output to see if button is being clicked
-        "Power button clicked!".postln;
-        
-        // Quit server in a way that works with EGLFS
+        // Clean shutdown for EGLFS compatibility
         {
+            // Quit SuperCollider server if running
             if(s.serverRunning) { 
-                "Quitting SuperCollider server".postln;
                 s.quit; 
             };
-        }.defer;
-    })
-    .mouseUpAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Visual feedback - button released
-        ~powerBtnPressed = false;
-        ~powerBtn.refresh;
+            
+            // Wait for server to quit
+            0.2.wait;
+            
+            // Close the window on AppClock to avoid Qt threading issues
+            AppClock.sched(0.1, {
+                win.close;
+            });
+            
+            // Exit the interpreter cleanly after window closes
+            AppClock.sched(0.3, {
+                thisProcess.shutdown;
+            });
+        }.fork;
     });
