@@ -22,6 +22,8 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Maplin button overlay ---
 ~maplinBtnOverlay = nil;
+// --- Power button state ---
+~powerBtnPressed = false;
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -2454,10 +2456,37 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-~powerBtn = Button(mainView, Rect(770, 450, 25, 25))  // Assign to variable like other buttons
-    .states_([["OFF", Color.cyan, Color.black]])  // Simple text instead of Unicode
-    .font_(Font("Helvetica", 10))  // Smaller font to fit
-    .action_({ |btn|
+~powerBtn = UserView(mainView, Rect(770, 450, 25, 25))  // Custom-drawn power symbol
+    .background_(Color.clear)
+    .drawFunc_({ |view|
+        var bounds = view.bounds;
+        var centerX = bounds.width / 2;
+        var centerY = bounds.height / 2;
+        var radius = 8;
+        
+        // Draw power symbol (circle with gap at top, vertical line in gap)
+        // Use different color based on pressed state
+        if(~powerBtnPressed == true, {
+            Pen.color = Color.white;  // Bright when pressed
+        }, {
+            Pen.color = Color.cyan;   // Normal when not pressed
+        });
+        Pen.width = 1.5;
+        
+        // Draw circle with gap at top (356° arc, gap centered at top)
+        Pen.addArc(Point(centerX, centerY), radius, 268.degrad, 356.degrad);
+        Pen.stroke;
+        
+        // Draw vertical line that sits in the gap
+        Pen.moveTo(Point(centerX, centerY - radius - 2));
+        Pen.lineTo(Point(centerX, centerY));
+        Pen.stroke;
+    })
+    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        // Visual feedback - button pressed
+        ~powerBtnPressed = true;
+        ~powerBtn.refresh;
+        
         // Debug output to see if button is being clicked
         "Power button clicked!".postln;
         
@@ -2473,4 +2502,9 @@ HIDdef.usage( \hidTumble, { |val|
             
             "Server quit complete".postln;
         }.fork;
+    })
+    .mouseUpAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        // Visual feedback - button released
+        ~powerBtnPressed = false;
+        ~powerBtn.refresh;
     });
