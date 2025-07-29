@@ -2479,10 +2479,7 @@ UserView(mainView, Rect(770, 450, 20, 20))
     })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         // Simple server quit only - let autoboot handle restart
-        {
-            // Quit SuperCollider server if running
-            if(s.serverRunning) { 
-                s.quit; 
-            };
-        }.fork;
+        if(s.serverRunning) { 
+            s.quit; 
+        };
     });
