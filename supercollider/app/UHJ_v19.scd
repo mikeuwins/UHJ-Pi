@@ -2490,18 +2490,16 @@ HIDdef.usage( \hidTumble, { |val|
         // Debug output to see if button is being clicked
         "Power button clicked!".postln;
         
-        // Simple server quit to prevent Pi freeze
-        {
-            "Power button pressed - quitting server".postln;
-            
-            // Just quit the server cleanly
-            if(s.serverRunning) { 
-                "Quitting SuperCollider server".postln;
-                s.quit; 
-            };
-            
-            "Server quit complete".postln;
-        }.fork;
+        // Simple server quit - direct action, no .fork
+        "Power button pressed - quitting server".postln;
+        
+        // Just quit the server cleanly
+        if(s.serverRunning) { 
+            "Quitting SuperCollider server".postln;
+            s.quit; 
+        };
+        
+        "Server quit complete".postln;
     })
     .mouseUpAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         // Visual feedback - button released
