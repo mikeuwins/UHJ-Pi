@@ -92,6 +92,16 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
+# Create general SuperCollider HID rule for headtrackers and other HID devices
+cat > /etc/udev/rules.d/99-supercollider-hid.rules << 'EOF'
+# Generic HID access for SuperCollider (headtrackers, controllers, etc.)
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0660", GROUP="plugdev"
+EOF
+
+# Reload udev rules
+udevadm control --reload-rules
+udevadm trigger
+
 # STEP 10: Configure JACK Audio
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
 usermod -aG audio,plugdev $ACTUAL_USER
