@@ -129,7 +129,7 @@ sleep 2
 
 # Start SuperCollider with UHJ-Pi app
 cd /home/pi/UHJ-Pi
-sclang supercollider/app/UHJ_Ambisonic_System_v17_lcd_fonts.scd &
+sclang supercollider/app/UHJ_v19.scd &
 
 # Start Openbox window manager
 exec openbox-session
