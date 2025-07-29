@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# UHJ-Pi Raspberry Pi Setup Script
+# UHJ-Pi Raspberry Pi Setup Script (Simple Version - No Auto-prompts)
 
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -11,17 +11,12 @@ fi
 # Get the actual username (the user who ran sudo)
 ACTUAL_USER=${SUDO_USER:-$(logname)}
 if [ -z "$ACTUAL_USER" ]; then
-    echo "Error: Could not determine username. Please run with: sudo -E ./setup-raspberry-pi.sh"
+    echo "Error: Could not determine username. Please run with: sudo -E ./setup-raspberry-pi-simple.sh"
     exit 1
 fi
 
-echo "UHJ-Pi Raspberry Pi Setup Script - Starting installation..."
+echo "UHJ-Pi Raspberry Pi Setup Script (Simple Version) - Starting installation..."
 echo "Installing for user: $ACTUAL_USER"
-
-# Configure non-interactive package installation BEFORE any apt commands
-export DEBIAN_FRONTEND=noninteractive
-echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
-echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
 apt-get update
@@ -132,17 +127,11 @@ EOF
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
-# Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
-    cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-fi
-# Note: Knob360 requires UserView class which is not available without Qt support
-# if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
-#     cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-# fi
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
-    cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-fi
+# Copy custom extensions to SuperCollider Extensions directory
+cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+cp -r MaplinSM333 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
@@ -150,4 +139,4 @@ chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider
 echo "Installation completed successfully!"
 echo ""
 echo "To run the UHJ Ambisonic System:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v18.scd" 
+echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v18.scd"

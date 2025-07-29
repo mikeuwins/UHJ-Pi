@@ -1,5 +1,5 @@
 // ============================================================================
-// UHJ AMBISONIC SYSTEM v15 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
+// UHJ v18 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
@@ -2452,3 +2452,15 @@ HIDdef.usage( \hidTumble, { |val|
     }.defer;
 }, \X );
 // ... existing 
+
+// --- SMALL POWER BUTTON (bottom right corner) ---
+StaticText(mainView, Rect(770, 450, 20, 20))
+    .string_("⏻")
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .font_(Font("Helvetica", 16))
+    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        // Quit the application
+        if(s.serverRunning) { s.quit; };
+        0.exit;
+    });
