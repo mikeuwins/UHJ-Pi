@@ -2454,13 +2454,45 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-StaticText(mainView, Rect(770, 450, 20, 20))
-    .string_("⏻")
-    .align_(\center)
-    .stringColor_(Color.cyan)
-    .font_(Font("Helvetica", 16))
+UserView(mainView, Rect(770, 450, 20, 20))
+    .background_(Color.clear)
+    .drawFunc_({ |view|
+        var bounds = view.bounds;
+        var centerX = bounds.width / 2;
+        var centerY = bounds.height / 2;
+        var radius = 7;
+        
+        // Draw power symbol (circle with gap at top, vertical line in gap)
+        Pen.color = Color.cyan;
+        Pen.width = 1.5;
+        
+        // Draw circle with gap at top (356° arc, gap centered at top)
+        Pen.addArc(Point(centerX, centerY), radius, 268.degrad, 356.degrad);
+        Pen.stroke;
+        
+        // Draw vertical line that sits in the gap
+        Pen.moveTo(Point(centerX, centerY - radius - 2));
+        Pen.lineTo(Point(centerX, centerY));
+        Pen.stroke;
+    })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Quit the application
-        if(s.serverRunning) { s.quit; };
-        0.exit;
+        // Clean shutdown for EGLFS compatibility
+        {
+            // Close the window first
+            win.close;
+            
+            // Wait a moment for window to close
+            0.1.wait;
+            
+            // Quit SuperCollider server if running
+            if(s.serverRunning) { 
+                s.quit; 
+            };
+            
+            // Wait for server to quit
+            0.2.wait;
+            
+            // Exit the interpreter cleanly
+            thisProcess.shutdown;
+        }.fork;
     });
