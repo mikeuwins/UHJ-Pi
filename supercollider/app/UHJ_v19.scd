@@ -2454,7 +2454,7 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-Button(mainView, Rect(770, 450, 25, 25))  // Back to smaller size, using Button instead of UserView
+~powerBtn = Button(mainView, Rect(770, 450, 25, 25))  // Assign to variable like other buttons
     .states_([["⏻", Color.cyan, Color.black]])  // Power symbol as text
     .font_(Font("Helvetica", 14))
     .action_({ |btn|
