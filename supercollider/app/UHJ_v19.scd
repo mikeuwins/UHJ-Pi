@@ -2490,16 +2490,13 @@ HIDdef.usage( \hidTumble, { |val|
         // Debug output to see if button is being clicked
         "Power button clicked!".postln;
         
-        // Simple server quit - direct action, no .fork
-        "Power button pressed - quitting server".postln;
-        
-        // Just quit the server cleanly
-        if(s.serverRunning) { 
-            "Quitting SuperCollider server".postln;
-            s.quit; 
-        };
-        
-        "Server quit complete".postln;
+        // Quit server in a way that works with EGLFS
+        {
+            if(s.serverRunning) { 
+                "Quitting SuperCollider server".postln;
+                s.quit; 
+            };
+        }.defer;
     })
     .mouseUpAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         // Visual feedback - button released
