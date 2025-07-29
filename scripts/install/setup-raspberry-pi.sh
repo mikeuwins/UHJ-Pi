@@ -35,7 +35,7 @@ fi
 apt install -y xserver-xorg x11-xserver-utils xinit blackbox
 
 # STEP 4: Install SuperCollider Dependencies
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev
+apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
 # STEP 5: Clone SuperCollider
 cd /home/$ACTUAL_USER
@@ -84,8 +84,8 @@ if [ ! -d "UHJ-Pi" ]; then
     git clone https://github.com/mikeuwins/UHJ-Pi.git
 fi
 cd UHJ-Pi/cli/phonorama-cli-linux
-gcc -o phono-control phono-control-final.c -lhidapi-hidraw
-sudo cp phono-control /usr/local/bin/phono-control
+chmod +x build.sh
+./build.sh
 
 echo "Installation completed successfully!"
 echo "Next steps:"
