@@ -2476,23 +2476,27 @@ UserView(mainView, Rect(770, 450, 20, 20))
         Pen.stroke;
     })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Clean shutdown for EGLFS compatibility
+        // Clean shutdown for EGLFS compatibility - simplified approach
         {
+            "Power button pressed - starting shutdown sequence".postln;
+            
             // Quit SuperCollider server if running
             if(s.serverRunning) { 
+                "Quitting SuperCollider server".postln;
                 s.quit; 
+                0.5.wait; // Wait longer for server to quit
             };
             
-            // Wait for server to quit
-            0.2.wait;
-            
-            // Close the window on AppClock to avoid Qt threading issues
+            "Closing window".postln;
+            // Close window on AppClock
             AppClock.sched(0.1, {
                 win.close;
+                "Window closed".postln;
             });
             
-            // Exit the interpreter cleanly after window closes
-            AppClock.sched(0.3, {
+            // Exit after a delay
+            AppClock.sched(1.0, {
+                "Shutting down interpreter".postln;
                 thisProcess.shutdown;
             });
         }.fork;
