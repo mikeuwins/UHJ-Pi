@@ -184,12 +184,21 @@ mkdir -p /usr/local/share/fonts/truetype/uhj-pi
 cp lcd_segment_monospace/lcd-5x7-segment-monospace.ttf /usr/local/share/fonts/truetype/uhj-pi/
 cp led_dot_matrix/LED\ Dot-Matrix.ttf /usr/local/share/fonts/truetype/uhj-pi/
 
+# Install Arial font for power button
+echo "Installing Arial font..."
+apt-get install -y cabextract
+mkdir -p /usr/share/fonts/truetype/msttcorefonts
+cd /usr/share/fonts/truetype/msttcorefonts
+# Download just Arial font directly
+wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
+
 # Update font cache
 fc-cache -f -v
 
 echo "Custom fonts installed:"
 echo "  - lcd-5x7-segment-monospace.ttf"
 echo "  - LED Dot-Matrix.ttf"
+echo "  - Arial (for power button)"
 
 # Add display environment variables to user's .bashrc for future sessions
 if ! grep -q "export DISPLAY=:0" /home/$ACTUAL_USER/.bashrc; then
