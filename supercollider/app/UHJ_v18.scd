@@ -2478,12 +2478,6 @@ UserView(mainView, Rect(770, 450, 20, 20))
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         // Clean shutdown for EGLFS compatibility
         {
-            // Close the window first
-            win.close;
-            
-            // Wait a moment for window to close
-            0.1.wait;
-            
             // Quit SuperCollider server if running
             if(s.serverRunning) { 
                 s.quit; 
@@ -2492,7 +2486,14 @@ UserView(mainView, Rect(770, 450, 20, 20))
             // Wait for server to quit
             0.2.wait;
             
-            // Exit the interpreter cleanly
-            thisProcess.shutdown;
+            // Close the window on AppClock to avoid Qt threading issues
+            AppClock.sched(0.1, {
+                win.close;
+            });
+            
+            // Exit the interpreter cleanly after window closes
+            AppClock.sched(0.3, {
+                thisProcess.shutdown;
+            });
         }.fork;
     });
