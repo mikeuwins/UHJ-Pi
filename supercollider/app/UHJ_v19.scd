@@ -2478,24 +2478,11 @@ UserView(mainView, Rect(770, 450, 20, 20))
         Pen.stroke;
     })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Clean shutdown for EGLFS compatibility
+        // Simple server quit only - let autoboot handle restart
         {
             // Quit SuperCollider server if running
             if(s.serverRunning) { 
                 s.quit; 
             };
-            
-            // Wait for server to quit
-            0.2.wait;
-            
-            // Close the window on AppClock to avoid Qt threading issues
-            AppClock.sched(0.1, {
-                win.close;
-            });
-            
-            // Exit the interpreter cleanly after window closes
-            AppClock.sched(0.3, {
-                thisProcess.shutdown;
-            });
         }.fork;
     });
