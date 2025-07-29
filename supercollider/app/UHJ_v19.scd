@@ -1091,6 +1091,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
 ~headtrackBtn = Button(mainView, Rect(742, 62, 40, 20))
     .states_([["OFF", Color.cyan, Color.black], ["ON", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var on = btn.value == 1;
         var idx = ~dmenu.value;
@@ -1119,6 +1120,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
 ~headtrackResetBtn = Button(mainView, Rect(742, 102, 40, 20))
     .states_([["RESET", Color.cyan, Color.black]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({
 ~rotateKnob.valueAction_(0.5); ~rotateKnob.enabled_(false);
 ~tiltKnob.valueAction_(0.5); ~tiltKnob.enabled_(false);
