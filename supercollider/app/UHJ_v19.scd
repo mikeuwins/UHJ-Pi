@@ -2455,8 +2455,8 @@ HIDdef.usage( \hidTumble, { |val|
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
 ~powerBtn = Button(mainView, Rect(770, 450, 25, 25))  // Assign to variable like other buttons
-    .states_([["⏻", Color.cyan, Color.black]])  // Power symbol as text
-    .font_(Font("Helvetica", 14))
+    .states_([["OFF", Color.cyan, Color.black]])  // Simple text instead of Unicode
+    .font_(Font("Helvetica", 10))  // Smaller font to fit
     .action_({ |btn|
         // Debug output to see if button is being clicked
         "Power button clicked!".postln;
