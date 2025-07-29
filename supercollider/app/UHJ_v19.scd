@@ -2488,12 +2488,7 @@ UserView(mainView, Rect(770, 450, 20, 20))
             // Wait for server to quit
             0.2.wait;
             
-            // Close the window on AppClock to avoid Qt threading issues
-            AppClock.sched(0.1, {
-                win.close;
-            });
-            
-            // Exit the interpreter cleanly after window closes
+            // Exit the interpreter cleanly (removed window close for EGLFS)
             AppClock.sched(0.3, {
                 thisProcess.shutdown;
             });
