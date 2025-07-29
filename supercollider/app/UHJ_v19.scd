@@ -2028,7 +2028,7 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
                             Pen.stringAtPoint("4", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - (Pen.stringWidth("Equal distance between all speakers", Font("Helvetica", 13)) / 2), 32), Font("Helvetica", 13), Color.cyan); // description stays at y+25 as before
+                            Pen.stringAtPoint("Equal distance between all speakers", Point(centerX - 97, 32), Font("Helvetica", 13), Color.cyan); // description stays at y+25 as before
                         },
                         3, { // Quad Narrow
                             var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2) + 25;
@@ -2049,7 +2049,7 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
                             Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Point(centerX - (Pen.stringWidth("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Font("Helvetica", 13)) / 2), 32), Font("Helvetica", 13), Color.cyan); // description stays
+                            Pen.stringAtPoint("Narrow Quadraphonic arrangement (x ≤ 0.75y)", Point(centerX - 115, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         },
                         4, { // Quad Wide
                             var rectWidth = 140, rectHeight = 105, rectLeft = centerX - (rectWidth / 2), totalHeight = rectHeight + 20, rectTop = centerY - (totalHeight / 2) + 10 + 25;
@@ -2070,7 +2070,7 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
                             Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Wide Quadraphonic arrangement (x ≥ 1.33y)", Point(centerX - (Pen.stringWidth("Wide Quadraphonic arrangement (x ≥ 1.33y)", Font("Helvetica", 13)) / 2), 32), Font("Helvetica", 13), Color.cyan); // description stays
+                            Pen.stringAtPoint("Wide Quadraphonic arrangement (x ≥ 1.33y)", Point(centerX - 114, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         },
                         5, { // Dolby 5.1
                             var layoutSize = 140, layoutLeft = centerX - (layoutSize / 2), layoutTop = centerY - (layoutSize / 2) + 25, speakerSize = 20, frontLeftX = layoutLeft - 10, frontLeftY = layoutTop - 10, frontRightX = layoutLeft + layoutSize - 10, frontRightY = layoutTop - 10, centerX_speaker = layoutLeft + (layoutSize / 2) - 10, centerY_speaker = layoutTop - 10, surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10, surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10, subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
@@ -2099,7 +2099,7 @@ win.front;
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX + 25, subwooferY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Point(centerX - (Pen.stringWidth("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Font("Helvetica", 13)) / 2), 32), Font("Helvetica", 13), Color.cyan); // description stays
+                            Pen.stringAtPoint("[1] 0°, [2] -30°, [3] +30° [4] -110°, [5] +110°, [6] Sub", Point(centerX - 136, 32), Font("Helvetica", 13), Color.cyan); // description stays
                         },
                         6, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
