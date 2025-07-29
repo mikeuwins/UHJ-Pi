@@ -2476,28 +2476,16 @@ UserView(mainView, Rect(770, 450, 20, 20))
         Pen.stroke;
     })
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Clean shutdown for EGLFS compatibility - simplified approach
+        // Simple server quit to prevent Pi freeze
         {
-            "Power button pressed - starting shutdown sequence".postln;
+            "Power button pressed - quitting server".postln;
             
-            // Quit SuperCollider server if running
+            // Just quit the server cleanly
             if(s.serverRunning) { 
                 "Quitting SuperCollider server".postln;
                 s.quit; 
-                0.5.wait; // Wait longer for server to quit
             };
             
-            "Closing window".postln;
-            // Close window on AppClock
-            AppClock.sched(0.1, {
-                win.close;
-                "Window closed".postln;
-            });
-            
-            // Exit after a delay
-            AppClock.sched(1.0, {
-                "Shutting down interpreter".postln;
-                thisProcess.shutdown;
-            });
+            "Server quit complete".postln;
         }.fork;
     });
