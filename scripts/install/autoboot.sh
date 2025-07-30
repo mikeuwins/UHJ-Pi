@@ -11,7 +11,7 @@ read -t 3 -n 1
 if [ $? -eq 0 ]; then
     echo "Autoboot aborted. You can now run commands manually."
     echo "To launch UHJ app: sclang supercollider/app/UHJ_v19.scd"
-    exec bash
+    exit 0
 fi
 
 # Check for headtracker (optional - uncomment and add your device address)
