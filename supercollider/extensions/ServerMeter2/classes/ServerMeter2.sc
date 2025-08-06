@@ -77,11 +77,12 @@ ServerMeter2View {
 			outmeters = Array.fill( numOuts, { arg i;
 				var comp;
 				comp = CompositeView(innerView, Rect(0, 0, meterWidth, 195));
-				StaticText(comp, Rect(0, 180, meterWidth, 15))
-				.font_(Font("Helvetica", 9).boldVariant)
-				.align_(\center)
-				.stringColor_(Color.cyan)
-				.string_((i+1).asString);
+				// Output meter numbering commented out to allow custom LRLR labels
+				// StaticText(comp, Rect(0, 180, meterWidth, 15))
+				// .font_(Font("Helvetica", 9).boldVariant)
+				// .align_(\center)
+				// .stringColor_(Color.cyan)
+				// .string_((i+1).asString);
 				levelIndic = LevelIndicator( comp, Rect(0, 0, meterWidth, 180) ).warning_(0.6).critical_(0.9)
 				.style_(\led)
 				.numSteps_(10)

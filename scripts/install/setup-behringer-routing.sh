@@ -46,21 +46,32 @@ EOF
 alsactl restore /tmp/behringer_output.conf 2>/dev/null || true
 
 # Set up JACK connections
-# Input from UFO202
-jack_connect "system:capture_1" "SuperCollider:in_1"
-jack_connect "system:capture_2" "SuperCollider:in_2"
+# Clear any existing connections first
+jack_disconnect "system:capture_1" "SuperCollider:in_1" 2>/dev/null || true
+jack_disconnect "system:capture_2" "SuperCollider:in_2" 2>/dev/null || true
+jack_disconnect "uca_line:capture_1" "SuperCollider:in_3" 2>/dev/null || true
+jack_disconnect "uca_line:capture_2" "SuperCollider:in_4" 2>/dev/null || true
 
-# Output to both devices
+# Input connections:
+# UCA222 line inputs to channels 1 & 2 (SuperCollider in_1, in_2)
+jack_connect "uca_line:capture_1" "SuperCollider:in_1"
+jack_connect "uca_line:capture_2" "SuperCollider:in_2"
+
+# UFO202 phono inputs to channels 3 & 4 (SuperCollider in_3, in_4)
+jack_connect "system:capture_1" "SuperCollider:in_3"
+jack_connect "system:capture_2" "SuperCollider:in_4"
+
+# Output connections:
 # UFO202 outputs (channels 1-2)
 jack_connect "SuperCollider:out_1" "system:playback_1"
 jack_connect "SuperCollider:out_2" "system:playback_2"
 
 # UCA202 outputs (channels 3-4) - if available
-if jack_lsp | grep -q "system:playback_3"; then
-    jack_connect "SuperCollider:out_3" "system:playback_3"
-    jack_connect "SuperCollider:out_4" "system:playback_4"
+if jack_lsp | grep -q "uca_out:playback_1"; then
+    jack_connect "SuperCollider:out_3" "uca_out:playback_1"
+    jack_connect "SuperCollider:out_4" "uca_out:playback_2"
 fi
 
 echo "Behringer routing setup complete!"
-echo "Input: UFO202 (channels 1-2)"
+echo "Input: UCA222 line (channels 1-2) + UFO202 phono (channels 3-4)"
 echo "Output: UFO202 (channels 1-2) + UCA202 (channels 3-4)" 
