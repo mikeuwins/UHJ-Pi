@@ -226,5 +226,8 @@ fi
 
 echo "Installation completed successfully!"
 echo ""
-echo "To run the UHJ Ambisonic System:"
+echo "A reboot is required for display and group changes to take effect."
+echo "Run: sudo reboot"
+echo ""
+echo "After reboot, start the UHJ Ambisonic System:"
 echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd"
