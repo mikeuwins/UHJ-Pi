@@ -157,11 +157,13 @@ Quarks.uninstall("PointView");
 0.exit;
 EOF'
 
-# Download ATK kernels, matrices, and sounds
+# Download ATK kernels, matrices, and sounds (in fresh session after class recompile)
+echo "Downloading ATK assets..."
 sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang << EOF
 Atk.downloadKernels();
 Atk.downloadMatrices();
 Atk.downloadSounds();
+"ATK assets downloaded successfully".postln;
 0.exit;
 EOF'
 
