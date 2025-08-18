@@ -20,19 +20,13 @@ echo "Installing for user: $ACTUAL_USER"
 
 # Configure non-interactive package installation BEFORE any apt commands
 export DEBIAN_FRONTEND=noninteractive
-export NEEDRESTART_MODE=a
-export APT_LISTCHANGES_FRONTEND=none
-# Prefer keeping existing config files automatically
-export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
-# Preseed to prevent interactive initramfs prompts and disable updates during install
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
-echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
-printf "update_initramfs=no\n" > /etc/initramfs-tools/update_initramfs.conf
+echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
 apt-get update
-apt-get upgrade -y $DPKG_OPTS
-apt-get dist-upgrade -y $DPKG_OPTS
+apt-get upgrade -y
+apt-get dist-upgrade -y
 
 # STEP 2: Disable Onboard and HDMI Audio
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
@@ -57,7 +51,7 @@ if ! grep -q "hdmi_force_hotplug=1" /boot/firmware/config.txt; then
 fi
 
 # STEP 3: Install X11 and Blackbox
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox xvfb $DPKG_OPTS
+apt install -y xserver-xorg x11-xserver-utils xinit blackbox xvfb
 
 # Configure display environment for Qt
 export DISPLAY=:0
@@ -70,7 +64,7 @@ pkill Xvfb 2>/dev/null || true
 # Remove Xvfb startup since we're using eglfs for embedded display
 
 # STEP 4: Install SuperCollider Dependencies
-apt-get install -y $DPKG_OPTS build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
 # STEP 5: Clone SuperCollider
 cd /home/$ACTUAL_USER
@@ -110,7 +104,7 @@ udevadm trigger
 
 # STEP 10: Configure JACK Audio
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
-usermod -aG audio,plugdev,video,render $ACTUAL_USER
+usermod -aG audio,plugdev $ACTUAL_USER
 
 # STEP 11: Install SC3 Plugins
 cd /home/$ACTUAL_USER
@@ -155,7 +149,7 @@ rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Feat
 sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.uninstall("PointView");
 0.exit;
-EOF'
+EOF
 
 # Download ATK kernels, matrices, and sounds
 sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
@@ -189,14 +183,6 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-# STEP 16: Create simple launcher command
-echo "Creating simple launcher command..."
-cat > /usr/local/bin/uhj << 'EOF'
-#!/bin/sh
-exec env QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-eglfs}" sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v21.scd"
-EOF
-chmod +x /usr/local/bin/uhj
-
 # STEP 15: Install custom fonts
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
@@ -210,7 +196,7 @@ cp led_dot_matrix/LED\ Dot-Matrix.ttf /usr/local/share/fonts/truetype/uhj-pi/
 
 # Install Arial font for power button
 echo "Installing Arial font..."
-apt-get install -y $DPKG_OPTS cabextract
+apt-get install -y cabextract
 mkdir -p /usr/share/fonts/truetype/msttcorefonts
 cd /usr/share/fonts/truetype/msttcorefonts
 # Download just Arial font directly
@@ -222,7 +208,7 @@ fc-cache -f -v
 echo "Custom fonts installed:"
 echo "  - lcd-5x7-segment-monospace.ttf"
 echo "  - LED Dot-Matrix.ttf"
-echo "  - Arial"
+echo "  - Arial (for power button)"
 
 # Add display environment variables to user's .bashrc for future sessions
 if ! grep -q "export DISPLAY=:0" /home/$ACTUAL_USER/.bashrc; then
@@ -234,11 +220,5 @@ fi
 
 echo "Installation completed successfully!"
 echo ""
-echo "A reboot is required for display and group changes to take effect."
-echo "Run: sudo reboot"
-echo ""
-echo "After reboot, start the UHJ Ambisonic System with:"
-echo "  uhj"
-echo ""
-echo "Or use the full command:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd"
+echo "To run the UHJ Ambisonic System:"
+echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v18.scd"
