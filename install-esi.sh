@@ -122,15 +122,8 @@ cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSU
 cmake --build . --config Release
 sudo cmake --build . --config Release --target install
 
-# Remove problematic GUI components (PointView, etc.) immediately after sc3-plugins
-echo "Removing problematic GUI components..."
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
-rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
-
-# Uninstall PointView quark
-sudo -u $ACTUAL_USER sclang -l /dev/null -e 'Quarks.uninstall("PointView"); 0.exit;'
+# Note: We'll remove problematic GUI components after ATK installation
+# to avoid conflicts with ATK's dependencies
 
 # STEP 12: Clone UHJ-Pi repository and build phono-control CLI
 cd /home/$ACTUAL_USER
@@ -148,16 +141,31 @@ cd /home/$ACTUAL_USER
 # Note: eglfs doesn't need Xvfb as it connects directly to the graphics hardware
 # Remove Xvfb checks since we're using eglfs for embedded display
 
-# Install ATK quark
+# Note: We'll install ATK after removing problematic components
+# so sclang can run properly
+
+# STEP 14: Remove problematic GUI components (fixes sclang display issues)
+echo "Removing problematic GUI components..."
+rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
+rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
+rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
+rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
+
+# Note: PointView is now installed by ATK, so we can remove it if needed
+
+# STEP 15: Install ATK and AmbiVerbSC (now that sclang can run properly)
+echo "Installing ATK and AmbiVerbSC..."
 sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Quarks.install(\"https://github.com/ambisonictoolkit/atk-sc3.git\"); 0.exit;" | sclang -l /dev/null'
-
-# Download ATK kernels, matrices, and sounds
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Atk.downloadKernels(); Atk.downloadMatrices(); Atk.downloadSounds(); 0.exit;" | sclang -l /dev/null'
-
-# Install AmbiVerbSC
 sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Quarks.install(\"https://github.com/JamesWenlock/AmbiVerbSC\"); 0.exit;" | sclang -l /dev/null'
 
-# STEP 14: Install custom user classes
+# Now uninstall PointView (since ATK has what it needs)
+sudo -u $ACTUAL_USER sclang -l /dev/null -e 'Quarks.uninstall("PointView"); 0.exit;'
+
+# STEP 16: Download ATK assets (now that sclang can run properly)
+echo "Downloading ATK assets..."
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Atk.downloadKernels(); Atk.downloadMatrices(); Atk.downloadSounds(); 0.exit;" | sclang -l /dev/null'
+
+# STEP 17: Install custom user classes
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -175,7 +183,7 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-# STEP 15: Create simple launcher script
+# STEP 18: Create simple launcher script
 echo "Creating simple launcher script..."
 cat > /usr/local/bin/uhj << 'EOF'
 #!/bin/bash
@@ -186,7 +194,7 @@ sclang UHJ_v21.scd
 EOF
 chmod +x /usr/local/bin/uhj
 
-# STEP 16: Install custom fonts
+# STEP 19: Install custom fonts
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
