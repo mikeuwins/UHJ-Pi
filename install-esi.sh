@@ -18,10 +18,18 @@ fi
 echo "UHJ-Pi Raspberry Pi Setup Script (Simple Version) - Starting installation..."
 echo "Installing for user: $ACTUAL_USER"
 
+# Configure non-interactive package installation
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export APT_LISTCHANGES_FRONTEND=none
+export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+# Preseed to prevent interactive initramfs prompts
+echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
+
 # STEP 1: System Update
 apt-get update
-apt-get upgrade -y
-apt-get dist-upgrade -y
+apt-get upgrade -y $DPKG_OPTS
+apt-get dist-upgrade -y $DPKG_OPTS
 
 # STEP 2: Disable Onboard and HDMI Audio
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
