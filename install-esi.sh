@@ -81,10 +81,10 @@ mkdir -p build
 cd build
 
 # STEP 6: Configure SuperCollider Build
-cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..
+cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=OFF -DSC_QT=ON ..
 
 # STEP 7: Build SuperCollider
-make -j2
+make -j3
 
 # STEP 8: Install SuperCollider
 sudo make install
@@ -109,7 +109,7 @@ udevadm trigger
 
 # STEP 10: Configure JACK Audio
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
-usermod -aG audio,plugdev $ACTUAL_USER
+usermod -aG audio,plugdev,video,render $ACTUAL_USER
 
 # STEP 11: Install SC3 Plugins
 cd /home/$ACTUAL_USER
@@ -122,6 +122,16 @@ cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSU
 cmake --build . --config Release
 sudo cmake --build . --config Release --target install
 
+# Remove problematic GUI components (PointView, etc.) immediately after sc3-plugins
+echo "Removing problematic GUI components..."
+rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
+rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
+rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
+rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
+
+# Uninstall PointView quark
+sudo -u $ACTUAL_USER sclang -l /dev/null -e 'Quarks.uninstall("PointView"); 0.exit;'
+
 # STEP 12: Clone UHJ-Pi repository and build phono-control CLI
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
@@ -131,44 +141,21 @@ cd UHJ-Pi/cli/phonorama-cli-linux
 chmod +x build.sh
 ./build.sh
 
-# STEP 13: Install ATK and handle GUI component cleanup
-echo "Installing ATK and handling GUI component cleanup..."
+# STEP 13: Install ATK and download assets
+echo "Installing ATK and downloading assets..."
 cd /home/$ACTUAL_USER
 
 # Note: eglfs doesn't need Xvfb as it connects directly to the graphics hardware
 # Remove Xvfb checks since we're using eglfs for embedded display
 
 # Install ATK quark
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
-Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
-0.exit;
-EOF'
-
-# Remove problematic GUI components
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
-rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
-
-# Uninstall PointView quark
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
-Quarks.uninstall("PointView");
-0.exit;
-EOF
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Quarks.install(\"https://github.com/ambisonictoolkit/atk-sc3.git\"); 0.exit;" | sclang -l /dev/null'
 
 # Download ATK kernels, matrices, and sounds
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
-Atk.downloadKernels();
-Atk.downloadMatrices();
-Atk.downloadSounds();
-0.exit;
-EOF'
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Atk.downloadKernels(); Atk.downloadMatrices(); Atk.downloadSounds(); 0.exit;" | sclang -l /dev/null'
 
 # Install AmbiVerbSC
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
-Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
-0.exit;
-EOF'
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; echo "Quarks.install(\"https://github.com/JamesWenlock/AmbiVerbSC\"); 0.exit;" | sclang -l /dev/null'
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
@@ -188,7 +175,18 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-# STEP 15: Install custom fonts
+# STEP 15: Create simple launcher script
+echo "Creating simple launcher script..."
+cat > /usr/local/bin/uhj << 'EOF'
+#!/bin/bash
+cd ~/UHJ-Pi/supercollider/app
+export DISPLAY=:0
+export QT_QPA_PLATFORM=eglfs
+sclang UHJ_v21.scd
+EOF
+chmod +x /usr/local/bin/uhj
+
+# STEP 16: Install custom fonts
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
@@ -213,7 +211,7 @@ fc-cache -f -v
 echo "Custom fonts installed:"
 echo "  - lcd-5x7-segment-monospace.ttf"
 echo "  - LED Dot-Matrix.ttf"
-echo "  - Arial (for power button)"
+echo "  - Arial"
 
 # Add display environment variables to user's .bashrc for future sessions
 if ! grep -q "export DISPLAY=:0" /home/$ACTUAL_USER/.bashrc; then
@@ -226,4 +224,7 @@ fi
 echo "Installation completed successfully!"
 echo ""
 echo "To run the UHJ Ambisonic System:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v18.scd"
+echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd"
+echo ""
+echo "Or use the simple launcher:"
+echo "  uhj"
