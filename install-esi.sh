@@ -222,7 +222,7 @@ fc-cache -f -v
 echo "Custom fonts installed:"
 echo "  - lcd-5x7-segment-monospace.ttf"
 echo "  - LED Dot-Matrix.ttf"
-echo "  - Arial (for power button)"
+echo "  - Arial"
 
 # Add display environment variables to user's .bashrc for future sessions
 if ! grep -q "export DISPLAY=:0" /home/$ACTUAL_USER/.bashrc; then
