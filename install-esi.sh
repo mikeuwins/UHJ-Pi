@@ -20,13 +20,18 @@ echo "Installing for user: $ACTUAL_USER"
 
 # Configure non-interactive package installation BEFORE any apt commands
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export APT_LISTCHANGES_FRONTEND=none
+# Prefer keeping existing config files automatically
+export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+# Preseed to prevent interactive initramfs prompts and disable updates during install
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
 apt-get update
-apt-get upgrade -y
-apt-get dist-upgrade -y
+apt-get upgrade -y $DPKG_OPTS
+apt-get dist-upgrade -y $DPKG_OPTS
 
 # STEP 2: Disable Onboard and HDMI Audio
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
