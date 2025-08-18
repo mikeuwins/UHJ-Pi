@@ -47,6 +47,13 @@ apt install -y xserver-xorg x11-xserver-utils xinit blackbox
 export DISPLAY=:0
 export QT_QPA_PLATFORM=eglfs
 
+# Set system-wide defaults for Qt
+echo "Setting system-wide Qt defaults..."
+echo 'export DISPLAY=:0' >> /etc/environment
+echo 'export QT_QPA_PLATFORM=eglfs' >> /etc/environment
+echo 'export QT_QPA_PLATFORM=eglfs' >> /etc/profile
+echo 'export DISPLAY=:0' >> /etc/profile
+
 # STEP 4: Install SuperCollider Dependencies (including Qt)
 apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
@@ -104,8 +111,15 @@ chmod +x build.sh
 echo "Installing ATK and handling GUI component cleanup..."
 cd /home/$ACTUAL_USER
 
-# Install ATK quark (headless to avoid display issues)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Ensure display environment is properly set up for eglfs
+echo "Setting up display environment for eglfs..."
+export DISPLAY=:0
+export QT_QPA_PLATFORM=eglfs
+# Test if eglfs can connect
+echo "Testing eglfs display connection..."
+
+# Install ATK quark
+sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
 EOF'
@@ -116,22 +130,22 @@ rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
 rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
 
-# Uninstall PointView quark (headless)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Uninstall PointView quark
+sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.uninstall("PointView");
 0.exit;
 EOF'
 
-# Download ATK kernels, matrices, and sounds (headless)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Download ATK kernels, matrices, and sounds
+sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Atk.downloadKernels();
 Atk.downloadMatrices();
 Atk.downloadSounds();
 0.exit;
 EOF'
 
-# Install AmbiVerbSC (headless)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Install AmbiVerbSC
+sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
 EOF'
