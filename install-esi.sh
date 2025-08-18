@@ -23,8 +23,9 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export APT_LISTCHANGES_FRONTEND=none
 export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
-# Preseed to prevent interactive initramfs prompts
+# Preseed to prevent interactive prompts
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
+echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
 apt-get update
