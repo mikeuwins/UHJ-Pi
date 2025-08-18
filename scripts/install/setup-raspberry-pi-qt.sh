@@ -20,13 +20,19 @@ echo "Installing for user: $ACTUAL_USER"
 
 # Configure non-interactive package installation BEFORE any apt commands
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export APT_LISTCHANGES_FRONTEND=none
+# Prefer keeping existing config files automatically
+export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+# Preseed to prevent interactive initramfs prompts and disable updates during install
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
-echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
+echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
+printf "update_initramfs=no\n" > /etc/initramfs-tools/update_initramfs.conf
 
 # STEP 1: System Update
 apt-get update
-apt-get upgrade -y
-apt-get dist-upgrade -y
+apt-get upgrade -y $DPKG_OPTS
+apt-get dist-upgrade -y $DPKG_OPTS
 
 # STEP 2: Disable Onboard and HDMI Audio
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
@@ -51,7 +57,7 @@ if ! grep -q "hdmi_force_hotplug=1" /boot/firmware/config.txt; then
 fi
 
 # STEP 3: Install X11 and Blackbox
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox xvfb
+apt install -y xserver-xorg x11-xserver-utils xinit blackbox xvfb $DPKG_OPTS
 
 # Configure display environment for Qt
 export DISPLAY=:0
@@ -64,7 +70,7 @@ pkill Xvfb 2>/dev/null || true
 # Remove Xvfb startup since we're using eglfs for embedded display
 
 # STEP 4: Install SuperCollider Dependencies
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+apt-get install -y $DPKG_OPTS build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
 # STEP 5: Clone SuperCollider
 cd /home/$ACTUAL_USER
@@ -196,7 +202,7 @@ cp led_dot_matrix/LED\ Dot-Matrix.ttf /usr/local/share/fonts/truetype/uhj-pi/
 
 # Install Arial font for power button
 echo "Installing Arial font..."
-apt-get install -y cabextract
+apt-get install -y $DPKG_OPTS cabextract
 mkdir -p /usr/share/fonts/truetype/msttcorefonts
 cd /usr/share/fonts/truetype/msttcorefonts
 # Download just Arial font directly
