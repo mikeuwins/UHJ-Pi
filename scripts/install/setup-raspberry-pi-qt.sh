@@ -189,6 +189,14 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
+# STEP 16: Create simple launcher command
+echo "Creating simple launcher command..."
+cat > /usr/local/bin/uhj << 'EOF'
+#!/bin/sh
+exec env QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-eglfs}" sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v21.scd"
+EOF
+chmod +x /usr/local/bin/uhj
+
 # STEP 15: Install custom fonts
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
@@ -229,5 +237,8 @@ echo ""
 echo "A reboot is required for display and group changes to take effect."
 echo "Run: sudo reboot"
 echo ""
-echo "After reboot, start the UHJ Ambisonic System:"
+echo "After reboot, start the UHJ Ambisonic System with:"
+echo "  uhj"
+echo ""
+echo "Or use the full command:"
 echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd"
