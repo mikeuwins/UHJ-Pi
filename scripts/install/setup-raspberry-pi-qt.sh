@@ -104,7 +104,7 @@ udevadm trigger
 
 # STEP 10: Configure JACK Audio
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
-usermod -aG audio,plugdev $ACTUAL_USER
+usermod -aG audio,plugdev,video,render $ACTUAL_USER
 
 # STEP 11: Install SC3 Plugins
 cd /home/$ACTUAL_USER
@@ -133,8 +133,8 @@ cd /home/$ACTUAL_USER
 # Note: eglfs doesn't need Xvfb as it connects directly to the graphics hardware
 # Remove Xvfb checks since we're using eglfs for embedded display
 
-# Install ATK quark
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
+# Install ATK quark (headless, then fresh session will have classes)
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
 EOF'
@@ -151,16 +151,16 @@ Quarks.uninstall("PointView");
 0.exit;
 EOF
 
-# Download ATK kernels, matrices, and sounds
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
+# Download ATK kernels, matrices, and sounds (headless)
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Atk.downloadKernels();
 Atk.downloadMatrices();
 Atk.downloadSounds();
 0.exit;
 EOF'
 
-# Install AmbiVerbSC
-sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
+# Install AmbiVerbSC (headless)
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
 EOF'
@@ -221,4 +221,4 @@ fi
 echo "Installation completed successfully!"
 echo ""
 echo "To run the UHJ Ambisonic System:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v18.scd"
+echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd"
