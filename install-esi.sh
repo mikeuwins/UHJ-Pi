@@ -139,8 +139,8 @@ cd /home/$ACTUAL_USER
 # Note: eglfs doesn't need Xvfb as it connects directly to the graphics hardware
 # Remove Xvfb checks since we're using eglfs for embedded display
 
-# Install ATK quark (headless, then fresh session will have classes)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Install ATK quark
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
 EOF'
@@ -155,18 +155,18 @@ rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Feat
 sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.uninstall("PointView");
 0.exit;
-EOF
+EOF'
 
-# Download ATK kernels, matrices, and sounds (headless)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Download ATK kernels, matrices, and sounds
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
 Atk.downloadKernels();
 Atk.downloadMatrices();
 Atk.downloadSounds();
 0.exit;
 EOF'
 
-# Install AmbiVerbSC (headless)
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+# Install AmbiVerbSC
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang << EOF
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
 EOF'
