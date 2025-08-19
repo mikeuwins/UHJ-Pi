@@ -160,6 +160,8 @@ fi
 
 # Install AmbiVerbSC manually
 echo "Installing AmbiVerbSC manually..."
+
+# Return to SuperCollider directory for AmbiVerbSC installation
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
 
 # Clean up any existing failed installation
@@ -178,14 +180,30 @@ cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
+echo "Installing custom extensions..."
+
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
+    echo "Installing ServerMeter2..."
     cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "ServerMeter2 installation completed"
+else
+    echo "ServerMeter2 already exists, skipping"
 fi
+
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
+    echo "Installing Knob360..."
     cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "Knob360 installation completed"
+else
+    echo "Knob360 already exists, skipping"
 fi
+
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
+    echo "Installing MaplinMatrix..."
     cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "MaplinMatrix installation completed"
+else
+    echo "MaplinMatrix already exists, skipping"
 fi
 
 
