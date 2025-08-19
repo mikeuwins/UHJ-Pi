@@ -115,12 +115,12 @@ echo "Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
 # Create necessary directories
-sudo -u $ACTUAL_USER mkdir -p ~/.local/share/SuperCollider/downloaded-quarks
-sudo -u $ACTUAL_USER mkdir -p ~/.local/share/ATK
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 
 # Install ATK quark manually (clone repo)
 echo "Installing ATK quark manually..."
-cd ~/.local/share/SuperCollider/downloaded-quarks
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
 sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git
 
 # Remove problematic GUI components (keeping PointView as it works in the system)
@@ -131,7 +131,7 @@ rm /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-c
 
 # Download ATK assets manually (kernels and matrices only)
 echo "Downloading ATK kernels and matrices manually..."
-cd ~/.local/share/ATK
+cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
@@ -150,7 +150,7 @@ echo "Attempting to download ATK sounds (optional)..."
 if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
-    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* ~/.local/share/ATK/
+    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
     sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
     echo "ATK sounds installed successfully"
 else
@@ -160,7 +160,14 @@ fi
 
 # Install AmbiVerbSC manually
 echo "Installing AmbiVerbSC manually..."
-cd ~/.local/share/SuperCollider/downloaded-quarks
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+
+# Clean up any existing failed installation
+if [ -d "AmbiVerbSC" ]; then
+    echo "Removing existing AmbiVerbSC directory..."
+    sudo -u $ACTUAL_USER rm -rf AmbiVerbSC
+fi
+
 sudo -u $ACTUAL_USER git clone https://github.com/JamesWenlock/AmbiVerbSC.git
 
 # STEP 14: Install custom user classes
