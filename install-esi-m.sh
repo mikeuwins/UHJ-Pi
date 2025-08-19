@@ -97,13 +97,18 @@ cd UHJ-Pi/cli/phonorama-cli-linux
 chmod +x build.sh
 ./build.sh
 
-# STEP 13: Install ATK and handle GUI component cleanup
-echo "Installing ATK and handling GUI component cleanup..."
+# STEP 13: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
+echo "Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
-# Install ATK quark
-echo "Installing ATK quark..."
-sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git")'
+# Create necessary directories
+sudo -u $ACTUAL_USER mkdir -p ~/.local/share/SuperCollider/downloaded-quarks
+sudo -u $ACTUAL_USER mkdir -p ~/.local/share/ATK
+
+# Install ATK quark manually (clone repo)
+echo "Installing ATK quark manually..."
+cd ~/.local/share/SuperCollider/downloaded-quarks
+sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git
 
 # Remove problematic GUI components (keeping PointView as it works in the system)
 echo "Removing problematic GUI components..."
@@ -111,15 +116,30 @@ rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
 rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
 
-# Download ATK kernels, matrices, and sounds
-echo "Downloading ATK assets..."
-sudo -u $ACTUAL_USER sclang -e 'Atk.downloadKernels()'
-sudo -u $ACTUAL_USER sclang -e 'Atk.downloadMatrices()'
-sudo -u $ACTUAL_USER sclang -e 'Atk.downloadSounds()'
+# Download ATK assets manually (kernels and matrices only)
+echo "Downloading ATK kernels and matrices manually..."
+cd ~/.local/share/ATK
 
-# Install AmbiVerbSC
-echo "Installing AmbiVerbSC..."
-sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC")'
+# Download kernels
+sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-sc3/releases/download/v2.2.0/ATK-kernels-v2.2.0.zip" -o kernels.zip
+sudo -u $ACTUAL_USER unzip -o kernels.zip
+sudo -u $ACTUAL_USER rm kernels.zip
+
+# Download matrices  
+sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-sc3/releases/download/v2.2.0/ATK-matrices-v2.2.0.zip" -o matrices.zip
+sudo -u $ACTUAL_USER unzip -o matrices.zip
+sudo -u $ACTUAL_USER rm matrices.zip
+
+# Download ATK sounds (optional - increases installation time)
+echo "Downloading ATK sounds manually..."
+sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-sc3/releases/download/v2.2.0/ATK-sounds-v2.2.0.zip" -o sounds.zip
+sudo -u $ACTUAL_USER unzip -o sounds.zip
+sudo -u $ACTUAL_USER rm sounds.zip
+
+# Install AmbiVerbSC manually
+echo "Installing AmbiVerbSC manually..."
+cd ~/.local/share/SuperCollider/downloaded-quarks
+sudo -u $ACTUAL_USER git clone https://github.com/JamesWenlock/AmbiVerbSC.git
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
