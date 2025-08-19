@@ -24,8 +24,15 @@ echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
+
+# Set aggressive non-interactive mode to prevent hangs
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export APT_LISTCHANGES_FRONTEND=none
+
 apt-get update
-apt-get upgrade -y
+# Skip upgrade - go straight to installing what we need
+# apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
 # STEP 2: Disable Onboard and HDMI Audio
@@ -154,6 +161,22 @@ echo "Downloading ATK matrices v1.0.3..."
 sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip
 sudo -u $ACTUAL_USER unzip -o matrices.zip
 sudo -u $ACTUAL_USER rm matrices.zip
+
+# Download ATK sounds (complete repository)
+echo "Downloading ATK sounds repository..."
+cd /tmp
+if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "ATK sounds downloaded successfully - extracting..."
+    sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
+    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
+    echo "ATK sounds installed successfully"
+else
+    echo "ATK sounds download failed - continuing without sounds"
+fi
+
+# Return to ATK directory for custom sounds
+cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 13.5: Install Custom UHJ Test Sounds
 echo "Step 13.5: Installing Custom UHJ Test Sounds..."
