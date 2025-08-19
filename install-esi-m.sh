@@ -175,6 +175,12 @@ else
     echo "ATK sounds download failed - continuing without sounds"
 fi
 
+# Copy ATK classes to SuperCollider Extensions so they can be found
+echo "Copying ATK classes to SuperCollider Extensions..."
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/atk-sc3
+sudo -u $ACTUAL_USER cp -r /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/atk-sc3/Classes/* /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/atk-sc3/
+echo "ATK classes copied to Extensions successfully"
+
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
