@@ -23,6 +23,8 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export APT_LISTCHANGES_FRONTEND=none
 export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
+# Configure specific package selections to prevent interactive prompts
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
@@ -43,7 +45,7 @@ fi
 apt install -y xserver-xorg x11-xserver-utils xinit blackbox
 
 # STEP 4: Install SuperCollider Dependencies
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev
+apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
 # STEP 5: Clone SuperCollider
 cd /home/$ACTUAL_USER
@@ -54,8 +56,8 @@ cd supercollider
 mkdir -p build
 cd build
 
-# STEP 6: Configure SuperCollider Build
-cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=OFF ..
+# STEP 6: Configure SuperCollider Build - FIXED: SC_QT=ON for Qt support without X11
+cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..
 
 # STEP 7: Build SuperCollider
 make -j2
