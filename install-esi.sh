@@ -18,13 +18,8 @@ fi
 echo "UHJ-Pi Raspberry Pi Setup Script - Starting installation..."
 echo "Installing for user: $ACTUAL_USER"
 
-# Configure non-interactive package installation BEFORE any apt commands
+# Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
-export NEEDRESTART_MODE=a
-export APT_LISTCHANGES_FRONTEND=none
-export DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
-
-# Configure specific package selections to prevent interactive prompts
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
