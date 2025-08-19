@@ -58,8 +58,8 @@ cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIV
 make -j2
 
 # STEP 8: Install SuperCollider
-sudo make install
-sudo ldconfig
+make install
+ldconfig
 
 # STEP 9: Set up udev rules for HID and audio permissions
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
@@ -119,6 +119,9 @@ sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/JamesWenlock/
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
+
+# Ensure SuperCollider Extensions directory exists
+mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
