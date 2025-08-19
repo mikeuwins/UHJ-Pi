@@ -122,7 +122,7 @@ echo "Testing eglfs display connection..."
 sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
-EOF'
+EOF
 
 # Remove problematic GUI components
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
