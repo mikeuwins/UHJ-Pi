@@ -118,11 +118,11 @@ export QT_QPA_PLATFORM=eglfs
 # Test if eglfs can connect
 echo "Testing eglfs display connection..."
 
-# Install ATK quark
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
+# Install ATK quark (ensure display environment for touchscreen)
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
-EOF
+EOF'
 
 # Remove problematic GUI components
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
@@ -130,25 +130,25 @@ rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
 rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
 
-# Uninstall PointView quark
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
+# Uninstall PointView quark (ensure display environment for touchscreen)
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang -l /dev/null << EOF
 Quarks.uninstall("PointView");
 0.exit;
-EOF'
+EOF''
 
-# Download ATK kernels, matrices, and sounds
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
+# Download ATK kernels, matrices, and sounds (ensure display environment for touchscreen)
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang -l /dev/null << EOF
 Atk.downloadKernels();
 Atk.downloadMatrices();
 Atk.downloadSounds();
 0.exit;
-EOF'
+EOF''
 
-# Install AmbiVerbSC
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
+# Install AmbiVerbSC (ensure display environment for touchscreen)
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
-EOF'
+EOF''
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
