@@ -102,37 +102,29 @@ echo "Installing ATK and handling GUI component cleanup..."
 cd /home/$ACTUAL_USER
 
 # Install ATK quark
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
-Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
-thisProcess.recompile;
-0.exit;
-EOF
+echo "Installing ATK quark..."
+sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git")'
 
 # Remove problematic GUI components
+echo "Removing problematic GUI components..."
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
 rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
 
 # Uninstall PointView quark
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
-Quarks.uninstall("PointView");
-0.exit;
-EOF
+echo "Uninstalling PointView quark..."
+sudo -u $ACTUAL_USER sclang -e 'Quarks.uninstall("PointView")'
 
 # Download ATK kernels, matrices, and sounds
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
-Atk.downloadKernels();
-Atk.downloadMatrices();
-Atk.downloadSounds();
-0.exit;
-EOF
+echo "Downloading ATK assets..."
+sudo -u $ACTUAL_USER sclang -e 'Atk.downloadKernels()'
+sudo -u $ACTUAL_USER sclang -e 'Atk.downloadMatrices()'
+sudo -u $ACTUAL_USER sclang -e 'Atk.downloadSounds()'
 
 # Install AmbiVerbSC
-sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
-Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
-0.exit;
-EOF
+echo "Installing AmbiVerbSC..."
+sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC")'
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
@@ -142,18 +134,27 @@ cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
     cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 fi
-# Note: Knob360 requires UserView class which is not available without Qt support
-# if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
-#     cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-# fi
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
+    cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+fi
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
     cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+fi
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinSM333" ]; then
+    cp -r MaplinSM333 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 fi
 
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
+# STEP 15: Configure Qt platform for headless operation
+echo "Step 15: Configuring Qt platform for headless operation..."
+# Set Qt platform to eglfs for the user's shell
+echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
+echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
+
 echo "Installation completed successfully!"
 echo ""
+echo "Qt platform has been set to eglfs for headless operation."
 echo "To run the UHJ Ambisonic System:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v18.scd" 
+echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v20.scd" 
