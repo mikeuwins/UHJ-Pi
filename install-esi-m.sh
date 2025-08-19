@@ -26,7 +26,7 @@ echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 # STEP 1: System Update
 apt-get update
 apt-get upgrade -y
-apt-get dist-upgrade -y
+# apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
 # STEP 2: Disable Onboard and HDMI Audio
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
