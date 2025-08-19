@@ -52,14 +52,32 @@ mkdir -p build
 cd build
 
 # STEP 6: Configure SuperCollider Build - FIXED: SC_QT=ON for Qt support without X11
-cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..
+echo "Configuring SuperCollider build..."
+if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..; then
+    echo "SuperCollider configuration successful"
+else
+    echo "ERROR: SuperCollider configuration failed!"
+    exit 1
+fi
 
 # STEP 7: Build SuperCollider
-make -j2
+echo "Building SuperCollider..."
+if make -j2; then
+    echo "SuperCollider build successful"
+else
+    echo "ERROR: SuperCollider build failed!"
+    exit 1
+fi
 
 # STEP 8: Install SuperCollider
-make install
-ldconfig
+echo "Installing SuperCollider..."
+if make install; then
+    echo "SuperCollider installation successful"
+    ldconfig
+else
+    echo "ERROR: SuperCollider installation failed!"
+    exit 1
+fi
 
 # STEP 9: Set up udev rules for HID and audio permissions
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
@@ -107,29 +125,38 @@ sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git
 
 # Remove problematic GUI components (keeping PointView as it works in the system)
 echo "Removing problematic GUI components..."
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
-rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
+rm -rf /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
+rm -rf /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
+rm /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
 
 # Download ATK assets manually (kernels and matrices only)
 echo "Downloading ATK kernels and matrices manually..."
 cd ~/.local/share/ATK
 
 # Download kernels
-sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-sc3/releases/download/v2.2.0/ATK-kernels-v2.2.0.zip" -o kernels.zip
+echo "Downloading ATK kernels v1.2.1..."
+sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip
 sudo -u $ACTUAL_USER unzip -o kernels.zip
 sudo -u $ACTUAL_USER rm kernels.zip
 
 # Download matrices  
-sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-sc3/releases/download/v2.2.0/ATK-matrices-v2.2.0.zip" -o matrices.zip
+echo "Downloading ATK matrices v1.0.3..."
+sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip
 sudo -u $ACTUAL_USER unzip -o matrices.zip
 sudo -u $ACTUAL_USER rm matrices.zip
 
-# Download ATK sounds (optional - increases installation time)
-echo "Downloading ATK sounds manually..."
-sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-sc3/releases/download/v2.2.0/ATK-sounds-v2.2.0.zip" -o sounds.zip
-sudo -u $ACTUAL_USER unzip -o sounds.zip
-sudo -u $ACTUAL_USER rm sounds.zip
+# Download ATK sounds (optional - try to download, but don't fail if problems)
+echo "Attempting to download ATK sounds (optional)..."
+if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "ATK sounds downloaded successfully - extracting..."
+    sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
+    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* ~/.local/share/ATK/
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
+    echo "ATK sounds installed successfully"
+else
+    echo "ATK sounds download failed - continuing without sounds"
+    echo "Sounds can be installed later using the ATK quark method if needed"
+fi
 
 # Install AmbiVerbSC manually
 echo "Installing AmbiVerbSC manually..."
@@ -141,7 +168,7 @@ echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
 # Ensure SuperCollider Extensions directory exists
-mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
