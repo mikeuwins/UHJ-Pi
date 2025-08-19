@@ -20,15 +20,12 @@ echo "Installing for user: $ACTUAL_USER"
 
 # Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export APT_LISTCHANGES_FRONTEND=none
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
-
-# Set aggressive non-interactive mode to prevent hangs
-export DEBIAN_FRONTEND=noninteractive
-export NEEDRESTART_MODE=a
-export APT_LISTCHANGES_FRONTEND=none
 
 apt-get update
 # Skip upgrade - go straight to installing what we need
@@ -98,24 +95,61 @@ echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 
 usermod -aG audio,plugdev $ACTUAL_USER
 
 # STEP 11: Install SC3 Plugins
+echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
-    git clone --recursive https://github.com/supercollider/sc3-plugins.git
+    if git clone --recursive https://github.com/supercollider/sc3-plugins.git; then
+        echo "SC3 Plugins cloned successfully"
+    else
+        echo "ERROR: SC3 Plugins clone failed!"
+        exit 1
+    fi
 fi
 cd sc3-plugins
 mkdir build && cd build
-cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF ..
-cmake --build . --config Release
-sudo cmake --build . --config Release --target install
+if cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF ..; then
+    echo "SC3 Plugins configuration successful"
+else
+    echo "ERROR: SC3 Plugins configuration failed!"
+    exit 1
+fi
+if cmake --build . --config Release; then
+    echo "SC3 Plugins build successful"
+else
+    echo "ERROR: SC3 Plugins build failed!"
+    exit 1
+fi
+if sudo cmake --build . --config Release --target install; then
+    echo "SC3 Plugins installation successful"
+else
+    echo "ERROR: SC3 Plugins installation failed!"
+    exit 1
+fi
 
 # STEP 12: Clone UHJ-Pi repository and build phono-control CLI
+echo "Cloning UHJ-Pi repository and building phono-control CLI..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
-    git clone https://github.com/mikeuwins/UHJ-Pi.git
+    if git clone https://github.com/mikeuwins/UHJ-Pi.git; then
+        echo "UHJ-Pi repository cloned successfully"
+    else
+        echo "ERROR: UHJ-Pi repository clone failed!"
+        exit 1
+    fi
 fi
 cd UHJ-Pi/cli/phonorama-cli-linux
-chmod +x build.sh
-./build.sh
+if [ -f "build.sh" ]; then
+    chmod +x build.sh
+    if ./build.sh; then
+        echo "phono-control CLI build successful"
+    else
+        echo "ERROR: phono-control CLI build failed!"
+        exit 1
+    fi
+else
+    echo "ERROR: build.sh not found!"
+    exit 1
+fi
 
 # STEP 13: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
 echo "Installing ATK and handling GUI component cleanup (manual approach)..."
@@ -128,7 +162,12 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 # Install ATK quark manually (clone repo)
 echo "Installing ATK quark manually..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
-sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git
+if sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git; then
+    echo "ATK quark cloned successfully"
+else
+    echo "ERROR: ATK quark clone failed!"
+    exit 1
+fi
 
 # Remove problematic GUI components (keeping PointView as it works in the system)
 echo "Removing problematic GUI components..."
@@ -152,15 +191,33 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
-sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip
-sudo -u $ACTUAL_USER unzip -o kernels.zip
-sudo -u $ACTUAL_USER rm kernels.zip
+if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+    if sudo -u $ACTUAL_USER unzip -o kernels.zip; then
+        sudo -u $ACTUAL_USER rm kernels.zip
+        echo "ATK kernels downloaded and extracted successfully"
+    else
+        echo "ERROR: ATK kernels extraction failed!"
+        exit 1
+    fi
+else
+    echo "ERROR: ATK kernels download failed!"
+    exit 1
+fi
 
 # Download matrices  
 echo "Downloading ATK matrices v1.0.3..."
-sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip
-sudo -u $ACTUAL_USER unzip -o matrices.zip
-sudo -u $ACTUAL_USER rm matrices.zip
+if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+    if sudo -u $ACTUAL_USER unzip -o matrices.zip; then
+        sudo -u $ACTUAL_USER rm matrices.zip
+        echo "ATK matrices downloaded and extracted successfully"
+    else
+        echo "ERROR: ATK matrices extraction failed!"
+        exit 1
+    fi
+else
+    echo "ERROR: ATK matrices download failed!"
+    exit 1
+fi
 
 # Download ATK sounds (complete repository)
 echo "Downloading ATK sounds repository..."
