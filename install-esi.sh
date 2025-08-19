@@ -124,6 +124,13 @@ Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
 EOF'
 
+# Recompile SuperCollider class library to recognize ATK
+echo "Recompiling SuperCollider class library to recognize ATK..."
+sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang -l /dev/null << EOF
+thisProcess.recompile;
+0.exit;
+EOF'
+
 # Remove problematic GUI components
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/PointView/
 rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
@@ -142,7 +149,7 @@ Atk.downloadKernels();
 Atk.downloadMatrices();
 Atk.downloadSounds();
 0.exit;
-EOF''
+EOF'
 
 # Install AmbiVerbSC (ensure display environment for touchscreen)
 sudo -u $ACTUAL_USER bash -c 'export DISPLAY=:0; export QT_QPA_PLATFORM=eglfs; sclang -l /dev/null << EOF
