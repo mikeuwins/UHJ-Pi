@@ -312,4 +312,4 @@ echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
 echo "Installation completed successfully!"
 echo ""
 echo "Reboot required. After reboot and login, run:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v20.scd" 
+echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 
