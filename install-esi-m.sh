@@ -155,18 +155,15 @@ sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/r
 sudo -u $ACTUAL_USER unzip -o matrices.zip
 sudo -u $ACTUAL_USER rm matrices.zip
 
-# Download ATK sounds (optional - try to download, but don't fail if problems)
-echo "Attempting to download ATK sounds (optional)..."
-if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
-    echo "ATK sounds downloaded successfully - extracting..."
-    sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
-    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
-    echo "ATK sounds installed successfully"
-else
-    echo "ATK sounds download failed - continuing without sounds"
-    echo "Sounds can be installed later using the ATK quark method if needed"
-fi
+# STEP 13.5: Install Custom UHJ Test Sounds
+echo "Step 13.5: Installing Custom UHJ Test Sounds..."
+echo "Installing custom UHJ test sounds..."
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
+echo "Custom UHJ test sounds installed successfully"
 
 # Install AmbiVerbSC manually
 echo "Installing AmbiVerbSC manually..."
