@@ -102,6 +102,7 @@ cd /home/$ACTUAL_USER
 # Install ATK quark
 sudo -u $ACTUAL_USER sclang -l /dev/null << 'EOF'
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
+thisProcess.recompile;
 0.exit;
 EOF
 
