@@ -22,7 +22,7 @@ echo "Installing for user: $ACTUAL_USER"
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export APT_LISTCHANGES_FRONTEND=none
-echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
+echo "initramfs-tools inthat itramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
@@ -159,11 +159,11 @@ cd /home/$ACTUAL_USER
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 
-# Install ATK quark manually (clone repo)
-echo "Installing ATK quark manually..."
-cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+# Install ATK quark directly to Extensions
+echo "Installing ATK quark directly to Extensions..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 if sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git; then
-    echo "ATK quark cloned successfully"
+    echo "ATK quark cloned successfully to Extensions"
 else
     echo "ERROR: ATK quark clone failed!"
     exit 1
@@ -232,11 +232,7 @@ else
     echo "ATK sounds download failed - continuing without sounds"
 fi
 
-# Copy ATK classes to SuperCollider Extensions so they can be found
-echo "Copying ATK classes to SuperCollider Extensions..."
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/atk-sc3
-sudo -u $ACTUAL_USER cp -r /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/atk-sc3/Classes/* /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/atk-sc3/
-echo "ATK classes copied to Extensions successfully"
+# ATK classes are now directly in Extensions - no copying needed
 
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
@@ -251,11 +247,11 @@ sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodiu
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
 echo "Custom UHJ test sounds installed successfully"
 
-# Install AmbiVerbSC manually
-echo "Installing AmbiVerbSC manually..."
+# Install AmbiVerbSC directly to Extensions
+echo "Installing AmbiVerbSC directly to Extensions..."
 
-# Return to SuperCollider directory for AmbiVerbSC installation
-cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+# Go to Extensions directory for AmbiVerbSC installation
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
 # Clean up any existing failed installation
 if [ -d "AmbiVerbSC" ]; then
@@ -263,7 +259,12 @@ if [ -d "AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER rm -rf AmbiVerbSC
 fi
 
-sudo -u $ACTUAL_USER git clone https://github.com/JamesWenlock/AmbiVerbSC.git
+if sudo -u $ACTUAL_USER git clone https://github.com/JamesWenlock/AmbiVerbSC.git; then
+    echo "AmbiVerbSC cloned successfully to Extensions"
+else
+    echo "ERROR: AmbiVerbSC clone failed!"
+    exit 1
+fi
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
