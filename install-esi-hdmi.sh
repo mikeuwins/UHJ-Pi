@@ -57,6 +57,7 @@ cd build
 
 # STEP 6: Configure SuperCollider Build - Qt with X11 for HDMI
 echo "Configuring SuperCollider build..."
+echo "Note: Qt6 runtime libraries are provided by dev packages on Pi OS Lite"
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=OFF -DSC_QT=ON ..; then
     echo "SuperCollider configuration successful"
 else
@@ -83,18 +84,44 @@ else
     exit 1
 fi
 
-# STEP 9: Set up udev rules for HID and audio permissions
+# STEP 9: Set up ARM64 library paths and Qt environment
+echo "Setting up ARM64 library paths and Qt environment..."
+# Detect architecture and set correct library paths
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ]; then
+    LIB_PATH="/usr/lib/aarch64-linux-gnu"
+elif [ "$ARCH" = "armv7l" ]; then
+    LIB_PATH="/usr/lib/arm-linux-gnueabihf"
+else
+    LIB_PATH="/usr/lib/x86_64-linux-gnu"
+fi
+
+# Set Qt environment variables for the user
+echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.bashrc
+echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.bashrc
+
+# Also set in .profile for login sessions
+echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.profile
+echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.profile
+echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.profile
+echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
+
+echo "ARM64 library paths and Qt environment configured for $ARCH"
+
+# STEP 10: Set up udev rules for HID and audio permissions
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
-# STEP 10: Configure JACK Audio
+# STEP 11: Configure JACK Audio
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
 usermod -aG audio,plugdev $ACTUAL_USER
 
-# STEP 11: Install SC3 Plugins
+# STEP 12: Install SC3 Plugins
 echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
@@ -126,7 +153,7 @@ else
     exit 1
 fi
 
-# STEP 12: Clone UHJ-Pi repository and build phono-control CLI
+# STEP 13: Clone UHJ-Pi repository and build phono-control CLI
 echo "Cloning UHJ-Pi repository and building phono-control CLI..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
@@ -151,7 +178,7 @@ else
     exit 1
 fi
 
-# STEP 13: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
+# STEP 14: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
 echo "Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
@@ -238,8 +265,8 @@ fi
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-# STEP 13.5: Install Custom UHJ Test Sounds
-echo "Step 13.5: Installing Custom UHJ Test Sounds..."
+# STEP 15: Install Custom UHJ Test Sounds
+echo "Step 15: Installing Custom UHJ Test Sounds..."
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -267,7 +294,7 @@ else
     exit 1
 fi
 
-# STEP 14: Install custom user classes
+# STEP 16: Install custom user classes
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -305,15 +332,7 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-# STEP 15: Configure Qt platform for HDMI (X11)
-echo "Step 15: Configuring Qt platform for HDMI (X11)..."
-# Set X11 display and Qt xcb platform for the user's shell
-echo 'export DISPLAY=:0' >> /home/$ACTUAL_USER/.bashrc
-echo 'export QT_QPA_PLATFORM=xcb' >> /home/$ACTUAL_USER/.bashrc
-echo 'export DISPLAY=:0' >> /home/$ACTUAL_USER/.profile
-echo 'export QT_QPA_PLATFORM=xcb' >> /home/$ACTUAL_USER/.profile
-
-## STEP 16: Install custom fonts
+# STEP 17: Install custom fonts
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
@@ -334,7 +353,7 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-# STEP 17: Create X session startup for HDMI with auto-hiding cursor
+# STEP 18: Create X session startup for HDMI with auto-hiding cursor
 echo "Configuring X session startup (Blackbox + unclutter + app)..."
 
 # Ensure unclutter is installed to manage cursor visibility
@@ -342,19 +361,59 @@ apt-get install -y unclutter
 
 # Create .xinitrc to start Blackbox, auto-hide cursor after 1s, set Qt xcb, and launch the app
 cat > /home/$ACTUAL_USER/.xinitrc << 'EOF'
-# ~/.xinitrc for UHJ-Pi HDMI (no app autostart)
-blackbox &
+# ~/.xinitrc for UHJ-Pi HDMI with auto-launch and fullscreen
+# Hide cursor after 1 second
 unclutter -idle 1 -root &
+
+# Set Qt platform
 export QT_QPA_PLATFORM=xcb
-# To auto-launch the app later, uncomment the next line:
-# exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
+
+# Start Blackbox with clean workspace
+blackbox &
+
+# Wait for Blackbox to start, then launch UHJ app in fullscreen
+sleep 2
+
+# Launch UHJ app in fullscreen
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
 EOF
 
 # Set ownership of the new file
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.xinitrc
 
+# STEP 19: Create auto-start X session service
+echo "Creating auto-start X session service..."
+cat > /etc/systemd/system/uhj-pi-x11.service << EOF
+[Unit]
+Description=UHJ-Pi X11 Session
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+User=$ACTUAL_USER
+Environment=DISPLAY=:0
+Environment=QT_QPA_PLATFORM=xcb
+ExecStart=/usr/bin/startx -- :0
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service to start on boot
+systemctl enable uhj-pi-x11.service
+
+echo "Auto-start X session service created and enabled"
+
 echo "Installation completed successfully!"
 echo ""
 echo "Reboot required. Run: sudo reboot"
-echo "After reboot and login, run:"
+echo "After reboot:"
+echo "  - X11 session will start automatically"
+echo "  - UHJ app will launch in fullscreen"
+echo "  - No manual commands needed"
+echo ""
+echo "Manual launch (if needed):"
 echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 
