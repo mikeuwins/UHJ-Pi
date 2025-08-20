@@ -518,8 +518,8 @@ chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.xinitrc
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackboxrc
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackbox
 
-# STEP 21: Create systemd service for X11 auto-start
-echo "Step 21: Creating systemd service for X11 auto-start..."
+# STEP 21: Create systemd service for X11 auto-start (disabled by default for debugging)
+echo "Step 21: Creating systemd service for X11 auto-start (disabled by default for debugging)..."
 
 cat > /etc/systemd/system/uhj-pi-x11.service << EOF
 [Unit]
@@ -533,17 +533,20 @@ User=$ACTUAL_USER
 Environment=DISPLAY=:0
 Environment=QT_QPA_PLATFORM=xcb
 ExecStart=/usr/bin/startx -- :0
-Restart=always
+Restart=no
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Enable the service to start on boot
-systemctl enable uhj-pi-x11.service
+# Create the service but don't enable it yet (for debugging)
+systemctl daemon-reload
+echo "X11 auto-start service created but NOT enabled (for debugging)"
+echo "To enable kiosk mode later, run: sudo systemctl enable uhj-pi-x11.service"
 
-echo "Auto-start X11 session service created and enabled"
+echo "Auto-start X11 session service created but NOT enabled (for debugging)"
+echo "To enable kiosk mode later, run: sudo systemctl enable uhj-pi-x11.service"
 
 # STEP 22: Set up X11 session environment
 echo "Step 22: Setting up X11 session environment..."
@@ -587,10 +590,11 @@ echo "  ✅ Audio limits and security configuration"
 echo ""
 echo "Reboot required. Run: sudo reboot"
 echo "After reboot:"
-echo "  - X11 session will start automatically"
+echo "  - X11 session will NOT start automatically (for debugging)"
+echo "  - To start X11 manually: startx"
 echo "  - Blackbox will run with no window decorations"
 echo "  - UHJ app will launch in fullscreen"
-echo "  - No manual commands needed"
+echo "  - To enable kiosk mode: sudo systemctl enable uhj-pi-x11.service"
 echo ""
 echo "Manual launch (if needed):"
 echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 
