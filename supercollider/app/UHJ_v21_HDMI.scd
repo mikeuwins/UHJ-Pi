@@ -22,6 +22,11 @@ var win, mainView,
     var logEntry = "[" ++ timestamp ++ "] " ++ msg ++ "\n";
     File(logFile, "a").write(logEntry);
 };
+
+// Initial logging to verify the function works
+~log.("=== UHJ_v21_HDMI Starting ===");
+~log.("SuperCollider version: " ++ Main.version);
+~log.("Current working directory: " ++ Platform.userHomeDir);
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
@@ -541,16 +546,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
     tryBoot = {
         if(s.serverBooting, {
+            ~log.("Server busy (booting), retrying audio engine init...");
             ("Server busy (booting), retrying audio engine init...").postln;
             AppClock.sched(0.2, { tryBoot.value });
         }, {
             if(s.serverRunning.not, {
+                ~log.("Audio server not running - attempting to boot...");
                 s.options.memSize = 65536;
                 s.options.numOutputBusChannels = outputs;
                 s.options.numInputBusChannels = inputs;
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
+                    ~log.("Audio server booted successfully");
                     // Set audio card volume after server boot
                     ("amixer -c HD set PCM 80%").unixCmd;
 
@@ -576,6 +584,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     encoder = encoderDict.at(configKeyE ? \uhj);
                     decoder = decoderDict.at(configKeyD ? \binaural);
 
+                    ~log.("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD);
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
                     // Load test audio file (same as MainApp2)
