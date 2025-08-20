@@ -404,16 +404,6 @@ echo "Step 18: Configuring X11 and Blackbox with all refinements..."
 # Create X11 configuration directory
 mkdir -p /etc/X11/xorg.conf.d
 
-# Create Xorg configuration for VC4 driver
-cat > /etc/X11/xorg.conf.d/99-v3d.conf << 'EOF'
-Section "OutputClass"
-  Identifier "vc4"
-  MatchDriver "vc4"
-  Driver "modesetting"
-  Option "PrimaryGPU" "true"
-EndSection
-EOF
-
 # Create X11 wrapper configuration
 cat > /etc/X11/Xwrapper.config << 'EOF'
 allowed_users=anybody
