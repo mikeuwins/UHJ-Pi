@@ -1,11 +1,9 @@
 // ============================================================================
-// UHJ v21 - AMBISONIC UHJ ENCODER/DECODER (HDMI Version)
+// UHJ v21 - AMBISONIC UHJ ENCODER/DECODER
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
-
-
 
 var win, mainView,
     decoderChanged,
@@ -14,22 +12,6 @@ var win, mainView,
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~maplinOverlay = nil;
-
-// Simple logging for HDMI debugging (safe location after variables)
-~log = { |msg| 
-    var logFile = "/home/uhj-pi/UHJ-Pi/sclang_debug.log";
-    var timestamp = Date.getDate.format("%Y-%m-%d %H:%M:%S");
-    var logEntry = "[" ++ timestamp ++ "] " ++ msg ++ "\n";
-    File(logFile, "a").write(logEntry);
-};
-
-// Initial logging to verify the function works
-~log.("=== UHJ_v21_HDMI Starting ===");
-~log.("SuperCollider version: " ++ Main.version);
-~log.("Current working directory: " ++ Platform.userHomeDir);
-
-// Test if logging is working at all
-"LOGGING TEST - CHECK IF THIS APPEARS IN POST WINDOW".postln;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
@@ -549,22 +531,16 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
     tryBoot = {
         if(s.serverBooting, {
-            ~log.("Server busy (booting), retrying audio engine init...");
             ("Server busy (booting), retrying audio engine init...").postln;
             AppClock.sched(0.2, { tryBoot.value });
         }, {
             if(s.serverRunning.not, {
-                ~log.("Audio server not running - attempting to boot...");
                 s.options.memSize = 65536;
                 s.options.numOutputBusChannels = outputs;
                 s.options.numInputBusChannels = inputs;
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
-                    ~log.("Audio server booted successfully");
-                    ~log.("Server status check: " ++ if(s.serverRunning) { "RUNNING" } { "NOT RUNNING" });
-                    ~log.("Server booted: " ++ if(s.serverBooted) { "YES" } { "NO" });
-                    
                     // Set audio card volume after server boot
                     ("amixer -c HD set PCM 80%").unixCmd;
 
@@ -590,7 +566,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     encoder = encoderDict.at(configKeyE ? \uhj);
                     decoder = decoderDict.at(configKeyD ? \binaural);
 
-                    ~log.("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD);
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
                     // Load test audio file (same as MainApp2)
@@ -605,7 +580,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     });
 
                     s.sync(cond);
-                    ~log.("After sync - Server status: " ++ if(s.serverRunning) { "RUNNING" } { "NOT RUNNING" });
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
