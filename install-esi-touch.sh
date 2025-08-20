@@ -334,5 +334,6 @@ fc-cache -f -v
 
 echo "Installation completed successfully!"
 echo ""
-echo "Reboot required. After reboot and login, run:"
+echo "Reboot required. Run: sudo reboot"
+echo "After reboot and login, run:"
 echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 

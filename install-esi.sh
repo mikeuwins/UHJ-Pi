@@ -52,14 +52,32 @@ mkdir -p build
 cd build
 
 # STEP 6: Configure SuperCollider Build - FIXED: SC_QT=ON for Qt support without X11
-cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..
+echo "Configuring SuperCollider build..."
+if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..; then
+    echo "SuperCollider configuration successful"
+else
+    echo "ERROR: SuperCollider configuration failed!"
+    exit 1
+fi
 
 # STEP 7: Build SuperCollider
-make -j2
+echo "Building SuperCollider..."
+if make -j2; then
+    echo "SuperCollider build successful"
+else
+    echo "ERROR: SuperCollider build failed!"
+    exit 1
+fi
 
 # STEP 8: Install SuperCollider
-make install
-ldconfig
+echo "Installing SuperCollider..."
+if make install; then
+    echo "SuperCollider installation successful"
+    ldconfig
+else
+    echo "ERROR: SuperCollider installation failed!"
+    exit 1
+fi
 
 # STEP 9: Set up udev rules for HID and audio permissions
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
@@ -98,30 +116,60 @@ cd /home/$ACTUAL_USER
 
 # Install ATK quark
 echo "Installing ATK quark..."
-sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git")'
+if sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git")'; then
+    echo "ATK quark installation successful"
+else
+    echo "ERROR: ATK quark installation failed!"
+    exit 1
+fi
 
 # Remove problematic GUI components (keeping PointView as it works in the system)
 echo "Removing problematic GUI components..."
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
-rm -rf ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
-rm ~/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
+rm -rf /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
+rm -rf /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/Interpolation/extPen-splineCurve.sc
+rm /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main\ Features/SVGFile/extColPen-asSVGFile.sc
 
 # Download ATK kernels, matrices, and sounds
 echo "Downloading ATK assets..."
-sudo -u $ACTUAL_USER sclang -e 'Atk.downloadKernels()'
-sudo -u $ACTUAL_USER sclang -e 'Atk.downloadMatrices()'
-sudo -u $ACTUAL_USER sclang -e 'Atk.downloadSounds()'
+echo "Downloading ATK kernels..."
+if sudo -u $ACTUAL_USER sclang -e 'Atk.downloadKernels()'; then
+    echo "ATK kernels download successful"
+else
+    echo "ERROR: ATK kernels download failed!"
+    exit 1
+fi
+
+echo "Downloading ATK matrices..."
+if sudo -u $ACTUAL_USER sclang -e 'Atk.downloadMatrices()'; then
+    echo "ATK matrices download successful"
+else
+    echo "ERROR: ATK matrices download failed!"
+    exit 1
+fi
+
+echo "Downloading ATK sounds..."
+if sudo -u $ACTUAL_USER sclang -e 'Atk.downloadSounds()'; then
+    echo "ATK sounds download successful"
+else
+    echo "ERROR: ATK sounds download failed!"
+    exit 1
+fi
 
 # Install AmbiVerbSC
 echo "Installing AmbiVerbSC..."
-sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC")'
+if sudo -u $ACTUAL_USER sclang -e 'Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC")'; then
+    echo "AmbiVerbSC installation successful"
+else
+    echo "ERROR: AmbiVerbSC installation failed!"
+    exit 1
+fi
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
 # Ensure SuperCollider Extensions directory exists
-mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then

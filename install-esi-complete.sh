@@ -96,8 +96,14 @@ cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
     cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 fi
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
+    cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+fi
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
     cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+fi
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinSM333" ]; then
+    cp -r MaplinSM333 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 fi
 
 # Set proper ownership

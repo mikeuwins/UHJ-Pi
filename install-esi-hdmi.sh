@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# UHJ-Pi Raspberry Pi Setup Script
+# UHJ-Pi Raspberry Pi Setup Script - HDMI Version
+# Updated with all X11 and QT configuration refinements from August 20, 2025
 
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -15,38 +16,80 @@ if [ -z "$ACTUAL_USER" ]; then
     exit 1
 fi
 
-echo "UHJ-Pi Raspberry Pi Setup Script - Starting installation..."
+echo "UHJ-Pi Raspberry Pi Setup Script - HDMI Version"
 echo "Installing for user: $ACTUAL_USER"
+echo "This version includes all X11 and QT configuration refinements"
 
 # Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export APT_LISTCHANGES_FRONTEND=none
-echo "initramfs-tools inthat itramfs-tools/update_initramfs boolean false" | debconf-set-selections
+echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
 # STEP 1: System Update
-
+echo "Step 1: System Update..."
 apt-get update
 # Skip upgrade - go straight to installing what we need
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
-# STEP 2: Disable Onboard and HDMI Audio
-if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
-    echo "dtparam=audio=off" >> /boot/firmware/config.txt
-fi
-if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
-    echo "dtoverlay=vc4-kms-v3d,noaudio" >> /boot/firmware/config.txt
-fi
+# STEP 2: Configure Boot Configuration for HDMI
+echo "Step 2: Configuring boot configuration for HDMI..."
+# Backup existing config
+cp /boot/firmware/config.txt /boot/firmware/config.txt.backup
 
-# STEP 3: Install X11 and Blackbox
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes
+# Add HDMI-specific configuration
+cat >> /boot/firmware/config.txt << 'EOF'
+
+# UHJ-Pi HDMI Configuration
+# Disable onboard audio
+dtparam=audio=off
+
+# Enable DRM VC4 V3D driver for HDMI
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# Don't have the firmware create an initial video= setting in cmdline.txt
+# Use the kernel's default instead
+disable_fw_kms_setup=1
+
+# Run in 64-bit mode
+arm_64bit=1
+
+# Disable compensation for displays with overscan
+disable_overscan=1
+
+# Run as fast as firmware / board allows
+arm_boost=1
+
+# Enable host mode on the 2711 built-in XHCI USB controller
+[cm4]
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]
+dtoverlay=vc4-kms-v3d,noaudio
+EOF
+
+echo "Boot configuration updated for HDMI"
+
+# STEP 3: Install X11 and Blackbox with all dependencies
+echo "Step 3: Installing X11 and Blackbox..."
+apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes \
+    unclutter bsetroot x11-common x11-apps x11-session-utils
 
 # STEP 4: Install SuperCollider Dependencies
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+echo "Step 4: Installing SuperCollider Dependencies..."
+apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev \
+    libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev \
+    libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev \
+    qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
 # STEP 5: Clone SuperCollider
+echo "Step 5: Cloning SuperCollider..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
     git clone --branch main --recurse-submodules https://github.com/supercollider/supercollider.git
@@ -56,9 +99,10 @@ mkdir -p build
 cd build
 
 # STEP 6: Configure SuperCollider Build - Qt with X11 for HDMI
-echo "Configuring SuperCollider build..."
+echo "Step 6: Configuring SuperCollider build..."
 echo "Note: Qt6 runtime libraries are provided by dev packages on Pi OS Lite"
-if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=OFF -DSC_QT=ON ..; then
+if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
+    -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=OFF -DSC_QT=ON ..; then
     echo "SuperCollider configuration successful"
 else
     echo "ERROR: SuperCollider configuration failed!"
@@ -66,7 +110,7 @@ else
 fi
 
 # STEP 7: Build SuperCollider
-echo "Building SuperCollider..."
+echo "Step 7: Building SuperCollider..."
 if make -j2; then
     echo "SuperCollider build successful"
 else
@@ -75,7 +119,7 @@ else
 fi
 
 # STEP 8: Install SuperCollider
-echo "Installing SuperCollider..."
+echo "Step 8: Installing SuperCollider..."
 if make install; then
     echo "SuperCollider installation successful"
     ldconfig
@@ -85,7 +129,7 @@ else
 fi
 
 # STEP 9: Set up ARM64 library paths and Qt environment
-echo "Setting up ARM64 library paths and Qt environment..."
+echo "Step 9: Setting up ARM64 library paths and Qt environment..."
 # Detect architecture and set correct library paths
 ARCH=$(uname -m)
 if [ "$ARCH" = "aarch64" ]; then
@@ -111,6 +155,7 @@ echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
 echo "ARM64 library paths and Qt environment configured for $ARCH"
 
 # STEP 10: Set up udev rules for HID and audio permissions
+echo "Step 10: Setting up udev rules..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -118,11 +163,12 @@ SUBSYSTEM=="audio", MODE="0666"
 EOF
 
 # STEP 11: Configure JACK Audio
+echo "Step 11: Configuring JACK Audio..."
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
 usermod -aG audio,plugdev $ACTUAL_USER
 
 # STEP 12: Install SC3 Plugins
-echo "Installing SC3 Plugins..."
+echo "Step 12: Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
     if git clone --recursive https://github.com/supercollider/sc3-plugins.git; then
@@ -154,7 +200,7 @@ else
 fi
 
 # STEP 13: Clone UHJ-Pi repository and build phono-control CLI
-echo "Cloning UHJ-Pi repository and building phono-control CLI..."
+echo "Step 13: Cloning UHJ-Pi repository and building phono-control CLI..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
     if git clone https://github.com/mikeuwins/UHJ-Pi.git; then
@@ -179,7 +225,7 @@ else
 fi
 
 # STEP 14: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
-echo "Installing ATK and handling GUI component cleanup (manual approach)..."
+echo "Step 14: Installing ATK and handling GUI component cleanup..."
 cd /home/$ACTUAL_USER
 
 # Create necessary directories
@@ -295,7 +341,7 @@ else
 fi
 
 # STEP 16: Install custom user classes
-echo "Installing custom user classes..."
+echo "Step 16: Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
 # Ensure SuperCollider Extensions directory exists
@@ -328,12 +374,11 @@ else
     echo "MaplinMatrix already exists, skipping"
 fi
 
-
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 17: Install custom fonts
-echo "Installing custom fonts..."
+echo "Step 17: Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
 # Create fonts directory if it doesn't exist
@@ -353,50 +398,124 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-# STEP 18: Create X session startup for HDMI with auto-hiding cursor
-echo "Configuring X session startup (Blackbox + unclutter + app)..."
+# STEP 18: Configure X11 and Blackbox with all refinements
+echo "Step 18: Configuring X11 and Blackbox with all refinements..."
 
-# Ensure unclutter is installed to manage cursor visibility
-apt-get install -y unclutter
+# Create X11 configuration directory
+mkdir -p /etc/X11/xorg.conf.d
 
-# Create .xinitrc to start Blackbox, auto-hide cursor after 1s, set Qt xcb, and launch the app
+# Create Xorg configuration for VC4 driver
+cat > /etc/X11/xorg.conf.d/99-v3d.conf << 'EOF'
+Section "OutputClass"
+  Identifier "vc4"
+  MatchDriver "vc4"
+  Driver "modesetting"
+  Option "PrimaryGPU" "true"
+EndSection
+EOF
+
+# Create X11 wrapper configuration
+cat > /etc/X11/Xwrapper.config << 'EOF'
+allowed_users=anybody
+needs_root_rights=yes
+EOF
+
+# Configure unclutter for cursor management
+cat > /etc/default/unclutter << 'EOF'
+# Unclutter configuration for UHJ-Pi
+UNCLUTTER_ARGS="-idle 1 -root"
+EOF
+
+# Set audio limits for real-time processing
+cat > /etc/security/limits.d/audio.conf << 'EOF'
+# Audio group real-time limits
+@audio - rtprio 95
+@audio - memlock unlimited
+@audio - nice -19
+EOF
+
+# STEP 19: Create custom Blackbox configuration
+echo "Step 19: Creating custom Blackbox configuration..."
+
+# Create blackbox directory and configuration
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.blackbox/styles
+
+# Create the custom NoDecorations style
+cat > /home/$ACTUAL_USER/.blackbox/styles/NoDecorations << 'EOF'
+! NoDecorations style
+window.title.marginWidth: 0
+window.handleHeight: 0
+window.grip.marginWidth: 0
+window.frame.borderWidth: 0
+borderWidth: 0
+bevelWidth: 0
+handleWidth: 0
+frameWidth: 0
+EOF
+
+# Create .blackboxrc with all the refined settings
+cat > /home/$ACTUAL_USER/.blackboxrc << 'EOF'
+session.screen0.toolbar.autoHide:       True
+session.screen0.toolbar.onTop:  False
+session.screen0.toolbar.placement:      BottomCenter
+session.screen0.toolbar.widthPercent:   66
+session.screen0.slit.placement: CenterRight
+session.screen0.slit.direction: Vertical
+session.screen0.slit.onTop:     False
+session.screen0.slit.autoHide:  False
+session.screen0.enableToolbar:  False
+session.screen0.workspaces:     1
+session.screen0.strftimeFormat: %I:%M %p
+session.screen0.workspaceNames: Workspace 1
+session.screen0.fullMaximization:       True
+session.focusNewWindows:        True
+session.colPlacementDirection:  TopToBottom
+session.doubleClickInterval:    250
+session.styleFile:      /home/uhj-pi/.blackbox/styles/NoDecorations
+session.focusModel:     ClickToFocus
+session.windowSnapThreshold:    0
+session.focusLastWindow:        True
+session.placementIgnoresShaded: True
+session.autoRaiseDelay: 400
+session.menuFile:       /etc/X11/blackbox/blackbox-menu
+session.changeWorkspaceWithMouseWheel:  True
+session.opaqueMove:     True
+session.imageDither:    OrderedDither
+session.windowPlacement:        RowSmartPlacement
+session.shadeWindowWithMouseWheel:      True
+session.opaqueResize:   True
+session.toolbarActionsWithMouseWheel:   True
+session.maximumColors:  0
+session.rowPlacementDirection:  LeftToRight
+session.disableBindingsWithScrollLock:  False
+session.fullMaximization:       True
+session.edgeSnapThreshold:      0
+EOF
+
+# Update the username in the blackboxrc file
+sed -i "s/uhj-pi/$ACTUAL_USER/g" /home/$ACTUAL_USER/.blackboxrc
+
+# STEP 20: Create refined .xinitrc with proper startup sequence
+echo "Step 20: Creating refined .xinitrc..."
+
 cat > /home/$ACTUAL_USER/.xinitrc << 'EOF'
-# ~/.xinitrc for UHJ-Pi HDMI with auto-launch and fullscreen
-# Hide cursor after 1 second
-unclutter -idle 1 -root &
-
-# Set Qt platform
 export QT_QPA_PLATFORM=xcb
-
-# Create Blackbox configuration for clean desktop
-mkdir -p ~/.blackbox
-cat > ~/.blackbox/rc << 'BBEOF'
-session.styleFile: /usr/share/blackbox/styles/Blue
-session.toolbar: false
-session.slits: false
-session.autoRaise: false
-session.focusLastWindow: false
-session.focusNewWindows: false
-session.edgeSnapThreshold: 0
-session.windowPlacement: RowSmartPlacement
-session.fullMaximization: true
-BBEOF
-
-# Start Blackbox with clean configuration
-blackbox -rc ~/.blackbox/rc &
-
-# Wait for Blackbox to start, then launch UHJ app in fullscreen
-sleep 3
-
-# Launch UHJ app in fullscreen (will be maximized by Blackbox config)
+unclutter -idle 1 -root &
+blackbox &
+sleep 1
+bsetroot -solid black
+sleep 0.5
 exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
 EOF
 
-# Set ownership of the new file
+# Set ownership of the new files
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.xinitrc
+chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackboxrc
+chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackbox
 
-# STEP 19: Create auto-start X session service
-echo "Creating auto-start X session service..."
+# STEP 21: Create systemd service for X11 auto-start
+echo "Step 21: Creating systemd service for X11 auto-start..."
+
 cat > /etc/systemd/system/uhj-pi-x11.service << EOF
 [Unit]
 Description=UHJ-Pi X11 Session
@@ -419,13 +538,53 @@ EOF
 # Enable the service to start on boot
 systemctl enable uhj-pi-x11.service
 
-echo "Auto-start X session service created and enabled"
+echo "Auto-start X11 session service created and enabled"
+
+# STEP 22: Set up X11 session environment
+echo "Step 22: Setting up X11 session environment..."
+
+# Create X11 session directory
+mkdir -p /etc/X11/Xsession.d
+
+# Create Qt accessibility configuration
+cat > /etc/X11/Xsession.d/90qt-a11y << 'EOF'
+# -*- sh -*-
+# Xsession.d script to set the env variables to enable accessibility for Qt
+#
+# This file is sourced by Xsession(5), not executed.
+
+QT_ACCESSIBILITY=1
+
+export QT_ACCESSIBILITY
+
+if [ -x "/usr/bin/dbus-update-activation-environment" ]; then
+        dbus-update-activation-environment --verbose --systemd QT_ACCESSIBILITY
+fi
+EOF
+
+# Create environment configuration
+mkdir -p /etc/environment.d
+cat > /etc/environment.d/90qt-a11y.conf << 'EOF'
+QT_ACCESSIBILITY=1
+EOF
+
+echo "X11 session environment configured"
 
 echo "Installation completed successfully!"
+echo ""
+echo "All X11 and QT configuration refinements have been applied:"
+echo "  ✅ Custom Blackbox style (NoDecorations)"
+echo "  ✅ Refined .blackboxrc configuration"
+echo "  ✅ Optimized .xinitrc startup sequence"
+echo "  ✅ Xorg VC4 driver configuration"
+echo "  ✅ Systemd service for auto-start"
+echo "  ✅ X11 session environment setup"
+echo "  ✅ Audio limits and security configuration"
 echo ""
 echo "Reboot required. Run: sudo reboot"
 echo "After reboot:"
 echo "  - X11 session will start automatically"
+echo "  - Blackbox will run with no window decorations"
 echo "  - UHJ app will launch in fullscreen"
 echo "  - No manual commands needed"
 echo ""
