@@ -44,7 +44,7 @@ fi
 apt install -y xserver-xorg x11-xserver-utils xinit blackbox
 
 # STEP 4: Install SuperCollider Dependencies
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base qt6-base-dev qt6-svg qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
 # STEP 5: Clone SuperCollider
 cd /home/$ACTUAL_USER
@@ -82,6 +82,32 @@ else
     echo "ERROR: SuperCollider installation failed!"
     exit 1
 fi
+
+# STEP 8.5: Set up ARM64 library paths and Qt environment
+echo "Setting up ARM64 library paths and Qt environment..."
+# Detect architecture and set correct library paths
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ]; then
+    LIB_PATH="/usr/lib/aarch64-linux-gnu"
+elif [ "$ARCH" = "armv7l" ]; then
+    LIB_PATH="/usr/lib/arm-linux-gnueabihf"
+else
+    LIB_PATH="/usr/lib/x86_64-linux-gnu"
+fi
+
+# Set Qt environment variables for the user
+echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.bashrc
+echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.bashrc
+
+# Also set in .profile for login sessions
+echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.profile
+echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.profile
+echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.profile
+echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
+
+echo "ARM64 library paths and Qt environment configured for $ARCH"
 
 # STEP 9: Set up udev rules for HID and audio permissions
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
@@ -342,18 +368,59 @@ apt-get install -y unclutter
 
 # Create .xinitrc to start Blackbox, auto-hide cursor after 1s, set Qt xcb, and launch the app
 cat > /home/$ACTUAL_USER/.xinitrc << 'EOF'
-# ~/.xinitrc for UHJ-Pi HDMI (no app autostart)
-blackbox &
+# ~/.xinitrc for UHJ-Pi HDMI with auto-launch and fullscreen
+# Hide cursor after 1 second
 unclutter -idle 1 -root &
+
+# Set Qt platform
 export QT_QPA_PLATFORM=xcb
-# To auto-launch the app later, uncomment the next line:
-# exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
+
+# Start Blackbox with clean workspace (no taskbar)
+blackbox -rc <(echo 'session.styleFile: /usr/share/blackbox/styles/Blue') &
+
+# Wait for Blackbox to start, then launch UHJ app in fullscreen
+sleep 2
+
+# Launch UHJ app in fullscreen
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
 EOF
 
 # Set ownership of the new file
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.xinitrc
 
+# STEP 18: Create auto-start X session service
+echo "Creating auto-start X session service..."
+cat > /etc/systemd/system/uhj-pi-x11.service << EOF
+[Unit]
+Description=UHJ-Pi X11 Session
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+User=$ACTUAL_USER
+Environment=DISPLAY=:0
+Environment=QT_QPA_PLATFORM=xcb
+ExecStart=/usr/bin/startx -- :0
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service to start on boot
+systemctl enable uhj-pi-x11.service
+
+echo "Auto-start X session service created and enabled"
+
 echo "Installation completed successfully!"
 echo ""
-echo "Reboot required. After reboot and login, run:"
+echo "Reboot required. Run: sudo reboot"
+echo "After reboot:"
+echo "  - X11 session will start automatically"
+echo "  - UHJ app will launch in fullscreen"
+echo "  - No manual commands needed"
+echo ""
+echo "Manual launch (if needed):"
 echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 
