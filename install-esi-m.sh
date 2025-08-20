@@ -226,10 +226,24 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
-    echo "ATK sounds installed successfully"
+    echo "ATK sounds copied successfully - cleaning up temporary files..."
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+    sudo -u $ACTUAL_USER rm -f atk-sounds.zip
+    echo "ATK sounds installed successfully and temporary files cleaned up"
 else
     echo "ATK sounds download failed - continuing without sounds"
+fi
+
+# Ensure we're back in the right directory and clean up any leftover files
+cd /home/$ACTUAL_USER/.local/share/ATK
+# Final cleanup check - remove any leftover files in /tmp
+if [ -f "/tmp/atk-sounds.zip" ]; then
+    echo "Removing leftover atk-sounds.zip from /tmp..."
+    rm -f /tmp/atk-sounds.zip
+fi
+if [ -d "/tmp/atk-sounds-master" ]; then
+    echo "Removing leftover atk-sounds-master from /tmp..."
+    rm -rf /tmp/atk-sounds-master
 fi
 
 # ATK classes are now directly in Extensions - no copying needed
