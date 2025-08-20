@@ -76,10 +76,11 @@ EOF
 
 echo "Boot configuration updated for HDMI"
 
-# STEP 3: Install X11 and Blackbox with all dependencies
-echo "Step 3: Installing X11 and Blackbox..."
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes \
-    unclutter bsetroot x11-common x11-apps x11-session-utils
+# STEP 3: Install X11 and Blackbox
+apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes
+
+# STEP 3.5: Install additional X11 utilities
+apt install -y unclutter bsetroot
 
 # STEP 4: Install SuperCollider Dependencies
 echo "Step 4: Installing SuperCollider Dependencies..."
@@ -300,10 +301,24 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
-    echo "ATK sounds installed successfully"
+    echo "ATK sounds copied successfully - cleaning up temporary files..."
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+    sudo -u $ACTUAL_USER rm -f atk-sounds.zip
+    echo "ATK sounds installed successfully and temporary files cleaned up"
 else
     echo "ATK sounds download failed - continuing without sounds"
+fi
+
+# Ensure we're back in the right directory and clean up any leftover files
+cd /home/$ACTUAL_USER/.local/share/ATK
+# Final cleanup check - remove any leftover files in /tmp
+if [ -f "/tmp/atk-sounds.zip" ]; then
+    echo "Removing leftover atk-sounds.zip from /tmp..."
+    rm -f /tmp/atk-sounds.zip
+fi
+if [ -d "/tmp/atk-sounds-master" ]; then
+    echo "Removing leftover atk-sounds-master from /tmp..."
+    rm -rf /tmp/atk-sounds-master
 fi
 
 # ATK classes are now directly in Extensions - no copying needed
@@ -566,7 +581,6 @@ echo "All X11 and QT configuration refinements have been applied:"
 echo "  ✅ Custom Blackbox style (NoDecorations)"
 echo "  ✅ Refined .blackboxrc configuration"
 echo "  ✅ Optimized .xinitrc startup sequence"
-echo "  ✅ Xorg VC4 driver configuration"
 echo "  ✅ Systemd service for auto-start"
 echo "  ✅ X11 session environment setup"
 echo "  ✅ Audio limits and security configuration"
