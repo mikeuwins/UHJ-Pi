@@ -53,12 +53,7 @@ if ! grep -q "disable_overscan=1" /boot/firmware/config.txt; then
     echo "disable_overscan=1" >> /boot/firmware/config.txt
 fi
 if ! grep -q "hdmi_force_hotplug=1" /boot/firmware/config.txt; then
-    echo "hdmi_force_hotplug=1" >> /boot/firmware/config.txt
-fi
-
-# STEP 3: Install X11 and Blackbox
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox xvfb $DPKG_OPTS
-
+    echo "hdmi_force_hotpK
 # Configure display environment for Qt
 export DISPLAY=:0
 export QT_QPA_PLATFORM=eglfs
