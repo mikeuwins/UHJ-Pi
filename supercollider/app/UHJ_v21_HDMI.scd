@@ -5,24 +5,7 @@
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
 
-// ============================================================================
-// DEBUG LOGGING FOR HDMI INSTALLATION
-// ============================================================================
-// Create log file for debugging audio issues
-var logFile = "/home/uhj-pi/UHJ-Pi/sclang_debug.log";
 
-// Log function
-~log = { |msg|
-    var timestamp = Date.getDate.format("%Y-%m-%d %H:%M:%S");
-    var logEntry = "[" ++ timestamp ++ "] " ++ msg ++ "\n";
-    File(logFile, "a").write(logEntry);
-};
-
-// Test logging - this will help verify the logging is working
-~log.("SuperCollider UHJ_v21_HDMI starting...");
-~log.("Current working directory: " ++ Platform.userHomeDir);
-~log.("SuperCollider version: " ++ Main.version);
-~log.("Server status: " ++ if(s.serverRunning) { "RUNNING" } { "NOT RUNNING" });
 
 var win, mainView,
     decoderChanged,
@@ -31,6 +14,14 @@ var win, mainView,
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~maplinOverlay = nil;
+
+// Simple logging for HDMI debugging (safe location after variables)
+~log = { |msg| 
+    var logFile = "/home/uhj-pi/UHJ-Pi/sclang_debug.log";
+    var timestamp = Date.getDate.format("%Y-%m-%d %H:%M:%S");
+    var logEntry = "[" ++ timestamp ++ "] " ++ msg ++ "\n";
+    File(logFile, "a").write(logEntry);
+};
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
