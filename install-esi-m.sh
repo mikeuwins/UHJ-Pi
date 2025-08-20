@@ -310,6 +310,27 @@ echo "Step 15: Configuring Qt platform for headless operation..."
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
 
+## STEP 16: Install custom fonts
+echo "Installing custom fonts..."
+cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
+
+# Create fonts directory if it doesn't exist
+mkdir -p /usr/local/share/fonts/truetype/uhj-pi
+
+# Copy custom fonts to system font directory
+cp lcd_segment_monospace/lcd-5x7-segment-monospace.ttf /usr/local/share/fonts/truetype/uhj-pi/
+cp "led_dot_matrix/LED Dot-Matrix.ttf" /usr/local/share/fonts/truetype/uhj-pi/
+
+# Install Arial font for power button
+echo "Installing Arial font..."
+apt-get install -y cabextract
+mkdir -p /usr/share/fonts/truetype/msttcorefonts
+cd /usr/share/fonts/truetype/msttcorefonts
+wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
+
+# Update font cache
+fc-cache -f -v
+
 echo "Installation completed successfully!"
 echo ""
 echo "Reboot required. After reboot and login, run:"
