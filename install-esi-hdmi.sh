@@ -41,7 +41,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
 fi
 
 # STEP 3: Install X11 and Blackbox
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox
+apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes
 
 # STEP 4: Install SuperCollider Dependencies
 apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
@@ -368,13 +368,27 @@ unclutter -idle 1 -root &
 # Set Qt platform
 export QT_QPA_PLATFORM=xcb
 
-# Start Blackbox with clean workspace
-blackbox &
+# Create Blackbox configuration for clean desktop
+mkdir -p ~/.blackbox
+cat > ~/.blackbox/rc << 'BBEOF'
+session.styleFile: /usr/share/blackbox/styles/Blue
+session.toolbar: false
+session.slits: false
+session.autoRaise: false
+session.focusLastWindow: false
+session.focusNewWindows: false
+session.edgeSnapThreshold: 0
+session.windowPlacement: RowSmartPlacement
+session.fullMaximization: true
+BBEOF
+
+# Start Blackbox with clean configuration
+blackbox -rc ~/.blackbox/rc &
 
 # Wait for Blackbox to start, then launch UHJ app in fullscreen
-sleep 2
+sleep 3
 
-# Launch UHJ app in fullscreen
+# Launch UHJ app in fullscreen (will be maximized by Blackbox config)
 exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
 EOF
 
