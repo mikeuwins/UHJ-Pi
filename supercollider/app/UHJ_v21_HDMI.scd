@@ -27,6 +27,9 @@ var win, mainView,
 ~log.("=== UHJ_v21_HDMI Starting ===");
 ~log.("SuperCollider version: " ++ Main.version);
 ~log.("Current working directory: " ++ Platform.userHomeDir);
+
+// Test if logging is working at all
+"LOGGING TEST - CHECK IF THIS APPEARS IN POST WINDOW".postln;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
@@ -559,6 +562,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 cond = Condition.new;
                 s.waitForBoot({
                     ~log.("Audio server booted successfully");
+                    ~log.("Server status check: " ++ if(s.serverRunning) { "RUNNING" } { "NOT RUNNING" });
+                    ~log.("Server booted: " ++ if(s.serverBooted) { "YES" } { "NO" });
+                    
                     // Set audio card volume after server boot
                     ("amixer -c HD set PCM 80%").unixCmd;
 
@@ -599,6 +605,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     });
 
                     s.sync(cond);
+                    ~log.("After sync - Server status: " ++ if(s.serverRunning) { "RUNNING" } { "NOT RUNNING" });
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
