@@ -510,7 +510,7 @@ blackbox &
 sleep 1
 bsetroot -solid black
 sleep 0.5
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21_HDMI.scd
 EOF
 
 # Set ownership of the new files
