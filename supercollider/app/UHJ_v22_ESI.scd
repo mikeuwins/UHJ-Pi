@@ -2501,15 +2501,13 @@ HIDdef.usage( \hidTumble, { |val|
 // --- SMALL POWER BUTTON (bottom right corner) ---
 // Simple window close button for HDMI mode with menu bar
 ~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
-    .string_("⏻")
-    .font_(Font("Arial", 16)) // Use Arial font for Pi compatibility
+    .string_("X") // Simple X symbol that should work on any font
+    .font_(Font.default.size_(18)) // Use system default font
     .stringColor_(Color.cyan) // Full opacity cyan
     .align_(\center)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        ~server.quit; // Stop the server first to prevent terminal hang
-        win.close; // This will trigger the existing onClose handler
+        win.close; // Just close the window, let existing cleanup handle server
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
-        ~server.quit; // Stop the server first to prevent terminal hang
-        win.close; // This will trigger the existing onClose handler
+        win.close; // Just close the window, let existing cleanup handle server
     });
