@@ -449,25 +449,41 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 ~tumbleKnob.enabled_(true);
             };
         } {
-            // Non-binaural mode (quad, 5.1, octagon)
+            // Non-binaural modes
             ~headtrackBtn.enabled_(false);
             ~rotateKnob.enabled_(false);
             ~tiltKnob.enabled_(false);
             ~tumbleKnob.enabled_(false);
             
-            // Always hide knobs and ON/OFF button in non-binaural modes
-            ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
-                .background_(Color.black.alpha_(0.7))
-                .alpha_(1.0)
-                .front;
-            ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 42)) // Cover only ON/OFF button (y=60-102)
-                .background_(Color.black.alpha_(0.7))
-                .alpha_(1.0)
-                .front;
-                
-            // Reset button always visible and enabled in non-binaural modes
-            // (since all remaining modes are quad, which use the panner)
-            ~headtrackResetBtn.enabled_(true);
+            if((idx == 2) or: { idx == 3 } or: { idx == 4 }) {
+                // Quad modes: reset button visible for panner control
+                ~headtrackResetBtn.enabled_(true);
+                // Hide knobs and ON/OFF button
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+                ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 42)) // Cover only ON/OFF button (y=60-102)
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+            } {
+                // Dolby/Octagon modes: BOTH buttons hidden (no headtracking, no panner)
+                ~headtrackResetBtn.enabled_(false);
+                ~htResetOverlay = View(mainView, Rect(734, 102, 48, 20)) // Cover reset button
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+                // Hide knobs and ON/OFF button
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+                ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 42)) // Cover only ON/OFF button (y=60-102)
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+            }
         };
         // ... existing code ...
         // --- Quad panner logic ---
