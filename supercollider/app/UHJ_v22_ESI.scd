@@ -2499,15 +2499,23 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-// Simple window close button for HDMI mode with menu bar
-~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
-    .string_("X") // Simple X symbol that works reliably
-    .font_(Font.default.size_(18)) // Use system default font
-    .stringColor_(Color.cyan) // Full opacity cyan
-    .align_(\center)
+// PNG-based power button for HDMI mode with menu bar
+~powerBtn = UserView(mainView, Rect(752, 442, 40, 30))
+    .background_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         win.close; // Simple close - let existing cleanup handle everything
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
         win.close; // Simple close - let existing cleanup handle everything
+    })
+    .drawFunc_({ |view|
+        var img;
+        // Load the power button image if not already loaded
+        if(~powerBtnImage.isNil) {
+            ~powerBtnImage = Image.open(PathName(thisProcess.nowExecutingPath).pathOnly ++ "../assets/power-button-icon-8343.png");
+        };
+        // Draw the image if loaded successfully
+        if(~powerBtnImage.notNil) {
+            ~powerBtnImage.drawInRect(Rect(0, 0, 40, 30));
+        };
     });
