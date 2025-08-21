@@ -1,5 +1,5 @@
 // ============================================================================
-// UHJ v22 ESI - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
+// UHJ v21 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
@@ -428,6 +428,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
         if(isBinaural) {
             ~headtrackBtn.enabled_(true);
+            ~headtrackResetBtn.enabled_(true);
             if(htIsOff) {
                 // Headtracking OFF: disable controls and hide reset button
                 ~headtrackResetBtn.enabled_(false);
@@ -443,8 +444,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     .alpha_(1.0)
                     .front;
             } {
-                // Headtracking ON: enable controls and show reset button
-                ~headtrackResetBtn.enabled_(true);
                 ~rotateKnob.enabled_(true);
                 ~tiltKnob.enabled_(true);
                 ~tumbleKnob.enabled_(true);
@@ -1113,7 +1112,6 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
         var isBinaural = (idx == 0) or: { idx == 1 };
         // Remove overlays if present
         if(~knobOverlay.notNil) { ~knobOverlay.remove; ~knobOverlay = nil; };
-        if(~htBtnOverlay.notNil) { ~htBtnOverlay.remove; ~htBtnOverlay = nil; };
         if(~htResetOverlay.notNil) { ~htResetOverlay.remove; ~htResetOverlay = nil; };
         if(isBinaural) {
             if(on) {
@@ -1147,21 +1145,11 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
     .action_({
-        var idx = ~dmenu.value;
-        var isBinaural = (idx == 0) or: { idx == 1 };
-        
-        if(isBinaural) {
-            // Binaural mode: reset headtracker knobs
-            ~rotateKnob.valueAction_(0.5);
-            ~tiltKnob.valueAction_(0.5);
-            ~tumbleKnob.valueAction_(0.5);
-        } {
-            // Quad mode: reset quad panner
-            if(~xyPanner.notNil) {
-                ~xyPanner.valueAction_([0.5, 0.5]); // Center the panner
-                ("Quad panner reset to center").postln;
-            };
-        };
+        // Reset both headtracker and quad panner - only the active one will have any effect
+        ~rotateKnob.valueAction_(0.5); ~rotateKnob.enabled_(false);
+        ~tiltKnob.valueAction_(0.5); ~tiltKnob.enabled_(false);
+        ~tumbleKnob.valueAction_(0.5); ~tumbleKnob.enabled_(false);
+        ~xyPanner.setXYActive(0.5, 0.5);
     });
 
 // --- Now trigger the overlay/enable logic for the correct initial state ---
