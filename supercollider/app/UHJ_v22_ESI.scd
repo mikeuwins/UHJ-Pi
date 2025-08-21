@@ -97,7 +97,7 @@ win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480)).background_(Color.bla
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
     if(s.serverRunning) { s.quit; };
-    0.exit;
+    // Don't force exit - let the system handle cleanup naturally
 });
 
 // Position at visible top-left corner
@@ -2506,8 +2506,12 @@ HIDdef.usage( \hidTumble, { |val|
     .stringColor_(Color.cyan) // Full opacity cyan
     .align_(\center)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        win.close; // Just close the window, let existing cleanup handle server
+        // Stop server first, then close window gently
+        if(s.serverRunning) { s.quit; };
+        win.close; // This will trigger the existing onClose handler
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
-        win.close; // Just close the window, let existing cleanup handle server
+        // Stop server first, then close window gently
+        if(s.serverRunning) { s.quit; };
+        win.close; // This will trigger the existing onClose handler
     });
