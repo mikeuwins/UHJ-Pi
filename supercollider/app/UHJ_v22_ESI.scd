@@ -97,7 +97,7 @@ win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480)).background_(Color.bla
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
     if(s.serverRunning) { s.quit; };
-    // Don't force exit - let the system handle cleanup naturally
+    0.exit;
 });
 
 // Position at visible top-left corner
@@ -2501,17 +2501,13 @@ HIDdef.usage( \hidTumble, { |val|
 // --- SMALL POWER BUTTON (bottom right corner) ---
 // Simple window close button for HDMI mode with menu bar
 ~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
-    .string_("⏼") // Alternative power symbol (more widely supported)
-    .font_(Font("Arial", 16)) // Try Arial font for Pi compatibility
+    .string_("X") // Simple X symbol that works reliably
+    .font_(Font.default.size_(18)) // Use system default font
     .stringColor_(Color.cyan) // Full opacity cyan
     .align_(\center)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Stop server first, then close window gently
-        if(s.serverRunning) { s.quit; };
-        win.close; // This will trigger the existing onClose handler
+        win.close; // Simple close - let existing cleanup handle everything
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
-        // Stop server first, then close window gently
-        if(s.serverRunning) { s.quit; };
-        win.close; // This will trigger the existing onClose handler
+        win.close; // Simple close - let existing cleanup handle everything
     });
