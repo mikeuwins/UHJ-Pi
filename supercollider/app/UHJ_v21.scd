@@ -569,7 +569,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
                     // Load test audio file (same as MainApp2)
-                    sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                    // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
                     
                     // Load spatial impulse responses for pseudo-surround convolution
                     // These would be B-format impulse responses for realistic spatialization
@@ -728,7 +728,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
                         // Load test audio file (same as MainApp2)
-                        sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+                        // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
 
                         s.sync(cond);
 
