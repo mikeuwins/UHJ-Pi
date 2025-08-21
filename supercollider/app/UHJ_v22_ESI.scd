@@ -2499,5 +2499,15 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
-// REMOVED - causing EGLFS freeze issues
-// Use Pi's physical power button to restart system
+// Simple window close button for HDMI mode with menu bar
+~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
+    .string_("⏻")
+    .font_(Font("Helvetica", 16)) // Removed boldVariant
+    .stringColor_(Color.cyan) // Full opacity cyan
+    .align_(\center)
+    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        win.close; // This will trigger the existing onClose handler
+    })
+    .touchBeginAction_({ |view, x, y, pressure, id|
+        win.close; // This will trigger the existing onClose handler
+    });
