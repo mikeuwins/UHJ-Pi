@@ -160,6 +160,37 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/down
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
+# Install base dependencies FIRST (required for ATK Matrix classes to work)
+echo "Installing base dependencies required for ATK Matrix classes..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
+
+# Install MatrixArray (Matrix base classes)
+echo "Installing MatrixArray dependency..."
+if sudo -u $ACTUAL_USER git clone https://gitlab.com/dxarts/projects/matrixarray.quark.git; then
+    echo "MatrixArray installed successfully"
+else
+    echo "ERROR: MatrixArray installation failed!"
+    exit 1
+fi
+
+# Install SignalBox (FreqSpectrum base class)
+echo "Installing SignalBox dependency..."
+if sudo -u $ACTUAL_USER git clone https://gitlab.com/dxarts/projects/SignalBox.quark.git; then
+    echo "SignalBox installed successfully"
+else
+    echo "ERROR: SignalBox installation failed!"
+    exit 1
+fi
+
+# Install SphericalDesign (TDesign base classes)
+echo "Installing SphericalDesign dependency..."
+if sudo -u $ACTUAL_USER git clone https://gitlab.com/dxarts/projects/SphericalDesign.quark.git; then
+    echo "SphericalDesign installed successfully"
+else
+    echo "ERROR: SphericalDesign installation failed!"
+    exit 1
+fi
+
 # Install ATK quark directly to Extensions
 echo "Installing ATK quark directly to Extensions..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
