@@ -2501,8 +2501,8 @@ HIDdef.usage( \hidTumble, { |val|
 // --- SMALL POWER BUTTON (bottom right corner) ---
 // Simple window close button for HDMI mode with menu bar
 ~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
-    .string_("X") // Simple X symbol that should work on any font
-    .font_(Font.default.size_(18)) // Use system default font
+    .string_("⏼") // Alternative power symbol (more widely supported)
+    .font_(Font("Arial", 16)) // Try Arial font for Pi compatibility
     .stringColor_(Color.cyan) // Full opacity cyan
     .align_(\center)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
