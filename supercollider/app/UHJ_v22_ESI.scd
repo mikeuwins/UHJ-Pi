@@ -2510,9 +2510,9 @@ HIDdef.usage( \hidTumble, { |val|
     })
     .drawFunc_({ |view|
         var img;
-        // Load the power button image if not already loaded
+        // Load the cyan power button image if not already loaded
         if(~powerBtnImage.isNil) {
-            ~powerBtnImage = Image.open(PathName(thisProcess.nowExecutingPath).pathOnly ++ "../assets/power-button-icon-8343.png");
+            ~powerBtnImage = Image.open(PathName(thisProcess.nowExecutingPath).pathOnly ++ "../assets/power-button-cyan.png");
         };
         // Draw the image if loaded successfully
         if(~powerBtnImage.notNil) {
