@@ -1,5 +1,5 @@
 // ============================================================================
-// UHJ v21 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
+// UHJ v22 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
@@ -681,12 +681,38 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             ];
                         });
                         if(outputs == 6, {
-                            var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum LF + RF for sub
-                            // Reorder outputs to match desired speaker order: LF=1, RL=2, RR=3, FR=4, C=5, Sub=6
-                            Out.ar(0, [out[1], out[2], out[3], out[4], out[0], lowpass]); // [LF, RL, RR, FR, C, Sub]
-                        }, {
-                            Out.ar(0, out);
+                            // --- DOLBY 5.1 OUTPUT MAPPING (Consumer Standard) ---
+                            // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
+                            // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub
+                            var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                            out = [
+                                out[1], // FL (Speaker 1) - Front Left
+                                out[4], // FR (Speaker 2) - Front Right  
+                                out[0], // C  (Speaker 3) - Center
+                                out[2], // RL (Speaker 4) - Rear Left
+                                out[3], // RR (Speaker 5) - Rear Right
+                                lowpass // Sub (Speaker 6) - Subwoofer
+                            ];
                         });
+                        
+                        if(outputs == 8, {
+                            // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
+                            // ATK 8.0 decoder: Anti-clockwise from front left out[0]
+                            // Map to diagram: Clockwise from front left starting at Speaker 1
+                            out = [
+                                out[0], // Speaker 1: Front Left (FL)
+                                out[7], // Speaker 2: Front Left Center (FLC)
+                                out[6], // Speaker 3: Center (C)
+                                out[5], // Speaker 4: Front Right Center (FRC)
+                                out[4], // Speaker 5: Front Right (FR)
+                                out[3], // Speaker 6: Rear Right Center (RRC)
+                                out[2], // Speaker 7: Rear Right (RR)
+                                out[1]  // Speaker 8: Rear Left Center (RLC)
+                            ];
+                        });
+                        
+                        // Output routing for all modes
+                        Out.ar(0, out);
                     }).add;
 
                     s.sync(cond);
@@ -831,12 +857,38 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 ];
                             });
                             if(outputs == 6, {
-                                var lowpass = BLowPass.ar((out[0] + out[4]), 120, 1, 0.4);
-                                Out.ar(0, out);
-                                Out.ar(5, lowpass);
-                            }, {
-                                Out.ar(0, out);
+                                // --- DOLBY 5.1 OUTPUT MAPPING (Consumer Standard) ---
+                                // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
+                                // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub
+                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                                out = [
+                                    out[1], // FL (Speaker 1) - Front Left
+                                    out[4], // FR (Speaker 2) - Front Right  
+                                    out[0], // C  (Speaker 3) - Center
+                                    out[2], // RL (Speaker 4) - Rear Left
+                                    out[3], // RR (Speaker 5) - Rear Right
+                                    lowpass // Sub (Speaker 6) - Subwoofer
+                                ];
                             });
+                            
+                            if(outputs == 8, {
+                                // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
+                                // ATK 8.0 decoder: Anti-clockwise from front left out[0]
+                                // Map to diagram: Clockwise from front left starting at Speaker 1
+                                out = [
+                                    out[0], // Speaker 1: Front Left (FL)
+                                    out[7], // Speaker 2: Front Left Center (FLC)
+                                    out[6], // Speaker 3: Center (C)
+                                    out[5], // Speaker 4: Front Right Center (FRC)
+                                    out[4], // Speaker 5: Front Right (FR)
+                                    out[3], // Speaker 6: Rear Right Center (RRC)
+                                    out[2], // Speaker 7: Rear Right (RR)
+                                    out[1]  // Speaker 8: Rear Left Center (RLC)
+                                ];
+                            });
+                            
+                            // Output routing for all modes
+                            Out.ar(0, out);
                         }).add;
 
                         s.sync(cond);
