@@ -2500,22 +2500,25 @@ HIDdef.usage( \hidTumble, { |val|
 
 // --- SMALL POWER BUTTON (bottom right corner) ---
 // PNG-based power button for HDMI mode with menu bar
-~powerBtn = UserView(mainView, Rect(752, 442, 40, 30))
+~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
+    .string_("⏻") // Fallback text symbol
+    .font_(Font.default.size_(18))
+    .stringColor_(Color.cyan)
+    .align_(\center)
     .background_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         win.close; // Simple close - let existing cleanup handle everything
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
         win.close; // Simple close - let existing cleanup handle everything
-    })
-    .drawFunc_({ |view|
-        var img;
-        // Load the cyan power button image if not already loaded
-        if(~powerBtnImage.isNil) {
-            ~powerBtnImage = Image.open(PathName(thisProcess.nowExecutingPath).pathOnly ++ "../assets/power-button-cyan.png");
-        };
-        // Draw the image if loaded successfully
-        if(~powerBtnImage.notNil) {
-            ~powerBtnImage.drawInRect(Rect(0, 0, 40, 30));
-        };
     });
+
+// Try to load and set the PNG as background
+{
+    var img;
+    img = Image.open(PathName(thisProcess.nowExecutingPath).pathOnly ++ "/../assets/power-button-cyan.png");
+    if(img.notNil) {
+        ~powerBtn.backgroundImage_(img);
+        ~powerBtn.string_(""); // Remove text if image loads
+    };
+}.defer(0.1); // Small delay to ensure GUI is ready
