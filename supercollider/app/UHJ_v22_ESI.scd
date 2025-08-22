@@ -2498,27 +2498,16 @@ HIDdef.usage( \hidTumble, { |val|
 }, \X );
 // ... existing 
 
-// --- SMALL POWER BUTTON (bottom right corner) ---
-// PNG-based power button for HDMI mode with menu bar
+// --- POWER BUTTON (bottom right corner) ---
 ~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
-    .string_("⏻") // Fallback text symbol
+    .string_("⏻")
     .font_(Font.default.size_(18))
     .stringColor_(Color.cyan)
     .align_(\center)
     .background_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        win.close; // Simple close - let existing cleanup handle everything
+        win.close;
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
-        win.close; // Simple close - let existing cleanup handle everything
+        win.close;
     });
-
-// Try to load and set the PNG as background
-{
-    var img;
-    img = Image.open(PathName(thisProcess.nowExecutingPath).pathOnly ++ "/../assets/power-button-cyan.png");
-    if(img.notNil) {
-        ~powerBtn.backgroundImage_(img);
-        ~powerBtn.string_(""); // Remove text if image loads
-    };
-}.defer(0.1); // Small delay to ensure GUI is ready
