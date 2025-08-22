@@ -2499,12 +2499,10 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- POWER BUTTON (bottom right corner) ---
-~powerBtn = StaticText(mainView, Rect(752, 442, 40, 30))
-    .string_("⏻")
-    .font_(Font.default.size_(18))
-    .stringColor_(Color.cyan)
-    .align_(\center)
-    .background_(Color.clear)
+~powerBtn = Button(mainView, Rect(760, 445, 20, 20))
+    .states_([["X", Color.cyan, Color.black]]) // Match headtracking button style, uppercase X
+    .font_(Font("Helvetica", 10)) // Same size as RESET button
+    .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         win.close;
     })
