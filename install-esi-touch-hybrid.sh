@@ -380,6 +380,9 @@ echo "Step 15: Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
+# Clear X11 display variable to force EGLFS
+echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
+echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
 
 ## STEP 16: Install custom fonts
 echo "Installing custom fonts..."
