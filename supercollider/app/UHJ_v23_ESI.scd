@@ -2598,34 +2598,13 @@ HIDdef.usage( \hidTumble, { |val|
 // ... existing 
 
 // --- POWER BUTTON (bottom right corner) ---
-// Set up proper window close handler for Pi
-win.onClose_({
-    Server.all.do(_.freeAll);
-    Server.quitAll;
-    0.exit;
-});
-
 ~powerBtn = Button(mainView, Rect(760, 445, 20, 20))
     .states_([["X", Color.cyan, Color.black]]) // Match headtracking button style, uppercase X
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        // Stop all synths
-        Server.all.do(_.freeAll);
-        // Quit SuperCollider properly
-        Server.quitAll;
-        // Close the window
         win.close;
-        // Exit the process
-        0.exit;
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
-        // Stop all synths
-        Server.all.do(_.freeAll);
-        // Quit SuperCollider properly
-        Server.quitAll;
-        // Close the window
         win.close;
-        // Exit the process
-        0.exit;
     });
