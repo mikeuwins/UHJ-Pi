@@ -2080,7 +2080,7 @@ win.front;
                             leftRotationAngle = atan2(centerY_bottom - speakerY, centerX - leftSpeakerX) + (pi / 2);
                             rightRotationAngle = atan2(centerY_bottom - speakerY, centerX - rightSpeakerX) + (pi / 2);
                             
-                            // Draw triangle lines
+                            // Draw triangle linestesting on 
                             Pen.color = Color.cyan; Pen.width = 1;
                             // Left diagonal from center to left speaker
                             Pen.line(Point(centerX, centerY_bottom), Point(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
@@ -2605,6 +2605,6 @@ HIDdef.usage( \hidTumble, { |val|
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         win.close;
     })
-    // .touchBeginAction_({ |view, x, y, pressure, id|
-    //     win.close;
-    // });
+    .touchBeginAction_({ |view, x, y, pressure, id|
+        win.close;
+    });
