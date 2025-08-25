@@ -93,7 +93,7 @@ formatDbValue = { |dbValue|
 };
 
 // --- Window setup with platform-specific positioning ---
-win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480)).background_(Color.black);
+win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).background_(Color.black);
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
     if(s.serverRunning) { s.quit; };
@@ -115,6 +115,7 @@ if(Platform.name == \osx, {
         win.bounds_(Rect(0, 30, 800, 480)); // Ubuntu desktop: account for top panel
     });
 });
+"UHJ-Pi: Centered on %x% screen".format(Window.screenBounds.width, Window.screenBounds.height).postln;
 
 mainView = CompositeView(win, Rect(0, 0, 800, 480)).background_(Color.black);
 
