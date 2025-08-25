@@ -1,4 +1,4 @@
-#!/bin/bash
+let's#!/bin/bash
 
 # UHJ-Pi ESI HDMI Hybrid Installation Script
 # HDMI version with latest SuperCollider fixes from touch-hybrid

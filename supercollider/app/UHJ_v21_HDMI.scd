@@ -1582,7 +1582,7 @@ win.front;
 };
 
 ~setMaplinEffect = { |level=0.8|
-    if(~synth.notNil) { ~synth.set(\maplinEffect, level); };
+    if(~synth.notNil) { ~synth.set(\maplinEffect, level); };kaydo w
     ~maplinState[\effect] = level;
     ("Maplin effect level: " ++ (level * 100).round(1) ++ "%").postln;
 };
