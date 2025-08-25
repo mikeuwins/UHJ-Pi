@@ -77,11 +77,10 @@ EOF
 
 echo "Boot configuration updated for HDMI"
 
-# STEP 3: Install X11 and Blackbox
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes
-
-# STEP 3.5: Install additional X11 utilities
-apt install -y unclutter bsetroot
+# STEP 3: Install X11 and Blackbox with all dependencies
+echo "Step 3: Installing X11 and Blackbox..."
+apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes \
+    unclutter bsetroot x11-common x11-apps x11-session-utils
 
 # STEP 4: Install SuperCollider Dependencies
 echo "Step 4: Installing SuperCollider Dependencies..."
@@ -142,17 +141,13 @@ else
     LIB_PATH="/usr/lib/x86_64-linux-gnu"
 fi
 
-# Set Qt environment variables for the user
+# Set library paths for the user (but not Qt platform - let SuperCollider handle it automatically)
 echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.bashrc
 echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.bashrc
-echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.bashrc
-echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.bashrc
 
 # Also set in .profile for login sessions
 echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.profile
 echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.profile
-echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.profile
-echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
 
 echo "ARM64 library paths and Qt environment configured for $ARCH"
 
