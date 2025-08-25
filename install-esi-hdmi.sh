@@ -458,59 +458,27 @@ handleWidth: 0
 frameWidth: 0
 EOF
 
-# Create .blackboxrc with all the refined settings
+# Create .blackboxrc with working settings
 cat > /home/$ACTUAL_USER/.blackboxrc << 'EOF'
-session.screen0.toolbar.autoHide:       True
-session.screen0.toolbar.onTop:  False
-session.screen0.toolbar.placement:      BottomCenter
-session.screen0.toolbar.widthPercent:   66
-session.screen0.slit.placement: CenterRight
-session.screen0.slit.direction: Vertical
-session.screen0.slit.onTop:     False
-session.screen0.slit.autoHide:  False
 session.screen0.enableToolbar:  False
 session.screen0.workspaces:     1
-session.screen0.strftimeFormat: %I:%M %p
-session.screen0.workspaceNames: Workspace 1
 session.screen0.fullMaximization:       True
-session.focusNewWindows:        True
-session.colPlacementDirection:  TopToBottom
-session.doubleClickInterval:    250
-session.styleFile:      /home/uhj-pi/.blackbox/styles/NoDecorations
+session.styleFile:      /home/$ACTUAL_USER/.blackbox/styles/NoDecorations
 session.focusModel:     ClickToFocus
-session.windowSnapThreshold:    0
-session.focusLastWindow:        True
-session.placementIgnoresShaded: True
-session.autoRaiseDelay: 400
-session.menuFile:       /etc/X11/blackbox/blackbox-menu
-session.changeWorkspaceWithMouseWheel:  True
-session.opaqueMove:     True
-session.imageDither:    OrderedDither
-session.windowPlacement:        RowSmartPlacement
-session.shadeWindowWithMouseWheel:      True
-session.opaqueResize:   True
-session.toolbarActionsWithMouseWheel:   True
-session.maximumColors:  0
-session.rowPlacementDirection:  LeftToRight
-session.disableBindingsWithScrollLock:  False
-session.fullMaximization:       True
-session.edgeSnapThreshold:      0
 EOF
 
-# Update the username in the blackboxrc file
-sed -i "s/uhj-pi/$ACTUAL_USER/g" /home/$ACTUAL_USER/.blackboxrc
+# Username is already set correctly in blackboxrc
 
 # STEP 20: Create refined .xinitrc with proper startup sequence
 echo "Step 20: Creating refined .xinitrc..."
 
 cat > /home/$ACTUAL_USER/.xinitrc << 'EOF'
-export QT_QPA_PLATFORM=xcb
 unclutter -idle 1 -root &
+export QT_QPA_PLATFORM=xcb
+export DISPLAY=:0
 blackbox &
-sleep 1
-bsetroot -solid black
-sleep 0.5
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v21_HDMI.scd
+bsetroot -solid black &
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_ESI.scd
 EOF
 
 # Set ownership of the new files
@@ -597,4 +565,9 @@ echo "  - UHJ app will launch in fullscreen"
 echo "  - To enable kiosk mode: sudo systemctl enable uhj-pi-x11.service"
 echo ""
 echo "Manual launch (if needed):"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 
+echo "  startx"
+echo ""
+echo "After reboot:"
+echo "  1. Run: sudo reboot"
+echo "  2. After reboot, run: startx"
+echo "  3. The UHJ app will launch automatically with no decorations" 
