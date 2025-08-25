@@ -226,7 +226,7 @@ else
 fi
 
 # STEP 14: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
-echo "Step 14: Installing ATK and handling GUI component cleanup..."
+echo "Step 14: Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
 # Create necessary directories
@@ -234,15 +234,34 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/down
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
-# Install ATK quark directly to Extensions
-echo "Installing ATK quark directly to Extensions..."
+# Install ATK and AmbiVerbSC using Quark system (handles dependencies automatically)
+echo "Installing ATK and AmbiVerbSC using Quark system..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
-if sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git; then
-    echo "ATK quark cloned successfully to Extensions"
+
+# Install ATK using Quark system (includes all dependencies)
+echo "Installing ATK quark..."
+if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
+0.exit;
+EOF'; then
+    echo "ATK quark installed successfully"
 else
-    echo "ERROR: ATK quark clone failed!"
+    echo "ERROR: ATK quark installation failed!"
     exit 1
 fi
+
+# Install AmbiVerbSC using Quark system
+echo "Installing AmbiVerbSC quark..."
+if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
+0.exit;
+EOF'; then
+    echo "AmbiVerbSC quark installed successfully"
+else
+    echo "ERROR: AmbiVerbSC quark installation failed!"
+    exit 1
+fi
+# ATK and AmbiVerbSC now installed via Quark system above
 
 # Remove problematic GUI components (keeping PointView as it works in the system)
 echo "Removing problematic GUI components..."
@@ -301,27 +320,60 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    echo "ATK sounds copied successfully - cleaning up temporary files..."
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
-    sudo -u $ACTUAL_USER rm -f atk-sounds.zip
-    echo "ATK sounds installed successfully and temporary files cleaned up"
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
+    echo "ATK sounds installed successfully"
+    
+    # Organize sounds into proper subdirectory structure (like working SD card)
+    echo "Organizing sounds into proper directory structure..."
+    cd /home/$ACTUAL_USER/.local/share/ATK
+    if [ ! -d "sounds" ]; then
+        sudo -u $ACTUAL_USER mkdir sounds
+    fi
+    # Move WAV files and documentation to sounds subdirectory
+    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
+    sudo -u $ACTUAL_USER mv LICENSE.md sounds/ 2>/dev/null || true
+    sudo -u $ACTUAL_USER mv README.md sounds/ 2>/dev/null || true
+    echo "Sounds organized into sounds/ subdirectory"
 else
     echo "ATK sounds download failed - continuing without sounds"
 fi
 
-# Ensure we're back in the right directory and clean up any leftover files
-cd /home/$ACTUAL_USER/.local/share/ATK
-# Final cleanup check - remove any leftover files in /tmp
-if [ -f "/tmp/atk-sounds.zip" ]; then
-    echo "Removing leftover atk-sounds.zip from /tmp..."
-    rm -f /tmp/atk-sounds.zip
+# CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
+echo "Moving ATK classes from downloaded-quarks to Extensions..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider
+
+# Move the clean, working classes to Extensions
+echo "Moving ATK dependencies to Extensions..."
+if [ -d "downloaded-quarks/MathLib" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/MathLib Extensions/
+    echo "Moved MathLib to Extensions"
 fi
-if [ -d "/tmp/atk-sounds-master" ]; then
-    echo "Removing leftover atk-sounds-master from /tmp..."
-    rm -rf /tmp/atk-sounds-master
+if [ -d "downloaded-quarks/MatrixArray" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/MatrixArray Extensions/
+    echo "Moved MatrixArray to Extensions"
+fi
+if [ -d "downloaded-quarks/SignalBox" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SignalBox Extensions/
+    echo "Moved SignalBox to Extensions"
+fi
+if [ -d "downloaded-quarks/SphericalDesign" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SphericalDesign Extensions/
+    echo "Moved SphericalDesign to Extensions"
+fi
+if [ -d "downloaded-quarks/atk-sc3" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/atk-sc3 Extensions/
+    echo "Moved atk-sc3 to Extensions"
+fi
+if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
+    echo "Moved AmbiVerbSC to Extensions"
 fi
 
-# ATK classes are now directly in Extensions - no copying needed
+# Set proper ownership for Extensions
+echo "Setting proper ownership for Extensions..."
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
+
+# ATK classes are now properly located in Extensions
 
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
@@ -336,24 +388,20 @@ sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodiu
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
 echo "Custom UHJ test sounds installed successfully"
 
-# Install AmbiVerbSC directly to Extensions
-echo "Installing AmbiVerbSC directly to Extensions..."
-
-# Go to Extensions directory for AmbiVerbSC installation
-cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
-
-# Clean up any existing failed installation
-if [ -d "AmbiVerbSC" ]; then
-    echo "Removing existing AmbiVerbSC directory..."
-    sudo -u $ACTUAL_USER rm -rf AmbiVerbSC
-fi
-
-if sudo -u $ACTUAL_USER git clone https://github.com/JamesWenlock/AmbiVerbSC.git; then
-    echo "AmbiVerbSC cloned successfully to Extensions"
+# Move custom sounds to sounds subdirectory to match working SD card structure
+echo "Moving custom sounds to sounds/ subdirectory..."
+cd /home/$ACTUAL_USER/.local/share/ATK
+if [ -d "sounds" ]; then
+    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
+    echo "Custom UHJ sounds moved to sounds/ subdirectory"
 else
-    echo "ERROR: AmbiVerbSC clone failed!"
-    exit 1
+    echo "WARNING: sounds/ directory not found - creating it and moving sounds"
+    sudo -u $ACTUAL_USER mkdir sounds
+    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
+    echo "Custom UHJ sounds moved to sounds/ subdirectory"
 fi
+
+# AmbiVerbSC now installed via Quark system above
 
 # STEP 16: Install custom user classes
 echo "Step 16: Installing custom user classes..."
