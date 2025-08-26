@@ -557,7 +557,7 @@ fc-cache -f -v
 echo "Step 22: Creating launcher..."
 cat > /usr/local/bin/start << 'EOF'
 #!/usr/bin/env bash
-exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_Behringer.scd > /home/$USER/post_output.log 2>&1
+exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH.scd > /home/$USER/post_output.log 2>&1
 EOF
 chmod +x /usr/local/bin/start
 
