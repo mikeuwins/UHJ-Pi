@@ -99,30 +99,65 @@ if [ -f "$CONFIG_FILE" ]; then
     echo "Found existing configuration, checking devices..."
     source "$CONFIG_FILE"
     
-    # Verify devices still exist
+    # Smart verification: check that 2 USB audio devices exist and are accessible
+    echo "Verifying devices are still accessible..."
     devices=$(detect_usb_devices)
-    uca_found=false
-    ufo_found=false
+    device_count=$(echo "$devices" | wc -w)
     
-    for device in $devices; do
-        if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
-            local card="${BASH_REMATCH[1]}"
-            local usb_path="${BASH_REMATCH[2]}"
-            if [ "$card:$usb_path" = "$UCA_DEVICE" ]; then
-                uca_found=true
-            elif [ "$card:$usb_path" = "$UFO_DEVICE" ]; then
-                ufo_found=true
+    if [ "$device_count" -eq 2 ]; then
+        echo "✅ Found 2 USB audio devices"
+        
+        # Check if we can actually connect to the devices (verify they're working)
+        test_success=true
+        
+        # Test UCA202 (first device)
+        first_device=$(echo "$devices" | cut -d' ' -f1)
+        if [[ $first_device =~ ^([0-9]+):(.*)$ ]]; then
+            test_card="${BASH_REMATCH[1]}"
+            echo "Testing UCA202 (Card $test_card)..."
+            
+            # Quick test: try to get device info
+            if ! amixer -c "$test_card" sget PCM >/dev/null 2>&1; then
+                echo "⚠️  UCA202 (Card $test_card) not responding"
+                test_success=false
+            else
+                echo "✅ UCA202 (Card $test_card) responding"
             fi
         fi
-    done
-    
-    if [ "$uca_found" = true ] && [ "$ufo_found" = true ]; then
-        echo "Using saved configuration:"
-        echo "  UCA202: Card $UCA_CARD ($UCA_DEVICE)"
-        echo "  UFO202: Card $UFO_CARD ($UFO_DEVICE)"
-        echo ""
+        
+        # Test UFO202 (second device)
+        second_device=$(echo "$devices" | cut -d' ' -f2)
+        if [[ $second_device =~ ^([0-9]+):(.*)$ ]]; then
+            test_card="${BASH_REMATCH[1]}"
+            echo "Testing UFO202 (Card $test_card)..."
+            
+            # Quick test: try to get device info
+            if ! amixer -c "$test_card" sget PCM >/dev/null 2>&1; then
+                echo "⚠️  UFO202 (Card $test_card) not responding"
+                test_success=false
+            else
+                echo "✅ UFO202 (Card $test_card) responding"
+            fi
+        fi
+        
+        if [ "$test_success" = true ]; then
+            echo ""
+            echo "✅ Devices verified and working - using saved configuration"
+            echo "  UCA202: Card $(echo "$first_device" | cut -d: -f1)"
+            echo "  UFO202: Card $(echo "$second_device" | cut -d: -f1)"
+            echo ""
+            
+            # Update card numbers to current values
+            UCA_CARD=$(echo "$first_device" | cut -d: -f1)
+            UFO_CARD=$(echo "$second_device" | cut -d: -f1)
+        else
+            echo "⚠️  Device verification failed, re-registering..."
+            rm "$CONFIG_FILE"
+            register_devices
+        fi
     else
-        echo "Saved configuration invalid, re-registering devices..."
+        echo "⚠️  Expected 2 USB audio devices, found $device_count"
+        echo "Re-registering devices..."
         rm "$CONFIG_FILE"
         register_devices
     fi
