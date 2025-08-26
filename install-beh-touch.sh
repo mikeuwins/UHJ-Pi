@@ -553,10 +553,111 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-# STEP 22: Create a simple launcher to start the app easily
-echo "Step 22: Creating launcher..."
+# STEP 22: Create a launcher that starts audio devices first, then the app
+echo "Step 22: Creating launcher with audio setup..."
 cat > /usr/local/bin/start << 'EOF'
 #!/usr/bin/env bash
+
+echo "Starting Behringer audio setup..."
+
+# Detect Behringer devices by USB controller
+UCA_CARD=""
+UFO_CARD=""
+
+# Parse /proc/asound/cards line by line
+while IFS= read -r line; do
+    if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[ ]]; then
+        current_card="${BASH_REMATCH[1]}"
+    elif [[ $line =~ 1d\.7 ]]; then
+        UCA_CARD="$current_card"
+    elif [[ $line =~ 1a\.7 ]]; then
+        UFO_CARD="$current_card"
+    fi
+done < /proc/asound/cards
+
+if [ -z "$UCA_CARD" ] || [ -z "$UFO_CARD" ]; then
+    echo "ERROR: Could not detect both Behringer devices"
+    echo "Make sure both UFO202 and UCA202 are connected"
+    echo "Current audio cards:"
+    cat /proc/asound/cards
+    exit 1
+fi
+
+echo "Detected devices:"
+echo "  UCA202 (Line Input) = Card $UCA_CARD"
+echo "  UFO202 (Phono Input) = Card $UFO_CARD"
+
+# Stop any existing audio processes
+echo "Stopping existing audio processes..."
+pkill jackd 2>/dev/null
+pkill zita-a2j 2>/dev/null
+pkill zita-j2a 2>/dev/null
+sleep 2
+
+# Start JACK on UCA202 (line device) as master
+echo "Starting JACK server on UCA202 (Card $UCA_CARD)..."
+jackd -d alsa -d hw:$UCA_CARD -r 44100 -p 256 -n 2 > /tmp/jack.log 2>&1 &
+JACK_PID=$!
+
+# Wait for JACK to initialize
+sleep 3
+
+# Check if JACK started successfully
+if ! ps -p $JACK_PID > /dev/null; then
+    echo "ERROR: JACK failed to start. Check /tmp/jack.log"
+    exit 1
+fi
+
+echo "JACK server started successfully (PID: $JACK_PID)"
+
+# Start zita bridges for UFO202
+echo "Starting zita bridges for UFO202 (Card $UFO_CARD)..."
+
+# Bridge UFO202 inputs to JACK (phono inputs)
+echo "Starting zita-a2j for UFO202 inputs..."
+zita-a2j -j ufo_phono -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-a2j.log 2>&1 &
+ZITA_A2J_PID=$!
+
+# Bridge JACK outputs to UFO202 (additional outputs)
+echo "Starting zita-j2a for UFO202 outputs..."
+zita-j2a -j ufo_out -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-j2a.log 2>&1 &
+ZITA_J2A_PID=$!
+
+# Wait for zita bridges to initialize
+sleep 2
+
+# Check if zita processes started successfully
+if ! ps -p $ZITA_A2J_PID > /dev/null; then
+    echo "ERROR: zita-a2j failed to start. Check /tmp/zita-a2j.log"
+    exit 1
+fi
+
+if ! ps -p $ZITA_J2A_PID > /dev/null; then
+    echo "ERROR: zita-j2a failed to start. Check /tmp/zita-j2a.log"
+    exit 1
+fi
+
+echo "Zita bridges started successfully"
+
+# Wait a moment for everything to sync
+sleep 2
+
+# Verify JACK ports
+echo "Verifying JACK configuration..."
+if command -v jack_lsp >/dev/null 2>&1; then
+    PORTS=$(jack_lsp | wc -l)
+    echo "Available JACK ports: $PORTS"
+    if [ $PORTS -ge 8 ]; then
+        echo "✅ SUCCESS: All ports available"
+    else
+        echo "⚠️  WARNING: Expected 8+ ports, found $PORTS"
+    fi
+fi
+
+echo "Audio setup complete! Starting SuperCollider app..."
+echo ""
+
+# Start the SuperCollider app
 exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH.scd > /home/$USER/post_output.log 2>&1
 EOF
 chmod +x /usr/local/bin/start
@@ -578,5 +679,10 @@ echo "Next Steps:"
 echo "1. Reboot: sudo reboot"
 echo "2. After reboot, run: start"
 echo ""
+echo "The 'start' command will:"
+echo "  - Detect your Behringer devices"
+echo "  - Start JACK server and zita bridges"
+echo "  - Launch the SuperCollider app"
+echo ""
 echo "Your Behringer devices are now configured for quad ambisonic operation!"
-echo "The system will automatically detect and configure the audio setup on each boot."
+echo "Audio setup happens automatically each time you run 'start'."
