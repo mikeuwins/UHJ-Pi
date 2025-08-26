@@ -609,6 +609,258 @@ EOF
 
 echo "X11 session environment configured"
 
+# STEP 23: Create launcher with persistent audio setup
+echo "Step 23: Creating launcher with persistent audio setup..."
+cat > /usr/local/bin/start << 'EOF'
+#!/usr/bin/env bash
+
+CONFIG_FILE="$HOME/.uhj-pi-audio.conf"
+echo "Starting Behringer audio setup..."
+
+# Function to detect USB audio devices
+detect_usb_devices() {
+    devices=()
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[ ]]; then
+            current_card="${BASH_REMATCH[1]}"
+        elif [[ $line =~ usb- ]]; then
+            # Extract USB path (e.g., usb-xhci-hcd.0-2)
+            if [[ $line =~ usb-[^,]+ ]]; then
+                usb_path="${BASH_REMATCH[0]}"
+                devices+=("$current_card:$usb_path")
+            fi
+        fi
+    done < /proc/asound/cards
+    echo "${devices[@]}"
+}
+
+# Function to register devices step by step
+register_devices() {
+    echo "Device registration required..."
+    echo ""
+    
+    # Step 1: Register UCA202
+    echo "Step 1: Connect UCA202 (line input/output device) and press Enter"
+    read -p "Press Enter when UCA202 is connected..."
+    
+    uca_device=""
+    devices=$(detect_usb_devices)
+    for device in $devices; do
+        if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
+            card="${BASH_REMATCH[1]}"
+            usb_path="${BASH_REMATCH[2]}"
+            echo "Device detected: $usb_path (Card $card)"
+            uca_device="$card:$usb_path"
+            break
+        fi
+    done
+    
+    if [ -z "$uca_device" ]; then
+        echo "ERROR: No USB audio device detected. Please check connection."
+        exit 1
+    fi
+    
+    echo "UCA202 registered as line input/outputs 1 & 2"
+    echo ""
+    
+    # Step 2: Register UFO202
+    echo "Step 2: Connect UFO202 (phono input/output device) and press Enter"
+    read -p "Press Enter when UFO202 is connected..."
+    
+    ufo_device=""
+    devices=$(detect_usb_devices)
+    for device in $devices; do
+        if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
+            card="${BASH_REMATCH[1]}"
+            usb_path="${BASH_REMATCH[2]}"
+            if [ "$device" != "$uca_device" ]; then
+                echo "Device detected: $usb_path (Card $card)"
+                ufo_device="$card:$usb_path"
+                break
+            fi
+        fi
+    done
+    
+    if [ -z "$ufo_device" ]; then
+        echo "ERROR: Second USB audio device not detected. Please check connection."
+        exit 1
+    fi
+    
+    echo "UFO202 registered as phono input/outputs 3 & 4"
+    echo ""
+    
+    # Save configuration
+    echo "Saving device configuration..."
+    cat > "$CONFIG_FILE" << CONFIG_EOF
+# UHJ-Pi Behringer Audio Configuration
+# Generated on $(date)
+UCA_DEVICE="$uca_device"
+UFO_DEVICE="$ufo_device"
+UCA_CARD=$(echo "$uca_device" | cut -d: -f1)
+UFO_CARD=$(echo "$ufo_device" | cut -d: -f1)
+CONFIG_EOF
+    
+    echo "Configuration saved to $CONFIG_FILE"
+    echo ""
+    
+    # Return the detected devices
+    UCA_CARD=$(echo "$uca_device" | cut -d: -f1)
+    UFO_CARD=$(echo "$ufo_device" | cut -d: -f1)
+}
+
+# Check if configuration exists and devices are still valid
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Found existing configuration, checking devices..."
+    source "$CONFIG_FILE"
+    
+    # Smart verification: check that 2 USB audio devices exist and are accessible
+    echo "Verifying devices are still accessible..."
+    devices=$(detect_usb_devices)
+    device_count=$(echo "$devices" | wc -w)
+    
+    if [ "$device_count" -eq 2 ]; then
+        echo "✅ Found 2 USB audio devices"
+        
+        # Check if we can actually connect to the devices (verify they're working)
+        test_success=true
+        
+        # Test UCA202 (first device)
+        first_device=$(echo "$devices" | cut -d' ' -f1)
+        if [[ $first_device =~ ^([0-9]+):(.*)$ ]]; then
+            test_card="${BASH_REMATCH[1]}"
+            echo "Testing UCA202 (Card $test_card)..."
+            
+            # Quick test: try to get device info
+            if ! amixer -c "$test_card" sget PCM >/dev/null 2>&1; then
+                echo "⚠️  UCA202 (Card $test_card) not responding"
+                test_success=false
+            else
+                echo "✅ UCA202 (Card $test_card) responding"
+            fi
+        fi
+        
+        # Test UFO202 (second device)
+        second_device=$(echo "$devices" | cut -d' ' -f2)
+        if [[ $second_device =~ ^([0-9]+):(.*)$ ]]; then
+            test_card="${BASH_REMATCH[1]}"
+            echo "Testing UFO202 (Card $test_card)..."
+            
+            # Quick test: try to get device info
+            if ! amixer -c "$test_card" sget PCM >/dev/null 2>&1; then
+                echo "⚠️  UFO202 (Card $test_card) not responding"
+                test_success=false
+            else
+                echo "✅ UFO202 (Card $test_card) responding"
+            fi
+        fi
+        
+        if [ "$test_success" = true ]; then
+            echo ""
+            echo "✅ Devices verified and working - using saved configuration"
+            echo "  UCA202: Card $(echo "$first_device" | cut -d: -f1)"
+            echo "  UFO202: Card $(echo "$second_device" | cut -d: -f1)"
+            echo ""
+            
+            # Update card numbers to current values
+            UCA_CARD=$(echo "$first_device" | cut -d: -f1)
+            UFO_CARD=$(echo "$second_device" | cut -d: -f1)
+        else
+            echo "⚠️  Device verification failed, re-registering..."
+            rm "$CONFIG_FILE"
+            register_devices
+        fi
+    else
+        echo "⚠️  Expected 2 USB audio devices, found $device_count"
+        echo "Re-registering devices..."
+        rm "$CONFIG_FILE"
+        register_devices
+    fi
+else
+    echo "No configuration found, registering devices..."
+    register_devices
+fi
+
+# Stop existing audio processes
+echo "Stopping existing audio processes..."
+pkill jackd 2>/dev/null
+pkill zita-a2j 2>/dev/null
+pkill zita-j2a 2>/dev/null
+sleep 2
+
+# Start JACK on UCA202 (line device) as master
+echo "Starting JACK server on UCA202 (Card $UCA_CARD)..."
+jackd -d alsa -d hw:$UCA_CARD -r 44100 -p 256 -n 2 > /tmp/jack.log 2>&1 &
+JACK_PID=$!
+
+# Wait for JACK to initialize
+sleep 3
+
+# Check if JACK started successfully
+if ! ps -p $JACK_PID > /dev/null; then
+    echo "ERROR: JACK failed to start. Check /tmp/jack.log"
+    exit 1
+fi
+
+echo "JACK server started successfully (PID: $JACK_PID)"
+
+# Start zita bridges for UFO202
+echo "Starting zita bridges for UFO202 (Card $UFO_CARD)..."
+
+# Bridge UFO202 inputs to JACK (phono inputs)
+echo "Starting zita-a2j for UFO202 inputs..."
+zita-a2j -j ufo_phono -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-a2j.log 2>&1 &
+ZITA_A2J_PID=$!
+
+# Bridge JACK outputs to UFO202 (additional outputs)
+echo "Starting zita-j2a for UFO202 outputs..."
+zita-j2a -j ufo_out -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-j2a.log 2>&1 &
+ZITA_J2A_PID=$!
+
+# Wait for zita bridges to initialize
+sleep 2
+
+# Check if zita processes started successfully
+if ! ps -p $ZITA_A2J_PID > /dev/null; then
+    echo "ERROR: zita-a2j failed to start. Check /tmp/zita-a2j.log"
+fi
+
+if ! ps -p $ZITA_J2A_PID > /dev/null; then
+    echo "ERROR: zita-j2a failed to start. Check /tmp/zita-j2a.log"
+fi
+
+echo "Zita bridges started successfully"
+
+# Wait a moment for everything to sync
+sleep 2
+
+# Verify JACK ports
+echo "Verifying JACK configuration..."
+if command -v jack_lsp >/dev/null 2>&1; then
+    PORTS=$(jack_lsp | wc -l)
+    echo "Available JACK ports: $PORTS"
+    if [ $PORTS -ge 8 ]; then
+        echo "✅ SUCCESS: All ports available"
+    else
+        echo "⚠️  WARNING: Expected 8+ ports, found $PORTS"
+    fi
+fi
+
+echo "Audio setup complete! Starting X11 session..."
+echo ""
+
+# Note: jack_quad device will be created by SuperCollider
+echo "Note: jack_quad device will be created automatically by SuperCollider"
+echo "This ensures proper timing and port creation for all inputs"
+
+echo ""
+echo "Starting X11 session with UHJ app..."
+echo ""
+
+# Start the X11 session
+exec startx -- :0
+EOF
+chmod +x /usr/local/bin/start
+
 echo "Installation completed successfully!"
 echo ""
 echo "Behringer + HDMI setup completed:"
@@ -632,20 +884,24 @@ echo "  ✅ SuperCollider + ATK + AmbiVerbSC installed"
 echo "  ✅ Custom extensions installed"
 echo "  ✅ Custom fonts installed"
 echo "  ✅ App configured: UHJ_v23_BEH.scd"
+echo "  ✅ Launcher created: /usr/local/bin/start"
 echo ""
 echo "Reboot required. Run: sudo reboot"
 echo "After reboot:"
 echo "  - X11 session will NOT start automatically (for debugging)"
-echo "  - To start X11 manually: startx"
+echo "  - To start X11 manually: start"
 echo "  - Blackbox will run with no window decorations"
 echo "  - UHJ app will launch in fullscreen"
 echo "  - To enable kiosk mode: sudo systemctl enable uhj-pi-x11.service"
 echo ""
 echo "Manual launch (if needed):"
-echo "  startx"
+echo "  start"
 echo ""
 echo "After reboot:"
 echo "  1. Run: sudo reboot"
-echo "  2. After reboot, run: startx"
-echo "  3. The UHJ app will launch automatically with no decorations"
+echo "  2. After reboot, run: start"
+echo "  3. The start command will:"
+echo "     - Detect and verify Behringer devices"
+echo "     - Set up JACK + zita bridges"
+echo "     - Launch X11 session with UHJ app"
 echo "  4. Behringer audio setup will be handled automatically by the app" 
