@@ -160,57 +160,61 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/down
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
-# Install ATK and AmbiVerbSC using Quark system (handles dependencies automatically)
-echo "Installing ATK and AmbiVerbSC using Quark system..."
+# Install base dependencies FIRST (required for ATK Matrix classes to work)
+echo "Installing base dependencies required for ATK Matrix classes..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
-# Install ATK using Quark system (includes all dependencies)
-echo "Installing ATK quark..."
-if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
-Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
-0.exit;
-EOF'; then
-    echo "ATK quark installed successfully"
+# Install MatrixArray (Matrix base classes)
+echo "Installing MatrixArray dependency..."
+if sudo -u $ACTUAL_USER git clone https://gitlab.com/dxarts/projects/matrixarray.quark.git; then
+    echo "MatrixArray installed successfully"
 else
-    echo "ERROR: ATK quark installation failed!"
+    echo "ERROR: MatrixArray installation failed!"
     exit 1
 fi
 
-# Install AmbiVerbSC using Quark system
-echo "Installing AmbiVerbSC quark..."
-if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
-Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
-0.exit;
-EOF'; then
-    echo "AmbiVerbSC quark installed successfully"
+# Install SignalBox (FreqSpectrum base class)
+echo "Installing SignalBox dependency..."
+if sudo -u $ACTUAL_USER git clone https://gitlab.com/dxarts/projects/SignalBox.quark.git; then
+    echo "SignalBox installed successfully"
 else
-    echo "ERROR: AmbiVerbSC quark installation failed!"
+    echo "ERROR: SignalBox installation failed!"
     exit 1
 fi
-# ATK and AmbiVerbSC now installed via Quark system above
 
-# Remove problematic GUI components BEFORE moving to Extensions
-echo "Removing problematic GUI components from downloaded-quarks..."
-cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+# Install SphericalDesign (TDesign base classes)
+echo "Installing SphericalDesign dependency..."
+if sudo -u $ACTUAL_USER git clone https://gitlab.com/dxarts/projects/SphericalDesign.quark.git; then
+    echo "SphericalDesign installed successfully"
+else
+    echo "ERROR: SphericalDesign installation failed!"
+    exit 1
+fi
 
-# Remove problematic wslib components
-if [ -d "wslib/wslib-classes/GUI/" ]; then
-    sudo -u $ACTUAL_USER rm -rf wslib/wslib-classes/GUI/
+# Install ATK quark directly to Extensions
+echo "Installing ATK quark directly to Extensions..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
+if sudo -u $ACTUAL_USER git clone https://github.com/ambisonictoolkit/atk-sc3.git; then
+    echo "ATK quark cloned successfully to Extensions"
+else
+    echo "ERROR: ATK quark clone failed!"
+    exit 1
+fi
+
+# Remove problematic GUI components (keeping PointView as it works in the system)
+echo "Removing problematic GUI components..."
+# Only remove if directories exist to prevent errors
+if [ -d "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/" ]; then
+    rm -rf /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
     echo "Removed wslib GUI components"
 fi
-if [ -f "wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc" ]; then
-    sudo -u $ACTUAL_USER rm "wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc"
+if [ -f "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc" ]; then
+    rm "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc"
     echo "Removed extPen-splineCurve.sc"
 fi
-if [ -f "wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc" ]; then
-    sudo -u $ACTUAL_USER rm "wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc"
+if [ -f "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc" ]; then
+    rm "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc"
     echo "Removed extColPen-asSVGFile.sc"
-fi
-
-# Remove entire wslib directory if it exists (can cause conflicts)
-if [ -d "wslib" ]; then
-    sudo -u $ACTUAL_USER rm -rf wslib
-    echo "Removed entire wslib directory (conflict-prone)"
 fi
 
 # Download ATK assets manually (kernels and matrices only)
@@ -256,58 +260,11 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
     sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
     echo "ATK sounds installed successfully"
-    
-    # Organize sounds into proper subdirectory structure (like working SD card)
-    echo "Organizing sounds into proper directory structure..."
-    cd /home/$ACTUAL_USER/.local/share/ATK
-    if [ ! -d "sounds" ]; then
-        sudo -u $ACTUAL_USER mkdir sounds
-    fi
-    # Move WAV files and documentation to sounds subdirectory
-    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
-    sudo -u $ACTUAL_USER mv LICENSE.md sounds/ 2>/dev/null || true
-    sudo -u $ACTUAL_USER mv README.md sounds/ 2>/dev/null || true
-    echo "Sounds organized into sounds/ subdirectory"
 else
     echo "ATK sounds download failed - continuing without sounds"
 fi
 
-# CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
-echo "Moving ATK classes from downloaded-quarks to Extensions..."
-cd /home/$ACTUAL_USER/.local/share/SuperCollider
-
-# Move the clean, working classes to Extensions
-echo "Moving ATK dependencies to Extensions..."
-if [ -d "downloaded-quarks/MathLib" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/MathLib Extensions/
-    echo "Moved MathLib to Extensions"
-fi
-if [ -d "downloaded-quarks/MatrixArray" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/MatrixArray Extensions/
-    echo "Moved MatrixArray to Extensions"
-fi
-if [ -d "downloaded-quarks/SignalBox" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/SignalBox Extensions/
-    echo "Moved SignalBox to Extensions"
-fi
-if [ -d "downloaded-quarks/SphericalDesign" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/SphericalDesign Extensions/
-    echo "Moved SphericalDesign to Extensions"
-fi
-if [ -d "downloaded-quarks/atk-sc3" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/atk-sc3 Extensions/
-    echo "Moved atk-sc3 to Extensions"
-fi
-if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
-    echo "Moved AmbiVerbSC to Extensions"
-fi
-
-# Set proper ownership for Extensions
-echo "Setting proper ownership for Extensions..."
-sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
-
-# ATK classes are now properly located in Extensions
+# ATK classes are now directly in Extensions - no copying needed
 
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
@@ -322,20 +279,24 @@ sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodiu
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
 echo "Custom UHJ test sounds installed successfully"
 
-# Move custom sounds to sounds subdirectory to match working SD card structure
-echo "Moving custom sounds to sounds/ subdirectory..."
-cd /home/$ACTUAL_USER/.local/share/ATK
-if [ -d "sounds" ]; then
-    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
-    echo "Custom UHJ sounds moved to sounds/ subdirectory"
-else
-    echo "WARNING: sounds/ directory not found - creating it and moving sounds"
-    sudo -u $ACTUAL_USER mkdir sounds
-    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
-    echo "Custom UHJ sounds moved to sounds/ subdirectory"
+# Install AmbiVerbSC directly to Extensions
+echo "Installing AmbiVerbSC directly to Extensions..."
+
+# Go to Extensions directory for AmbiVerbSC installation
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
+
+# Clean up any existing failed installation
+if [ -d "AmbiVerbSC" ]; then
+    echo "Removing existing AmbiVerbSC directory..."
+    sudo -u $ACTUAL_USER rm -rf AmbiVerbSC
 fi
 
-# AmbiVerbSC now installed via Quark system above
+if sudo -u $ACTUAL_USER git clone https://github.com/JamesWenlock/AmbiVerbSC.git; then
+    echo "AmbiVerbSC cloned successfully to Extensions"
+else
+    echo "ERROR: AmbiVerbSC clone failed!"
+    exit 1
+fi
 
 # STEP 14: Install custom user classes
 echo "Installing custom user classes..."
@@ -380,9 +341,6 @@ echo "Step 15: Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
-# Clear X11 display variable to force EGLFS
-echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
-echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
 
 ## STEP 16: Install custom fonts
 echo "Installing custom fonts..."
