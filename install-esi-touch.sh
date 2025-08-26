@@ -409,7 +409,7 @@ echo "Installation completed successfully!"
 echo ""
 echo "Reboot required. Run: sudo reboot"
 echo "After reboot and login, run:"
-echo "  sclang ~/UHJ-Pi/supercollider/app/UHJ_v21.scd" 
+echo "  start"
 
 # Create a simple launcher to start the app easily
 cat > /usr/local/bin/start << 'EOF'
