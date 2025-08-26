@@ -526,7 +526,7 @@ export QT_QPA_PLATFORM=xcb
 export DISPLAY=:0
 blackbox &
 bsetroot -solid black &
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_ESI.scd
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_ESI.scd > ~/post_output.log 2>&1
 EOF
 
 # Set ownership of the new files

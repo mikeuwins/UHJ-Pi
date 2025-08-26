@@ -232,7 +232,7 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Exte
 
 # Install ATK using Quark system (more reliable)
 echo "Installing ATK quark using Quark system..."
-cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3");
 0.exit;
