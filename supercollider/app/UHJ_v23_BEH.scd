@@ -609,7 +609,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         };
         // ... existing code ...
         // --- Quad panner logic ---
-        if((idx == 2) or: { idx == 3 } or: { idx == 4 }) {
+        if((idx == 3) or: { idx == 4 } or: { idx == 5 }) {
             ~xyPanner.enabled_(true);
             if(~xyPannerOverlay.notNil) { ~xyPannerOverlay.remove; ~xyPannerOverlay = nil; };
         } {
@@ -690,7 +690,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
                     // Use jack_quad device created by our setup script
-                s.options.device = "jack_quad";
+                // Check if the device exists first
+                var deviceExists = "jack_lsp | grep jack_quad".unixCmdGetStdOut.contains("jack_quad");
+                if(deviceExists, {
+                    s.options.device = "jack_quad";
+                    ("Using JACK device: jack_quad").postln;
+                }, {
+                    ("Warning: jack_quad device not found, using default JACK device").postln;
+                    s.options.device = "system";
+                });
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
@@ -716,7 +724,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     // Get selected encoder and decoder
                     encoder = encoderDict.at(configKeyE ? \uhj);
-                    decoder = decoderDict.at(configKeyD ? \binaural);
+                    decoder = decoderDict.at(configKeyD ? \stereo);
 
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
                     
@@ -2240,7 +2248,51 @@ win.front;
                     Pen.stroke;
                     Pen.width = 2;
                     switch(currentDecoderValue,
-                        0, { // IRCAM Binaural
+                        0, { // Stereo
+                            var speakerWidth = 20, speakerHeight = 20, speakerSpacing = 120, leftSpeakerX, rightSpeakerX, speakerY;
+                            var centerY_bottom = centerY + 80; // Center point further down at bottom of triangle
+                            var leftRotationAngle, rightRotationAngle;
+                            leftSpeakerX = centerX - (speakerSpacing / 2) - (speakerWidth / 2);
+                            rightSpeakerX = centerX + (speakerSpacing / 2) - (speakerWidth / 2);
+                            speakerY = centerY - 40; // Speakers at top of triangle
+                            
+                            // Calculate rotation angles
+                            leftRotationAngle = atan2(centerY_bottom - speakerY, centerX - leftSpeakerX) + (pi / 2);
+                            rightRotationAngle = atan2(centerY_bottom - speakerY, centerX - rightSpeakerX) + (pi / 2);
+                            
+                            // Draw triangle lines
+                            Pen.color = Color.cyan; Pen.width = 1;
+                            // Left diagonal from center to left speaker
+                            Pen.line(Point(centerX, centerY_bottom), Point(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
+                            Pen.stroke;
+                            // Right diagonal from center to right speaker
+                            Pen.line(Point(centerX, centerY_bottom), Point(rightSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
+                            Pen.stroke;
+                            
+                            // Speaker 1: Left (rotated to face center + 180° for upright text)
+                            Pen.push;
+                            Pen.translate(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2));
+                            Pen.rotate(leftRotationAngle + pi);
+                            Pen.translate(-10, -10);
+                            Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.pop;
+                            
+                            // Speaker 2: Right (rotated to face center + 180° for upright text)
+                            Pen.push;
+                            Pen.translate(rightSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2));
+                            Pen.rotate(rightRotationAngle + pi);
+                            Pen.translate(-10, -10);
+                            Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.pop;
+                            
+                            Pen.stringAtPoint("[1] L (-30°) & [2] R (+30°)", Point(centerX - 75, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("Optimum listening angles", Point(centerX - 70, 50), Font("Helvetica", 12, italic: true), Color.cyan);
+                        },
+                        1, { // IRCAM Binaural
                             var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
                             leftEarY = centerY + 25 + 25;
@@ -2259,7 +2311,7 @@ win.front;
                             // Do NOT move the description text
                             Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
                         },
-                        1, { // CIPIC Binaural
+                        2, { // CIPIC Binaural
                             var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
                             leftEarY = centerY + 25 + 25;
@@ -2277,8 +2329,7 @@ win.front;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
-
-						2, { // Quad Square
+                        3, { // Quad Square
     					var squareSize = 140, halfSquare = squareSize / 2;
     					Pen.color = Color.cyan;
     					Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare + 25, squareSize, squareSize));
@@ -2646,29 +2697,37 @@ UserView(mainView, Rect(571, 70, 4, 300))
 ~setupBehringerJACK = {
     // Wait for SuperCollider to boot and create jack_quad ports
     AppClock.sched(2.0, {
-        // Clear any existing connections first
-        "jack_disconnect system:capture_1 jack_quad:in_1 2>/dev/null".unixCmd;
-        "jack_disconnect system:capture_2 jack_quad:in_2 2>/dev/null".unixCmd;
-        "jack_disconnect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null".unixCmd;
-        "jack_disconnect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null".unixCmd;
+        // Check if jack_quad device exists
+        var deviceExists = "jack_lsp | grep jack_quad".unixCmdGetStdOut.contains("jack_quad");
         
-        // Connect UCA202 line inputs to channels 1 & 2 (SuperCollider 0 & 1) - JACK master
-        "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
-        "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
-        
-        // Connect UFO202 phono inputs to channels 3 & 4 (SuperCollider 2 & 3) - zita bridge
-        "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
-        "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
-        
-        // Connect outputs
-        "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
-        "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
-        if(outputs >= 4, {
-            "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
-            "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
-        });
-        
-        ("JACK connections established for Behringer devices").postln;
+        if(deviceExists, {
+            // Clear any existing connections first
+            "jack_disconnect system:capture_1 jack_quad:in_1 2>/dev/null".unixCmd;
+            "jack_disconnect system:capture_2 jack_quad:in_2 2>/dev/null".unixCmd;
+            "jack_disconnect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null".unixCmd;
+            "jack_disconnect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null".unixCmd;
+            
+            // Connect UCA202 line inputs to channels 1 & 2 (SuperCollider 0 & 1) - JACK master
+            "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
+            "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
+            
+            // Connect UFO202 phono inputs to channels 3 & 4 (SuperCollider 2 & 3) - zita bridge
+            "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
+            "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
+            
+            // Connect outputs
+            "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
+            "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
+            if(outputs >= 4, {
+                "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
+                "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
+            });
+            
+            ("JACK connections established for Behringer devices").postln;
+        }, {
+            ("Warning: jack_quad device not found, skipping JACK connections").postln;
+            ("Please ensure JACK server is running and zita bridges are set up").postln;
+        };
     });
 };
 
@@ -2739,9 +2798,17 @@ HIDdef.usage( \hidTumble, { |val|
 }, \X );
 // ... existing
 
-// --- SMALL POWER BUTTON (bottom right corner) ---
-// REMOVED - causing EGLFS freeze issues
-// Use Pi's physical power button to restart system
+// --- POWER BUTTON (bottom right corner) ---
+~powerBtn = Button(mainView, Rect(760, 445, 20, 20))
+    .states_([["X", Color.cyan, Color.black]]) // Match headtracking button style, uppercase X
+    .font_(Font("Helvetica", 10)) // Same size as RESET button
+    .focusColor_(Color.clear)
+    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        win.close;
+    })
+    .touchBeginAction_({ |view, x, y, pressure, id|
+        win.close;
+    });
 
 // --- Initialize Behringer setup ---
 ~detectBehringerDevices.value();
