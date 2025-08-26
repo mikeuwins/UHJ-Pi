@@ -690,7 +690,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
                     // Use default JACK device (SuperCollider will create its own ports)
-                s.options.device = "system";
+                s.options.device = "jack_quad";
                 ("Using default JACK device - SuperCollider will create SuperCollider:in_X/out_X ports").postln;
                 s.boot;
                 cond = Condition.new;
