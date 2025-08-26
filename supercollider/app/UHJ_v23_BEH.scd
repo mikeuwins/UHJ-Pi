@@ -2688,9 +2688,8 @@ UserView(mainView, Rect(571, 70, 4, 300))
 
 // --- JACK Connection Setup for Behringer Devices ---
 ~setupBehringerJACK = {
-    // Wait for server to boot and create jack_quad device
+    // Wait for server to boot and jack_quad device to be ready
     AppClock.sched(0.5, {
-        // Create jack_quad device by connecting to it (this creates the device)
         // Connect UCA202 line inputs to jack_quad
         "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
         "jack_connect system:capture_2 jack_quad:in_2".unixCmd;

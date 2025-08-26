@@ -280,5 +280,27 @@ fi
 echo "Audio setup complete! Starting SuperCollider app..."
 echo ""
 
+# Create jack_quad device before starting SuperCollider
+echo "Creating jack_quad device for persistent routing..."
+jack_connect system:capture_1 jack_quad:in_1 2>/dev/null || echo "jack_quad device not ready yet"
+jack_connect system:capture_2 jack_quad:in_2 2>/dev/null || echo "jack_quad device not ready yet"
+jack_connect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null || echo "jack_quad device not ready yet"
+jack_connect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null || echo "jack_quad device not ready yet"
+
+# Wait a moment for jack_quad to be fully created
+sleep 1
+
+# Verify jack_quad device exists
+if jack_lsp | grep -q "jack_quad:"; then
+    echo "✅ jack_quad device created successfully"
+else
+    echo "⚠️  jack_quad device not found, will be created by SuperCollider"
+fi
+
+echo ""
+echo "Starting SuperCollider app..."
+echo "Note: jack_quad device will be created automatically for persistent routing"
+echo ""
+
 # Start the SuperCollider app
 exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH.scd > /home/$USER/post_output.log 2>&1
