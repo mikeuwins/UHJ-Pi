@@ -525,7 +525,9 @@ unclutter -idle 1 -root &
 export QT_QPA_PLATFORM=xcb
 export DISPLAY=:0
 blackbox &
-bsetroot -solid black &
+sleep 0.1
+xsetroot -solid black
+sleep 0.1
 exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_ESI.scd > ~/post_output.log 2>&1
 EOF
 
