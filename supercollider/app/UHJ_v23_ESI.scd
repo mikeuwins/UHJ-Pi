@@ -112,7 +112,11 @@ if(Platform.name == \osx, {
     if(isPi, {
         win.bounds_(Rect(0, 0, 800, 480)); // Pi: true (0,0) for full screen
     }, {
-        win.bounds_(Rect(0, 30, 800, 480)); // Ubuntu desktop: account for top panel
+        win.bounds_(Rect(
+            (Window.screenBounds.width - 800) / 2,
+            (Window.screenBounds.height - 480) / 2,
+            800, 480
+        ));
     });
 });
 "UHJ-Pi: Centered on %x% screen".format(Window.screenBounds.width, Window.screenBounds.height).postln;
