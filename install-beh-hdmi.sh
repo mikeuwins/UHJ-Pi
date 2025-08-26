@@ -539,11 +539,6 @@ command -v unclutter >/dev/null 2>&1 && unclutter -idle 1 -root &
 export QT_QPA_PLATFORM=xcb
 export DISPLAY=:0
 blackbox &
-sleep 0.2
-# Force black background multiple times to ensure it works
-xsetroot -solid black
-sleep 0.1
-xsetroot -solid black
 sleep 0.1
 xsetroot -solid black
 sleep 0.1
@@ -859,11 +854,11 @@ echo "Note: jack_quad device will be created automatically by SuperCollider"
 echo "This ensures proper timing and port creation for all inputs"
 
 echo ""
-echo "Starting X11 session with UHJ app..."
+echo "Audio setup complete! Starting X11 session..."
 echo ""
 
-# Start the X11 session
-exec startx -- :0
+# Start the X11 session (this will use the xinitrc we created)
+startx -- :0
 EOF
 chmod +x /usr/local/bin/start
 
