@@ -80,7 +80,7 @@ echo "Boot configuration updated for HDMI"
 apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes
 
 # STEP 3.5: Install additional X11 utilities
-apt install -y unclutter bsetroot
+apt install -y unclutter unclutter-xfixes bsetroot
 
 # STEP 4: Install SuperCollider Dependencies
 echo "Step 4: Installing SuperCollider Dependencies..."
@@ -521,7 +521,7 @@ EOF
 echo "Step 20: Creating refined .xinitrc..."
 
 cat > /home/$ACTUAL_USER/.xinitrc << 'EOF'
-unclutter -idle 1 -root &
+command -v unclutter >/dev/null 2>&1 && unclutter -idle 1 -root &
 export QT_QPA_PLATFORM=xcb
 export DISPLAY=:0
 blackbox &
