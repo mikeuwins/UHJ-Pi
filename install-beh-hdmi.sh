@@ -333,7 +333,8 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+    rm -f atk-sounds.zip
     echo "ATK sounds installed successfully"
     
     # Organize sounds into proper subdirectory structure (like working SD card)

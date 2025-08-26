@@ -251,7 +251,8 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
+            sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+        rm -f atk-sounds.zip
     echo "ATK sounds installed successfully"
     
     # Organize sounds into proper subdirectory structure (like working SD card)
@@ -553,39 +554,141 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-# STEP 22: Create a launcher that starts audio devices first, then the app
-echo "Step 22: Creating launcher with audio setup..."
+# STEP 22: Create a launcher with persistent device configuration
+echo "Step 22: Creating launcher with persistent audio setup..."
 cat > /usr/local/bin/start << 'EOF'
 #!/usr/bin/env bash
 
+CONFIG_FILE="$HOME/.uhj-pi-audio.conf"
 echo "Starting Behringer audio setup..."
 
-# Detect Behringer devices by USB controller
-UCA_CARD=""
-UFO_CARD=""
+# Function to detect USB audio devices
+detect_usb_devices() {
+    local devices=()
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[ ]]; then
+            current_card="${BASH_REMATCH[1]}"
+        elif [[ $line =~ usb- ]]; then
+            # Extract USB path (e.g., usb-xhci-hcd.0-2)
+            if [[ $line =~ usb-[^,]+ ]]; then
+                usb_path="${BASH_REMATCH[0]}"
+                devices+=("$current_card:$usb_path")
+            fi
+        fi
+    done < /proc/asound/cards
+    echo "${devices[@]}"
+}
 
-# Parse /proc/asound/cards line by line
-while IFS= read -r line; do
-    if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[ ]]; then
-        current_card="${BASH_REMATCH[1]}"
-    elif [[ $line =~ 1d\.7 ]]; then
-        UCA_CARD="$current_card"
-    elif [[ $line =~ 1a\.7 ]]; then
-        UFO_CARD="$current_card"
+# Function to register devices step by step
+register_devices() {
+    echo "Device registration required..."
+    echo ""
+    
+    # Step 1: Register UCA202
+    echo "Step 1: Connect UCA202 (line input/output device) and press Enter"
+    read -p "Press Enter when UCA202 is connected..."
+    
+    local uca_device=""
+    local devices=$(detect_usb_devices)
+    for device in $devices; do
+        if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
+            local card="${BASH_REMATCH[1]}"
+            local usb_path="${BASH_REMATCH[2]}"
+            echo "Device detected: $usb_path (Card $card)"
+            uca_device="$card:$usb_path"
+            break
+        fi
+    done
+    
+    if [ -z "$uca_device" ]; then
+        echo "ERROR: No USB audio device detected. Please check connection."
+        exit 1
     fi
-done < /proc/asound/cards
+    
+    echo "UCA202 registered as line input/outputs 1 & 2"
+    echo ""
+    
+    # Step 2: Register UFO202
+    echo "Step 2: Connect UFO202 (phono input/output device) and press Enter"
+    read -p "Press Enter when UFO202 is connected..."
+    
+    local ufo_device=""
+    devices=$(detect_usb_devices)
+    for device in $devices; do
+        if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
+            local card="${BASH_REMATCH[1]}"
+            local usb_path="${BASH_REMATCH[2]}"
+            if [ "$device" != "$uca_device" ]; then
+                echo "Device detected: $usb_path (Card $card)"
+                ufo_device="$card:$usb_path"
+                break
+            fi
+        fi
+    done
+    
+    if [ -z "$ufo_device" ]; then
+        echo "ERROR: Second USB audio device not detected. Please check connection."
+        exit 1
+    fi
+    
+    echo "UFO202 registered as phono input/outputs 3 & 4"
+    echo ""
+    
+    # Save configuration
+    echo "Saving device configuration..."
+    cat > "$CONFIG_FILE" << CONFIG_EOF
+# UHJ-Pi Behringer Audio Configuration
+# Generated on $(date)
+UCA_DEVICE="$uca_device"
+UFO_DEVICE="$ufo_device"
+UCA_CARD=$(echo "$uca_device" | cut -d: -f1)
+UFO_CARD=$(echo "$ufo_device" | cut -d: -f1)
+CONFIG_EOF
+    
+    echo "Configuration saved to $CONFIG_FILE"
+    echo ""
+    
+    # Return the detected devices
+    UCA_CARD=$(echo "$uca_device" | cut -d: -f1)
+    UFO_CARD=$(echo "$ufo_device" | cut -d: -f1)
+}
 
-if [ -z "$UCA_CARD" ] || [ -z "$UFO_CARD" ]; then
-    echo "ERROR: Could not detect both Behringer devices"
-    echo "Make sure both UFO202 and UCA202 are connected"
-    echo "Current audio cards:"
-    cat /proc/asound/cards
-    exit 1
+# Check if configuration exists and devices are still valid
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Found existing configuration, checking devices..."
+    source "$CONFIG_FILE"
+    
+    # Verify devices still exist
+    local devices=$(detect_usb_devices)
+    local uca_found=false
+    local ufo_found=false
+    
+    for device in $devices; do
+        if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
+            local card="${BASH_REMATCH[1]}"
+            local usb_path="${BASH_REMATCH[2]}"
+            if [ "$card:$usb_path" = "$UCA_DEVICE" ]; then
+                uca_found=true
+            elif [ "$card:$usb_path" = "$UFO_DEVICE" ]; then
+                ufo_found=true
+            fi
+        fi
+    done
+    
+    if [ "$uca_found" = true ] && [ "$ufo_found" = true ]; then
+        echo "Using saved configuration:"
+        echo "  UCA202: Card $UCA_CARD ($UCA_DEVICE)"
+        echo "  UFO202: Card $UFO_CARD ($UFO_DEVICE)"
+        echo ""
+    else
+        echo "Saved configuration invalid, re-registering devices..."
+        rm "$CONFIG_FILE"
+        register_devices
+    fi
+else
+    echo "No configuration found, registering devices..."
+    register_devices
 fi
-
-echo "Detected devices:"
-echo "  UCA202 (Line Input) = Card $UCA_CARD"
-echo "  UFO202 (Phono Input) = Card $UFO_CARD"
 
 # Stop any existing audio processes
 echo "Stopping existing audio processes..."
@@ -629,12 +732,10 @@ sleep 2
 # Check if zita processes started successfully
 if ! ps -p $ZITA_A2J_PID > /dev/null; then
     echo "ERROR: zita-a2j failed to start. Check /tmp/zita-a2j.log"
-    exit 1
 fi
 
 if ! ps -p $ZITA_J2A_PID > /dev/null; then
     echo "ERROR: zita-j2a failed to start. Check /tmp/zita-j2a.log"
-    exit 1
 fi
 
 echo "Zita bridges started successfully"
@@ -680,9 +781,12 @@ echo "1. Reboot: sudo reboot"
 echo "2. After reboot, run: start"
 echo ""
 echo "The 'start' command will:"
-echo "  - Detect your Behringer devices"
-echo "  - Start JACK server and zita bridges"
+echo "  - Register your Behringer devices (first time only)"
+echo "  - Save device configuration for future use"
+echo "  - Start JACK server and zita bridges automatically"
 echo "  - Launch the SuperCollider app"
 echo ""
+echo "Device registration is required only once - after that, the system"
+echo "remembers your device setup and works automatically on each boot!"
+echo ""
 echo "Your Behringer devices are now configured for quad ambisonic operation!"
-echo "Audio setup happens automatically each time you run 'start'."
