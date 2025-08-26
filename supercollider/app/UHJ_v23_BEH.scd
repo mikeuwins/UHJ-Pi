@@ -2688,40 +2688,26 @@ UserView(mainView, Rect(571, 70, 4, 300))
 
 // --- JACK Connection Setup for Behringer Devices ---
 ~setupBehringerJACK = {
-    // Wait for server to boot and create ports
+    // Wait for server to boot and create jack_quad device
     AppClock.sched(0.5, {
-        // Check if SuperCollider ports are available
-        var scPorts = "jack_lsp | grep SuperCollider | wc -l".unixCmdGetStdOut.stripWhiteSpace.asInteger;
+        // Create jack_quad device by connecting to it (this creates the device)
+        // Connect UCA202 line inputs to jack_quad
+        "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
+        "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
         
-        if(scPorts >= 8, {
-            // Ports are ready, clear any existing connections first
-            "jack_disconnect system:capture_1 SuperCollider:in_1 2>/dev/null".unixCmd;
-            "jack_disconnect system:capture_2 SuperCollider:in_2 2>/dev/null".unixCmd;
-            "jack_disconnect ufo_phono:capture_1 SuperCollider:in_3 2>/dev/null".unixCmd;
-            "jack_disconnect ufo_phono:capture_2 SuperCollider:in_4 2>/dev/null".unixCmd;
-            
-            // Connect UCA202 line inputs to channels 1 & 2 (SuperCollider 0 & 1) - JACK master
-            "jack_connect system:capture_1 SuperCollider:in_1".unixCmd;
-            "jack_connect system:capture_2 SuperCollider:in_2".unixCmd;
-            
-            // Connect UFO202 phono inputs to channels 3 & 4 (SuperCollider 2 & 3) - zita bridge
-            "jack_connect ufo_phono:capture_1 SuperCollider:in_3".unixCmd;
-            "jack_connect ufo_phono:capture_2 SuperCollider:in_4".unixCmd;
-            
-            // Connect outputs
-            "jack_connect SuperCollider:out_1 system:playback_1".unixCmd;
-            "jack_connect SuperCollider:out_2 system:playback_2".unixCmd;
-            if(outputs >= 4, {
-                "jack_connect SuperCollider:out_3 ufo_out:playback_1".unixCmd;
-                "jack_connect SuperCollider:out_4 ufo_out:playback_2".unixCmd;
-            });
-            
-            ("JACK connections established for Behringer devices").postln;
-        }, {
-            // Ports not ready yet, retry after 0.2 seconds
-            ("SuperCollider ports not ready yet (found " ++ scPorts ++ "), retrying...").postln;
-            AppClock.sched(0.2, { ~setupBehringerJACK.value(); });
+        // Connect UFO202 phono inputs to jack_quad
+        "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
+        "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
+        
+        // Connect jack_quad outputs to playback devices
+        "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
+        "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
+        if(outputs >= 4, {
+            "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
+            "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
         });
+        
+        ("JACK connections established through jack_quad device").postln;
     });
 };
 

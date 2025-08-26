@@ -170,6 +170,11 @@ ZITA_J2A_PID=$!
 # Wait for zita bridges to initialize
 sleep 3
 
+# Audio setup complete - jack_quad device will be created by SuperCollider app
+echo "Audio setup complete! Starting SuperCollider app..."
+echo "Note: jack_quad device will be created automatically for persistent routing"
+echo ""
+
 # Check if zita processes started successfully
 if ! ps -p $ZITA_A2J_PID > /dev/null; then
     echo "ERROR: zita-a2j failed to start. Check /tmp/zita-a2j.log"
@@ -229,7 +234,7 @@ if command -v jack_lsp >/dev/null 2>&1; then
     echo "  UFO outputs (UFO202): $UFO_OUTPUTS"
     
     if [ $PORTS -ge 8 ] && [ $UFO_INPUTS -ge 2 ]; then
-        echo "✅ SUCCESS: All ports available including UFO202 phono inputs"
+        echo "✅ SUCCESS: All ports available"
     else
         echo "⚠️  WARNING: Expected 8+ ports with 2+ UFO inputs, found $PORTS total, $UFO_INPUTS UFO inputs"
         echo "Full JACK port list:"
