@@ -2689,7 +2689,7 @@ UserView(mainView, Rect(571, 70, 4, 300))
 // --- JACK Connection Setup for Behringer Devices ---
 ~setupBehringerJACK = {
     // Wait for server to boot and jack_quad device to be ready
-    AppClock.sched(0.5, {
+    AppClock.sched(2.0, {
         // First, disconnect any existing connections to avoid duplicates
         "jack_disconnect system:capture_1 jack_quad:in_1 2>/dev/null".unixCmd;
         "jack_disconnect system:capture_2 jack_quad:in_2 2>/dev/null".unixCmd;
