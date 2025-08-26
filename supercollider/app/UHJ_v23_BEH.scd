@@ -2690,23 +2690,34 @@ UserView(mainView, Rect(571, 70, 4, 300))
 ~setupBehringerJACK = {
     // Wait for server to boot and jack_quad device to be ready
     AppClock.sched(0.5, {
-        // Connect UCA202 line inputs to jack_quad
-        "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
-        "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
+        // First, disconnect any existing connections to avoid duplicates
+        "jack_disconnect system:capture_1 jack_quad:in_1 2>/dev/null".unixCmd;
+        "jack_disconnect system:capture_2 jack_quad:in_2 2>/dev/null".unixCmd;
+        "jack_disconnect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null".unixCmd;
+        "jack_disconnect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null";
         
-        // Connect UFO202 phono inputs to jack_quad
-        "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
-        "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
-        
-        // Connect jack_quad outputs to playback devices
-        "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
-        "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
-        if(outputs >= 4, {
-            "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
-            "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
+        // Wait a moment for disconnections to complete
+        AppClock.sched(0.1, {
+            // Now establish the correct routing:
+            // UCA202 line inputs (1&2) -> jack_quad:in_1 & jack_quad:in_2
+            "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
+            "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
+            
+            // UFO202 phono inputs (3&4) -> jack_quad:in_3 & jack_quad:in_4
+            "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
+            "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
+            
+            // Connect jack_quad outputs to playback devices
+            "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
+            "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
+            if(outputs >= 4, {
+                "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
+                "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
+            });
+            
+            ("JACK connections established through jack_quad device").postln;
+            ("UCA202: Line inputs 1&2, UFO202: Phono inputs 3&4").postln;
         });
-        
-        ("JACK connections established through jack_quad device").postln;
     });
 };
 

@@ -280,33 +280,9 @@ fi
 echo "Audio setup complete! Starting SuperCollider app..."
 echo ""
 
-# Create jack_quad device before starting SuperCollider
-echo "Creating jack_quad device for persistent routing..."
-
-# Method 1: Try to create jack_quad by connecting to it
-echo "Attempting to create jack_quad device..."
-jack_connect system:capture_1 jack_quad:in_1 2>/dev/null
-jack_connect system:capture_2 jack_quad:in_2 2>/dev/null
-jack_connect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null
-jack_connect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null
-
-# Wait and check if jack_quad was created
-sleep 2
-if jack_lsp | grep -q "jack_quad:"; then
-    echo "✅ jack_quad device created successfully"
-    
-    # Now connect the outputs to complete the routing
-    echo "Establishing complete jack_quad routing..."
-    jack_connect jack_quad:out_1 system:playback_1 2>/dev/null
-    jack_connect jack_quad:out_2 system:playback_2 2>/dev/null
-    jack_connect jack_quad:out_3 ufo_out:playback_1 2>/dev/null
-    jack_connect jack_quad:out_4 ufo_out:playback_2 2>/dev/null
-    
-    echo "✅ jack_quad routing complete - all inputs should work immediately"
-else
-    echo "⚠️  jack_quad device creation failed - SuperCollider will create it"
-    echo "Note: UFO inputs may not work until first server restart"
-fi
+# Note: jack_quad device will be created by SuperCollider
+echo "Note: jack_quad device will be created automatically by SuperCollider"
+echo "This ensures proper timing and port creation for all inputs"
 
 echo ""
 echo "Starting SuperCollider app..."
