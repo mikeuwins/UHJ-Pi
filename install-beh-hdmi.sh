@@ -539,6 +539,11 @@ command -v unclutter >/dev/null 2>&1 && unclutter -idle 1 -root &
 export QT_QPA_PLATFORM=xcb
 export DISPLAY=:0
 blackbox &
+sleep 0.2
+# Force black background multiple times to ensure it works
+xsetroot -solid black
+sleep 0.1
+xsetroot -solid black
 sleep 0.1
 xsetroot -solid black
 sleep 0.1
