@@ -216,7 +216,7 @@ formatDbValue = { |dbValue|
 };
 
 // --- Window setup with platform-specific positioning ---
-win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480)).background_(Color.black);
+win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).background_(Color.black);
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
     if(s.serverRunning) { s.quit; };
@@ -690,15 +690,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
                     // Use jack_quad device created by our setup script
-                // Check if the device exists first
-                var deviceExists = "jack_lsp | grep jack_quad".unixCmdGetStdOut.contains("jack_quad");
-                if(deviceExists, {
-                    s.options.device = "jack_quad";
-                    ("Using JACK device: jack_quad").postln;
-                }, {
-                    ("Warning: jack_quad device not found, using default JACK device").postln;
-                    s.options.device = "system";
-                });
+                s.options.device = "jack_quad";
+                ("Using JACK device: jack_quad").postln;
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
@@ -2697,37 +2690,29 @@ UserView(mainView, Rect(571, 70, 4, 300))
 ~setupBehringerJACK = {
     // Wait for SuperCollider to boot and create jack_quad ports
     AppClock.sched(2.0, {
-        // Check if jack_quad device exists
-        var deviceExists = "jack_lsp | grep jack_quad".unixCmdGetStdOut.contains("jack_quad");
+        // Clear any existing connections first
+        "jack_disconnect system:capture_1 jack_quad:in_1 2>/dev/null".unixCmd;
+        "jack_disconnect system:capture_2 jack_quad:in_2 2>/dev/null".unixCmd;
+        "jack_disconnect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null".unixCmd;
+        "jack_disconnect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null".unixCmd;
         
-        if(deviceExists, {
-            // Clear any existing connections first
-            "jack_disconnect system:capture_1 jack_quad:in_1 2>/dev/null".unixCmd;
-            "jack_disconnect system:capture_2 jack_quad:in_2 2>/dev/null".unixCmd;
-            "jack_disconnect ufo_phono:capture_1 jack_quad:in_3 2>/dev/null".unixCmd;
-            "jack_disconnect ufo_phono:capture_2 jack_quad:in_4 2>/dev/null".unixCmd;
-            
-            // Connect UCA202 line inputs to channels 1 & 2 (SuperCollider 0 & 1) - JACK master
-            "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
-            "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
-            
-            // Connect UFO202 phono inputs to channels 3 & 4 (SuperCollider 2 & 3) - zita bridge
-            "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
-            "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
-            
-            // Connect outputs
-            "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
-            "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
-            if(outputs >= 4, {
-                "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
-                "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
-            });
-            
-            ("JACK connections established for Behringer devices").postln;
-        }, {
-            ("Warning: jack_quad device not found, skipping JACK connections").postln;
-            ("Please ensure JACK server is running and zita bridges are set up").postln;
-        };
+        // Connect UCA202 line inputs to channels 1 & 2 (SuperCollider 0 & 1) - JACK master
+        "jack_connect system:capture_1 jack_quad:in_1".unixCmd;
+        "jack_connect system:capture_2 jack_quad:in_2".unixCmd;
+        
+        // Connect UFO202 phono inputs to channels 3 & 4 (SuperCollider 2 & 3) - zita bridge
+        "jack_connect ufo_phono:capture_1 jack_quad:in_3".unixCmd;
+        "jack_connect ufo_phono:capture_2 jack_quad:in_4".unixCmd;
+        
+        // Connect outputs
+        "jack_connect jack_quad:out_1 system:playback_1".unixCmd;
+        "jack_connect jack_quad:out_2 system:playback_2".unixCmd;
+        if(outputs >= 4, {
+            "jack_connect jack_quad:out_3 ufo_out:playback_1".unixCmd;
+            "jack_connect jack_quad:out_4 ufo_out:playback_2".unixCmd;
+        });
+        
+        ("JACK connections established for Behringer devices").postln;
     });
 };
 
