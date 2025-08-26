@@ -100,9 +100,9 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
     
     # Verify devices still exist
-    local devices=$(detect_usb_devices)
-    local uca_found=false
-    local ufo_found=false
+    devices=$(detect_usb_devices)
+    uca_found=false
+    ufo_found=false
     
     for device in $devices; do
         if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
@@ -168,31 +168,72 @@ zita-j2a -j ufo_out -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-j2a.log 2>&
 ZITA_J2A_PID=$!
 
 # Wait for zita bridges to initialize
-sleep 2
+sleep 3
 
 # Check if zita processes started successfully
 if ! ps -p $ZITA_A2J_PID > /dev/null; then
     echo "ERROR: zita-a2j failed to start. Check /tmp/zita-a2j.log"
+    echo "zita-a2j log contents:"
+    cat /tmp/zita-a2j.log
+    exit 1
 fi
 
 if ! ps -p $ZITA_J2A_PID > /dev/null; then
     echo "ERROR: zita-j2a failed to start. Check /tmp/zita-j2a.log"
+    echo "zita-j2a log contents:"
+    cat /tmp/zita-j2a.log
+    exit 1
 fi
 
 echo "Zita bridges started successfully"
 
+# Wait for JACK ports to appear
+echo "Waiting for JACK ports to appear..."
+sleep 2
+
+# Verify UFO202 ports are available
+echo "Checking for UFO202 ports..."
+if command -v jack_lsp >/dev/null 2>&1; then
+    UFO_PORTS=$(jack_lsp | grep ufo_phono | wc -l)
+    echo "Found $UFO_PORTS UFO202 ports"
+    
+    if [ $UFO_PORTS -lt 2 ]; then
+        echo "WARNING: Expected 2 UFO202 ports, found $UFO_PORTS"
+        echo "Available JACK ports:"
+        jack_lsp | sort
+    else
+        echo "✅ UFO202 ports available:"
+        jack_lsp | grep ufo_phono
+    fi
+fi
+
 # Wait a moment for everything to sync
 sleep 2
 
-# Verify JACK ports
+# Verify JACK ports and connections
 echo "Verifying JACK configuration..."
 if command -v jack_lsp >/dev/null 2>&1; then
     PORTS=$(jack_lsp | wc -l)
     echo "Available JACK ports: $PORTS"
-    if [ $PORTS -ge 8 ]; then
-        echo "✅ SUCCESS: All ports available"
+    
+    # Check specific port types
+    SYSTEM_INPUTS=$(jack_lsp | grep "system:capture" | wc -l)
+    UFO_INPUTS=$(jack_lsp | grep "ufo_phono:capture" | wc -l)
+    SYSTEM_OUTPUTS=$(jack_lsp | grep "system:playback" | wc -l)
+    UFO_OUTPUTS=$(jack_lsp | grep "ufo_out:playback" | wc -l)
+    
+    echo "Port breakdown:"
+    echo "  System inputs (UCA202): $SYSTEM_INPUTS"
+    echo "  UFO inputs (UFO202): $UFO_INPUTS"
+    echo "  System outputs (UCA202): $SYSTEM_OUTPUTS"
+    echo "  UFO outputs (UFO202): $UFO_OUTPUTS"
+    
+    if [ $PORTS -ge 8 ] && [ $UFO_INPUTS -ge 2 ]; then
+        echo "✅ SUCCESS: All ports available including UFO202 phono inputs"
     else
-        echo "⚠️  WARNING: Expected 8+ ports, found $PORTS"
+        echo "⚠️  WARNING: Expected 8+ ports with 2+ UFO inputs, found $PORTS total, $UFO_INPUTS UFO inputs"
+        echo "Full JACK port list:"
+        jack_lsp | sort
     fi
 fi
 
