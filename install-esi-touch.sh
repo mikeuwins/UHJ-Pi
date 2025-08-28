@@ -412,9 +412,16 @@ echo "Reboot required. Run: sudo reboot"
 echo "After reboot and login, run:"
 echo "  start"
 
+# STEP 17: Install Bluetooth pairing script
+echo "Installing Bluetooth pairing script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/auto_pair_headtracker.sh /usr/local/bin/
+chmod +x /usr/local/bin/auto_pair_headtracker.sh
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/auto_pair_headtracker.sh
+echo "Bluetooth pairing script installed to /usr/local/bin/"
+
 # Create a simple launcher to start the app easily
 cat > /usr/local/bin/start << 'EOF'
 #!/usr/bin/env bash
-exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_ESI.scd > /home/$USER/post_output.log 2>&1
+exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_ESI_PAIR.scd > /home/$USER/post_output.log 2>&1
 EOF
 chmod +x /usr/local/bin/start 
