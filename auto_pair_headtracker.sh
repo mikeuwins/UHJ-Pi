@@ -1,8 +1,18 @@
 #!/bin/bash
 echo "[BT] Starting headtracker Bluetooth setup..."
 
+# Kill any desktop Bluetooth agents that might interfere
+pkill -x blueman-applet >/dev/null 2>&1 || true
+pkill -x blueberry-tray >/dev/null 2>&1 || true
+pkill -x gsd-bluetooth >/dev/null 2>&1 || true
+
+# Set environment to force non-interactive mode
+export BLUEZ_AGENT_AUTO_CONFIRM=true
+export BLUEZ_AGENT_AUTO_ACCEPT=true
+
 # Basic Bluetooth setup
 bluetoothctl power on
+bluetoothctl agent off
 bluetoothctl agent NoInputNoOutput
 bluetoothctl default-agent
 bluetoothctl pairable on
