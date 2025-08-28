@@ -47,7 +47,9 @@ if [ -n "$MAC" ]; then
     
     # Device not paired, pair it
     echo "[BT] Pairing device..."
-    bluetoothctl pair $MAC
+    bluetoothctl <<EOF
+pair $MAC
+EOF
     sleep 3
     
     # Check if pairing succeeded
