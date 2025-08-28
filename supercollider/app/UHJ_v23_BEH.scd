@@ -2640,7 +2640,9 @@ StaticText(mainView, Rect(520, 10, 72, 28))
         if(~synth.notNil) {
             var amp = 10.pow(db / 20);
             ~synth.set(\amp, amp);
-        }
+        };
+        // Persist current amp so decoder/server reboot starts new synth at same level
+        voltmp = 10.pow(db / 20);
     });
 
 ~outputValue = StaticText(mainView, Rect(544, 380, 24, 24))
