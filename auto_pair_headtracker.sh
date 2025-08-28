@@ -24,10 +24,19 @@ MAC=$(bluetoothctl devices | grep -i "ht" | awk '{print $2}' | head -1)
 if [ -n "$MAC" ]; then
     echo "[PAIR] Found HT device at $MAC"
     
-    # Check if already connected
-    if bluetoothctl info "$MAC" | grep -q "Connected: yes"; then
-        echo "[PAIR] Device already connected"
+    # Check if already connected with HID services
+    INFO=$(bluetoothctl info "$MAC" 2>/dev/null)
+    CONNECTED=$(echo "$INFO" | grep -q "Connected: yes" && echo "yes" || echo "no")
+    SERVICES=$(echo "$INFO" | grep -q "ServicesResolved: yes" && echo "yes" || echo "no")
+    HID=$(echo "$INFO" | grep -qi "Human Interface Device" && echo "yes" || echo "no")
+    
+    if [ "$CONNECTED" = "yes" ] && [ "$SERVICES" = "yes" ] && [ "$HID" = "yes" ]; then
+        echo "[PAIR] Device already connected with HID services working!"
         exit 0
+    elif [ "$CONNECTED" = "yes" ]; then
+        echo "[PAIR] Device connected but services not fully resolved, reconnecting..."
+        bluetoothctl disconnect $MAC
+        sleep 3
     fi
     
     # Check if already paired
@@ -36,19 +45,20 @@ if [ -n "$MAC" ]; then
         bluetoothctl connect $MAC
         sleep 5
         
-        # Wait for full connection and services
-        echo "[PAIR] Waiting for full connection and services..."
+        # Wait for full connection and HID services
+        echo "[PAIR] Waiting for full connection and HID services..."
         for i in {1..20}; do
             INFO=$(bluetoothctl info "$MAC" 2>/dev/null)
             CONNECTED=$(echo "$INFO" | grep -q "Connected: yes" && echo "yes" || echo "no")
             SERVICES=$(echo "$INFO" | grep -q "ServicesResolved: yes" && echo "yes" || echo "no")
+            HID=$(echo "$INFO" | grep -qi "Human Interface Device" && echo "yes" || echo "no")
             
-            if [ "$CONNECTED" = "yes" ] && [ "$SERVICES" = "yes" ]; then
-                echo "[PAIR] Successfully connected with services resolved!"
+            echo "[PAIR] Status: Connected=$CONNECTED, Services=$SERVICES, HID=$HID (attempt $i/20)"
+            
+            if [ "$CONNECTED" = "yes" ] && [ "$SERVICES" = "yes" ] && [ "$HID" = "yes" ]; then
+                echo "[PAIR] Successfully connected with HID services working!"
                 exit 0
             fi
-            
-            echo "[PAIR] Connection status: Connected=$CONNECTED, Services=$SERVICES (attempt $i/20)"
             
             if [ "$CONNECTED" = "no" ]; then
                 echo "[PAIR] Connection lost, retrying..."
@@ -58,7 +68,7 @@ if [ -n "$MAC" ]; then
             sleep 2
         done
         
-        echo "[PAIR] Failed to establish full connection"
+        echo "[PAIR] Failed to establish full HID connection"
         exit 1
     fi
     
@@ -92,19 +102,20 @@ EOF
     bluetoothctl connect $MAC
     sleep 5
     
-    # Wait for full connection and services
-    echo "[PAIR] Waiting for full connection and services after pairing..."
+    # Wait for full connection and HID services
+    echo "[PAIR] Waiting for full connection and HID services after pairing..."
     for i in {1..20}; do
         INFO=$(bluetoothctl info "$MAC" 2>/dev/null)
         CONNECTED=$(echo "$INFO" | grep -q "Connected: yes" && echo "yes" || echo "no")
         SERVICES=$(echo "$INFO" | grep -q "ServicesResolved: yes" && echo "yes" || echo "no")
+        HID=$(echo "$INFO" | grep -qi "Human Interface Device" && echo "yes" || echo "no")
         
-        if [ "$CONNECTED" = "yes" ] && [ "$SERVICES" = "yes" ]; then
-            echo "[PAIR] Successfully paired and connected with services resolved!"
+        echo "[PAIR] Status: Connected=$CONNECTED, Services=$SERVICES, HID=$HID (attempt $i/20)"
+        
+        if [ "$CONNECTED" = "yes" ] && [ "$SERVICES" = "yes" ] && [ "$HID" = "yes" ]; then
+            echo "[PAIR] Successfully paired and connected with HID services working!"
             exit 0
         fi
-        
-        echo "[PAIR] Connection status: Connected=$CONNECTED, Services=$SERVICES (attempt $i/20)"
         
         if [ "$CONNECTED" = "no" ]; then
             echo "[PAIR] Connection lost, retrying..."
@@ -114,7 +125,7 @@ EOF
         sleep 2
     done
     
-    echo "[PAIR] Failed to establish full connection after pairing"
+    echo "[PAIR] Failed to establish full HID connection after pairing"
     exit 1
 else
     echo "[PAIR] No HT device found"
