@@ -19,7 +19,9 @@ var win, mainView,
 ~maplinSurroundKnob = nil; ~maplinEffectKnob = nil; ~maplinDelayKnob = nil; ~maplinActiveBtn = nil;
 ~maplinSurroundValue = nil; ~maplinEffectValue = nil; ~maplinDelayValue = nil;
 // --- Headtracker overlays ---
-~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil;                                                                                                                                                                                                                                                                                                                
+~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
+// --- Headtracker pairing button reference ---
+~headtrackPairBtn = nil;
 // --- Maplin button overlay ---
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
@@ -435,6 +437,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         if(isBinaural) {
             ~headtrackBtn.enabled_(true);
             ~headtrackResetBtn.enabled_(true);
+            if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(true); };
+            if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
             if(htIsOff) {
                 // Headtracking OFF: disable controls and hide reset button
                 ~headtrackResetBtn.enabled_(false);
@@ -445,7 +449,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
-                ~htResetOverlay = View(mainView, Rect(734, 102, 48, 20)) // Cover RESET button
+                ~htResetOverlay = View(mainView, Rect(734, 102, 51, 20)) // Cover RESET button, extended 3px right
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -457,9 +461,16 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         } {
             // Non-binaural modes
             ~headtrackBtn.enabled_(false);
+            if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(false); };
             ~rotateKnob.enabled_(false);
             ~tiltKnob.enabled_(false);
             ~tumbleKnob.enabled_(false);
+            // Dim PAIR button with overlay matching reset/knob overlay style
+            if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
+            ~htPairOverlay = View(mainView, Rect(742, 142, 40, 20))
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
             
             if((idx == 3) or: { idx == 4 } or: { idx == 5 }) {
                 // Quad modes: reset button visible for panner control
@@ -469,14 +480,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
-                ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 42)) // Cover only ON/OFF button (y=60-102)
+                ~htBtnOverlay = View(mainView, Rect(734, 60, 51, 42)) // Cover only ON/OFF button (y=60-102), extended 3px right
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
             } {
                 // Dolby/Octagon modes: BOTH buttons hidden (no headtracking, no panner)
                 ~headtrackResetBtn.enabled_(false);
-                ~htResetOverlay = View(mainView, Rect(734, 102, 48, 20)) // Cover reset button
+                ~htResetOverlay = View(mainView, Rect(734, 102, 51, 20)) // Cover reset button, extended 3px right
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -485,7 +496,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
-                ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 42)) // Cover only ON/OFF button (y=60-102)
+                ~htBtnOverlay = View(mainView, Rect(734, 60, 51, 42)) // Cover only ON/OFF button (y=60-102), extended 3px right
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
@@ -1172,6 +1183,20 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
+// --- BLUETOOTH PAIR BUTTON ---
+~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
+    .states_([["PAIR", Color.cyan, Color.black]])
+    .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
+    .action_({
+        var out;
+        // Run pairing script and capture stdout for post window
+        out = "bash -lc '/home/michael-uwins/UHJ-Pi/auto_pair_headtracker.sh'".unixCmdGetStdOut;
+        out.postln;
+    });
+// Ensure button is above overlays
+~headtrackPairBtn.front;
+
 // --- CONTROL LABELS ---
 StaticText(mainView, Rect(594, 80, 55, 20)).string_("ROTATE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
 StaticText(mainView, Rect(594, 162, 55, 20)).string_("TILT").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
@@ -1206,7 +1231,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
-                ~htResetOverlay = View(mainView, Rect(734, 102, 48, 20)) // Cover RESET button
+                ~htResetOverlay = View(mainView, Rect(734, 102, 51, 20)) // Cover RESET button, extended 3px right
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;

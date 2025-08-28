@@ -1,36 +1,64 @@
 #!/bin/bash
+echo "[PAIR] Starting headtracker pairing..."
 
-echo "Starting simple headtracker pairing..."
-
-# Scan for devices with timeout and capture output
-echo "bluetoothctl --timeout 5 scan on"
-SCAN_OUTPUT=$(bluetoothctl --timeout 5 scan on 2>&1)
-
-# Extract MAC address from scan output
-echo "Extracting MAC address from scan output..."
-MAC=$(echo "$SCAN_OUTPUT" | grep "\[NEW\] Device.* HT" | awk '{print $3}')
-
-if [ -z "$MAC" ]; then
-    echo "ERROR: HT device not found in scan output"
-    echo "Scan output:"
-    echo "$SCAN_OUTPUT"
-    echo "Trying alternative pattern..."
-    # Try a simpler pattern
-    MAC=$(echo "$SCAN_OUTPUT" | grep "HT" | grep "Device" | awk '{print $3}')
-    if [ -z "$MAC" ]; then
-        echo "Still not found with alternative pattern"
-        exit 1
-    fi
-fi
-
-echo "Found HT at MAC: $MAC"
-
-# Pair the device
-echo "Pairing device..."
+# Simple approach for headless Pi
 bluetoothctl <<EOF
+power on
+agent NoInputNoOutput
+default-agent
+pairable on
+EOF
+
+# Scan for HT devices
+echo "[PAIR] Scanning for HT devices..."
+bluetoothctl scan on >/dev/null 2>&1 &
+sleep 5
+bluetoothctl scan off >/dev/null 2>&1
+
+# Find HT device
+MAC=$(bluetoothctl devices | grep -i "ht" | awk '{print $2}' | head -1)
+
+if [ -n "$MAC" ]; then
+    echo "[PAIR] Found HT device at $MAC"
+    
+    # Check if already connected
+    if bluetoothctl info "$MAC" | grep -q "Connected: yes"; then
+        echo "[PAIR] Device already connected"
+        exit 0
+    fi
+    
+    # Try to connect
+    echo "[PAIR] Attempting to connect..."
+    bluetoothctl <<EOF
+trust $MAC
+connect $MAC
+EOF
+    
+    # Wait for connection
+    sleep 3
+    
+    if bluetoothctl info "$MAC" | grep -q "Connected: yes"; then
+        echo "[PAIR] Successfully connected!"
+        exit 0
+    else
+        echo "[PAIR] Connection failed, trying to pair first..."
+        bluetoothctl <<EOF
 pair $MAC
 trust $MAC
 connect $MAC
 EOF
-
-echo "Done!"
+        
+        sleep 5
+        
+        if bluetoothctl info "$MAC" | grep -q "Connected: yes"; then
+            echo "[PAIR] Successfully paired and connected!"
+            exit 0
+        else
+            echo "[PAIR] Failed to pair and connect"
+            exit 1
+        fi
+    fi
+else
+    echo "[PAIR] No HT device found"
+    exit 1
+fi
