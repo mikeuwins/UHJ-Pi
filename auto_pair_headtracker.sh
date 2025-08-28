@@ -19,7 +19,7 @@ bluetoothctl pairable on
 
 # Scan for HT devices
 echo "[BT] Scanning for HT devices..."
-bluetoothctl scan on &
+bluetoothctl scan on
 sleep 5
 bluetoothctl scan off
 
