@@ -290,4 +290,4 @@ echo "Note: jack_quad device will be created automatically for persistent routin
 echo ""
 
 # Start the SuperCollider app
-exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH.scd > /home/$USER/post_output.log 2>&1
+exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH_PAIR.scd > /home/$USER/post_output.log 2>&1

@@ -542,7 +542,7 @@ blackbox &
 sleep 0.1
 xsetroot -solid black
 sleep 0.1
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_BEH.scd > ~/post_output.log 2>&1
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_BEH_PAIR.scd > ~/post_output.log 2>&1
 EOF
 
 # Set ownership of the new files
@@ -610,8 +610,15 @@ EOF
 
 echo "X11 session environment configured"
 
-# STEP 23: Create launcher with persistent audio setup
-echo "Step 23: Creating launcher with persistent audio setup..."
+# STEP 23: Install Bluetooth pairing script
+echo "Step 23: Installing Bluetooth pairing script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
+chmod +x /usr/local/bin/ble-ht.sh
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
+echo "Bluetooth pairing script installed to /usr/local/bin/"
+
+# STEP 24: Create launcher with persistent audio setup
+echo "Step 24: Creating launcher with persistent audio setup..."
 cat > /usr/local/bin/start << 'EOF'
 #!/usr/bin/env bash
 
@@ -854,7 +861,8 @@ echo "Note: jack_quad device will be created automatically by SuperCollider"
 echo "This ensures proper timing and port creation for all inputs"
 
 echo ""
-echo "Audio setup complete! Starting X11 session..."
+echo "Starting X11 session..."
+echo "Note: jack_quad device will be created automatically for persistent routing"
 echo ""
 
 # Start the X11 session (this will use the xinitrc we created)
@@ -884,7 +892,7 @@ echo "SuperCollider Setup:"
 echo "  ✅ SuperCollider + ATK + AmbiVerbSC installed"
 echo "  ✅ Custom extensions installed"
 echo "  ✅ Custom fonts installed"
-echo "  ✅ App configured: UHJ_v23_BEH.scd"
+echo "  ✅ App configured: UHJ_v23_BEH_PAIR.scd"
 echo "  ✅ Launcher created: /usr/local/bin/start"
 echo ""
 echo "Reboot required. Run: sudo reboot"

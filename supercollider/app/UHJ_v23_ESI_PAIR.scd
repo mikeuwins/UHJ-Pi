@@ -1252,7 +1252,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 ("Device not paired - pairing...").postln;
                 
                 // Run pairing script in background with timeout
-                scriptPath = "/home/michael-uwins/UHJ-Pi/ble-ht.sh";
+                scriptPath = "/usr/local/bin/ble-ht.sh";
                 
                 // Safety timeout - reset button after 45 seconds if script hangs
                 AppClock.sched(45, { 
@@ -1310,18 +1310,18 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         5.wait; // Check every 5 seconds
         
         // Only check if button exists, shows paired status and not currently pairing
-        if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-            checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-            isConnected = checkResult.contains("Connected: yes");
-            isPaired = checkResult.contains("Paired: yes");
-            
-            {
+        {
+            if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
+                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                isConnected = checkResult.contains("Connected: yes");
+                isPaired = checkResult.contains("Paired: yes");
+                
                 if (isPaired.not || isConnected.not) {
                     // Device is disconnected/removed - reset button
                     ~headtrackPairBtn.value_(0);
                 };
-            }.defer;
-        };
+            };
+        }.defer;
     };
 }).play;
 

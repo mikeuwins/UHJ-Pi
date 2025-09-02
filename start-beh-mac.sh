@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-CONFIG_FILE="$HOME/.uhj-mac-audio.conf"
-echo "Starting Behringer audio setup..."
+CONFIG_FILE="$HOME/.uhj-vinyl-audio.conf"
+echo "Starting vinyl deck + output interface audio setup..."
 
-# Function to detect USB audio devices (Mac version - hardcoded for cards 3&4)
+# Function to detect USB audio devices (after display audio cleanup)
 detect_usb_devices() {
     local devices=()
-    # On Mac Mini, Behringer devices are at cards 3 (UCA202) and 4 (UFO202)
-    devices+=("3:usb-uca202")
-    devices+=("4:usb-ufo202")
+    # After cleanup: Card 1 = UMC204HD (4-output), Card 2 = USB AUDIO CODEC (vinyl)
+    devices+=("1:umc204hd")
+    devices+=("2:vinyl-codec")
     echo "${devices[@]}"
 }
 

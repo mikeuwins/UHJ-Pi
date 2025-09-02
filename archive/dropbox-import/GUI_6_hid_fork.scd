@@ -8,6 +8,8 @@ JA
 (
 var cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE, rotini = 0.5, tltini = 0.5, tumini = 0.5, volini = 0.5, ambini = 0, voltmp = 0.5;
 
+// MIDI completely disabled for this version
+
 (
 Tdef( 'tryOpenHID' , {
    var keepLooking = true;
@@ -19,8 +21,8 @@ Tdef( 'tryOpenHID' , {
       };
       if ( keepLooking ){
          HID.findAvailable;
-			if ( HID.findBy(0,0,serial: "e4:e1:de:be:db:2f").size > 0 ){
-            ~myhid = HID.open(0,0,serial: "e4:e1:de:be:db:2f");
+			if ( HID.findBy(0,0).size > 0 ){
+            ~myhid = HID.open(0,0);
             if ( ~myhid.notNil ){
                ~myhid.closeAction = {
                     "device closed".postln;
@@ -51,8 +53,7 @@ Tdef( 'tryOpenHID' ).play;
 
 HID.debug = true;
 
-MIDIIn.connectAll;
-MIDIFunc.trace(true);
+// MIDI removed - using HID only
 
 Window.closeAll;
 
@@ -164,7 +165,7 @@ w.background = Color.black;
 				encoder = encoderDict[configKeyE];
 				decoder = decoderDict[configKeyD];
 
-				sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
+				//sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/01 Sodium Sunrise UHJ Render.wav");
 				// Window.closeAll;
 
 				s.sync(cond);
@@ -172,8 +173,9 @@ w.background = Color.black;
 				// synth to encode a UHJ file, transform and decode using an binaral/quad/octo decoder
 				SynthDef(\kernelEncodeDecode, {arg buffer, rotation = 0, tilt = 0, tumble = 0, ambience = 0;
 				var out, src, trans, encode, volume;
-				src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer));	// load a UHJ sound file into a buffer
-				//src = SoundIn.ar([0,1]);												// live UHJ stereo source signal from phono input
+				//src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer));	// load a UHJ sound file into a buffer
+				//
+				src = SoundIn.ar([0,1]);												// live UHJ stereo source signal from phono input
 				src = src * \amp.kr(-6.dbamp);											// amplitude scaling
 				encode = FoaEncode.ar(src, encoder);									// encode to ambisonic using a UHJ encoder
 
@@ -300,6 +302,7 @@ w.background = Color.black;
 					}).font_( Font("LED Dot-Matrix", 12));*/
 
 
+			/* MIDI SECTION COMMENTED OUT - NOT NEEDED
 			MIDIdef.noteOn(\rotationState, {
 			arg val, num, chan, src;
 				{val.postln; (num/num).postln;
@@ -446,7 +449,7 @@ w.background = Color.black;
 							);
 							}.defer;
 			}, '/nxosc/quaternion');*/
-
+			END OF MIDI SECTION COMMENT */
 
 			HIDdef.usage( \hidRotation,
 			{ arg val;
@@ -507,6 +510,7 @@ k.setColors(Color.black, Color.cyan, Color.black, Color.cyan, Color.cyan, Color.
 
 )
 
+// Commented out OSC/networking code to avoid errors
 /*n = NetAddr.new("127.0.0.1", 8000);    // create the NetAddr
 // create the OSCFunc
 o = OSCFunc({ arg msg, time, addr, recvPort; [msg, time, addr, recvPort].postln; }, '/goodbye', n);

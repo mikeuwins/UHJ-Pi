@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# UHJ-Pi Raspberry Pi Setup Script - HDMI Version
-# Updated with all X11 and QT configuration refinements from August 20, 2025
+# UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck + HDMI Version
+# Combines HDMI display setup with Vinyl Deck audio configuration
 
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -16,9 +16,9 @@ if [ -z "$ACTUAL_USER" ]; then
     exit 1
 fi
 
-echo "UHJ-Pi Raspberry Pi Setup Script - HDMI Version"
+echo "UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck + HDMI Version"
 echo "Installing for user: $ACTUAL_USER"
-echo "This version includes all X11 and QT configuration refinements"
+echo "This version combines HDMI display setup with Vinyl Deck audio configuration"
 
 # Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
@@ -200,8 +200,8 @@ else
     exit 1
 fi
 
-# STEP 13: Clone UHJ-Pi repository and build phono-control CLI
-echo "Step 13: Cloning UHJ-Pi repository and building phono-control CLI..."
+# STEP 13: Clone UHJ-Pi repository and install Behringer audio setup
+echo "Step 13: Cloning UHJ-Pi repository and installing Behringer audio setup..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
     if git clone https://github.com/mikeuwins/UHJ-Pi.git; then
@@ -211,19 +211,32 @@ if [ ! -d "UHJ-Pi" ]; then
         exit 1
     fi
 fi
-cd UHJ-Pi/cli/phonorama-cli-linux
-if [ -f "build.sh" ]; then
-    chmod +x build.sh
-    if ./build.sh; then
-        echo "phono-control CLI build successful"
-    else
-        echo "ERROR: phono-control CLI build failed!"
-        exit 1
-    fi
-else
-    echo "ERROR: build.sh not found!"
-    exit 1
-fi
+
+# Install zita-ajbridge for Behringer audio routing
+echo "Installing zita-ajbridge for Behringer audio setup..."
+apt-get install -y zita-ajbridge
+
+# Create Behringer udev rules for persistent device naming
+echo "Creating Behringer udev rules..."
+cat > /etc/udev/rules.d/99-behringer-audio.rules << 'EOF'
+# Behringer UCA202/UFO202 USB Audio Device Rules
+# These rules ensure persistent device naming for Behringer USB audio devices
+
+# UCA202 (Line input/output device)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="08bb", ATTRS{idProduct}=="2902", ATTRS{manufacturer}=="Behringer", ATTRS{product}=="UCA202", SYMLINK+="audio/uca202"
+
+# UFO202 (Phono input/output device)  
+SUBSYSTEM=="usb", ATTRS{idVendor}=="08bb", ATTRS{idProduct}=="2902", ATTRS{manufacturer}=="Behringer", ATTRS{product}=="UFO202", SYMLINK+="audio/ufo202"
+
+# Set permissions for audio group
+SUBSYSTEM=="usb", ATTRS{idVendor}=="08bb", ATTRS{idProduct}=="2902", GROUP="audio", MODE="0666"
+EOF
+
+# Reload udev rules
+udevadm control --reload-rules
+udevadm trigger
+
+echo "Behringer audio setup completed successfully"
 
 # STEP 14: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
 echo "Step 14: Installing ATK and handling GUI component cleanup (manual approach)..."
@@ -320,7 +333,8 @@ if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/ma
     echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master atk-sounds.zip
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+    rm -f atk-sounds.zip
     echo "ATK sounds installed successfully"
     
     # Organize sounds into proper subdirectory structure (like working SD card)
@@ -528,7 +542,7 @@ blackbox &
 sleep 0.1
 xsetroot -solid black
 sleep 0.1
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_ESI_PAIR.scd > ~/post_output.log 2>&1
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > ~/post_output.log 2>&1
 EOF
 
 # Set ownership of the new files
@@ -603,28 +617,248 @@ chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
+# STEP 24: Create launcher with persistent audio setup
+echo "Step 24: Creating launcher with persistent audio setup..."
+cat > /usr/local/bin/start << 'EOF'
+#!/usr/bin/env bash
+
+CONFIG_FILE="$HOME/.uhj-vin-audio.conf"
+echo "Starting Vinyl Deck audio setup..."
+
+# Function to show device information
+show_device_info() {
+    local card_num=$1
+    local card_name=$2
+    
+    echo "Device Information:"
+    echo "  Name: $card_name"
+    echo "  Card: hw:$card_num"
+    
+    # Show playback capabilities
+    if aplay -l | grep -q "card $card_num:"; then
+        echo "  Playback: Available"
+    else
+        echo "  Playback: Not available"
+    fi
+    
+    # Show capture capabilities  
+    if arecord -l | grep -q "card $card_num:"; then
+        echo "  Capture: Available"
+    else
+        echo "  Capture: Not available"
+    fi
+    
+    # Try to get more detailed info from amixer
+    if command -v amixer >/dev/null 2>&1; then
+        local controls=$(amixer -c $card_num controls 2>/dev/null | wc -l)
+        if [ "$controls" -gt 0 ]; then
+            echo "  Controls: $controls available"
+        fi
+    fi
+    echo ""
+}
+
+# Interactive device detection
+detect_vinyl_devices() {
+    local vinyl_card=""
+    local output_card=""
+    local output_name=""
+    
+    echo "=== USB Turntable Setup ==="
+    echo ""
+    echo "Step 1: Connect your USB turntable/vinyl deck"
+    read -p "Press Enter when your USB turntable is connected..."
+    
+    # Look for newly connected audio devices
+    echo "Scanning for audio devices..."
+    sleep 2
+    
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
+            local card_num="${BASH_REMATCH[1]}"
+            local card_name="${BASH_REMATCH[2]}"
+            
+            # Look for likely turntable/vinyl deck names
+            if [[ $card_name =~ CODEC|Turntable|Vinyl|DJ ]]; then
+                vinyl_card="$card_num"
+                echo "✓ Found USB turntable: hw:$vinyl_card ($card_name)"
+                show_device_info "$card_num" "$card_name"
+                break
+            fi
+        fi
+    done < /proc/asound/cards
+    
+    # If no obvious turntable found, show all devices and let user choose
+    if [ -z "$vinyl_card" ]; then
+        echo "Could not automatically detect turntable. Available audio devices:"
+        echo ""
+        cat /proc/asound/cards
+        echo ""
+        read -p "Enter the card number for your turntable: " vinyl_card
+        
+        # Get the name for the chosen card
+        while IFS= read -r line; do
+            if [[ $line =~ ^[[:space:]]*${vinyl_card}[[:space:]]*\[([^]]+)\] ]]; then
+                local card_name="${BASH_REMATCH[1]}"
+                echo "✓ Selected turntable: hw:$vinyl_card ($card_name)"
+                show_device_info "$vinyl_card" "$card_name"
+                break
+            fi
+        done < /proc/asound/cards
+    fi
+    
+    echo "=== USB Audio Interface Setup ==="
+    echo ""
+    echo "Step 2: Connect your USB audio interface for output"
+    echo "(This can be any USB soundcard - Behringer, UMC, etc.)"
+    read -p "Press Enter when your USB audio interface is connected..."
+    
+    # Look for the output device (any card that's not the turntable)
+    echo "Scanning for output interface..."
+    sleep 2
+    
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
+            local card_num="${BASH_REMATCH[1]}"
+            local card_name="${BASH_REMATCH[2]}"
+            
+            # Skip the turntable card
+            if [ "$card_num" != "$vinyl_card" ]; then
+                output_card="$card_num"
+                output_name="$card_name"
+                echo "✓ Found output interface: hw:$output_card ($card_name)"
+                show_device_info "$card_num" "$card_name"
+                break
+            fi
+        fi
+    done < /proc/asound/cards
+    
+    if [ -z "$vinyl_card" ]; then
+        echo "ERROR: Turntable not configured"
+        exit 1
+    fi
+    
+    if [ -z "$output_card" ]; then
+        echo "ERROR: No output interface found"
+        echo "Please connect a USB audio interface and try again"
+        exit 1
+    fi
+    
+    echo "VINYL_CARD=$vinyl_card" > "$CONFIG_FILE"
+    echo "OUTPUT_CARD=$output_card" >> "$CONFIG_FILE"
+    echo "OUTPUT_NAME=$output_name" >> "$CONFIG_FILE"
+    echo "Device configuration saved to $CONFIG_FILE"
+    
+    echo ""
+    echo "=== Configuration Complete ==="
+    echo "✓ Turntable: hw:$vinyl_card (input)"
+    echo "✓ Audio Interface: hw:$output_card ($output_name) (output)"
+    echo ""
+}
+
+# Kill any existing audio processes
+echo "Stopping existing audio processes..."
+killall jackd 2>/dev/null
+killall sclang 2>/dev/null
+sleep 2
+
+# Audio performance optimizations
+echo "Applying audio performance optimizations..."
+
+# Set CPU governor to performance mode for better real-time performance
+if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+    echo "performance" > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || echo "Note: Could not set CPU governor (requires root)"
+fi
+
+# Increase audio thread priority limits
+if [ -f /etc/security/limits.conf ]; then
+    # Check if audio limits already exist
+    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
+        echo "Consider adding these lines to /etc/security/limits.conf for better audio performance:"
+        echo "  @audio   -  rtprio     95"
+        echo "  @audio   -  memlock    unlimited"
+    fi
+fi
+
+# Detect devices
+detect_vinyl_devices
+
+# Load configuration
+source "$CONFIG_FILE"
+
+echo "Starting JACK with:"
+echo "  Input: hw:$VINYL_CARD (Vinyl Deck)"
+echo "  Output: hw:$OUTPUT_CARD ($OUTPUT_NAME)"
+
+# Start JACK - simple input/output configuration like ESI  
+# Large buffer for stability (1024 frames = ~23ms latency, 3 periods)
+jackd -P75 -d alsa -C hw:$VINYL_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S &
+
+# Wait for JACK to start
+sleep 3
+
+# Check if JACK started successfully
+if ! pgrep jackd > /dev/null; then
+    echo "ERROR: JACK failed to start. Check /tmp/jack.log for details."
+    exit 1
+fi
+
+echo "✓ JACK started successfully"
+
+# Show available JACK ports
+echo ""
+echo "Available JACK ports:"
+jack_lsp 2>/dev/null || echo "jack_lsp not available"
+
+echo ""
+echo "🎵 Audio setup complete! Starting SuperCollider application..."
+
+# Launch SuperCollider with vinyl deck application
+exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > /home/$USER/post_output.log 2>&1
+EOF
+chmod +x /usr/local/bin/start
+
 echo "Installation completed successfully!"
 echo ""
-echo "All X11 and QT configuration refinements have been applied:"
+echo "Vinyl Deck + HDMI setup completed:"
+echo "  ✅ HDMI display configuration"
 echo "  ✅ Custom Blackbox style (NoDecorations)"
 echo "  ✅ Refined .blackboxrc configuration"
 echo "  ✅ Optimized .xinitrc startup sequence"
 echo "  ✅ Systemd service for auto-start"
 echo "  ✅ X11 session environment setup"
 echo "  ✅ Audio limits and security configuration"
+echo "  ✅ Vinyl Deck audio setup (dynamic device detection)"
+echo "  ✅ Simple JACK configuration for turntable + output interface"
+echo ""
+echo "Vinyl Deck Audio Setup:"
+echo "  ✅ Dynamic device detection for turntables and output interfaces"
+echo "  ✅ Simple JACK configuration (no zita bridges needed)"
+echo "  ✅ Optimized for vinyl deck input + any USB audio output"
+echo ""
+echo "SuperCollider Setup:"
+echo "  ✅ SuperCollider + ATK + AmbiVerbSC installed"
+echo "  ✅ Custom extensions installed"
+echo "  ✅ Custom fonts installed"
+echo "  ✅ App configured: UHJ_v23_VIN_PAIR.scd"
+echo "  ✅ Launcher created: /usr/local/bin/start"
 echo ""
 echo "Reboot required. Run: sudo reboot"
 echo "After reboot:"
 echo "  - X11 session will NOT start automatically (for debugging)"
-echo "  - To start X11 manually: startx"
+echo "  - To start X11 manually: start"
 echo "  - Blackbox will run with no window decorations"
 echo "  - UHJ app will launch in fullscreen"
 echo "  - To enable kiosk mode: sudo systemctl enable uhj-pi-x11.service"
 echo ""
 echo "Manual launch (if needed):"
-echo "  startx"
+echo "  start"
 echo ""
 echo "After reboot:"
 echo "  1. Run: sudo reboot"
-echo "  2. After reboot, run: startx"
-echo "  3. The UHJ app will launch automatically with no decorations" 
+echo "  2. After reboot, run: start"
+echo "  3. The start command will:"
+echo "     - Detect and verify Behringer devices"
+echo "     - Set up JACK + zita bridges"
+echo "     - Launch X11 session with UHJ app"
+echo "  4. Behringer audio setup will be handled automatically by the app" 

@@ -1,4 +1,4 @@
-#!/bin/bash
+t o#!/bin/bash
 
 # UHJ-Pi Raspberry Pi Setup Script
 
@@ -414,9 +414,9 @@ echo "  start"
 
 # STEP 17: Install Bluetooth pairing script
 echo "Installing Bluetooth pairing script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/auto_pair_headtracker.sh /usr/local/bin/
-chmod +x /usr/local/bin/auto_pair_headtracker.sh
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/auto_pair_headtracker.sh
+cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
+chmod +x /usr/local/bin/ble-ht.sh
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
 # Create a simple launcher to start the app easily
