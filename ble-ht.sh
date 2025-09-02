@@ -101,6 +101,12 @@ connect_headtracker() {
             return 0
         elif echo "$device_info" | grep -q "Paired: yes"; then
             log "Device is paired but not connected, attempting to connect..."
+            # Brief scan to wake up the device
+            log "Waking up device with brief scan..."
+            timeout 2 bluetoothctl scan on >/dev/null 2>&1 &
+            sleep 1
+            bluetoothctl scan off >/dev/null 2>&1
+            sleep 1
             # Skip pairing, go straight to connect
         else
             log "Device not found or not paired, will attempt pairing..."
