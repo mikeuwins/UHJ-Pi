@@ -3,6 +3,28 @@
 # UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck Touch Version
 # Based on install-beh-touch.sh with Vinyl Deck audio setup integrated
 
+# Progress bar function
+show_progress() {
+    local current=$1
+    local total=$2
+    local width=50
+    local percentage=$((current * 100 / total))
+    local completed=$((current * width / total))
+    
+    printf "\r["
+    printf "%*s" $completed | tr ' ' '='
+    printf "%*s" $((width - completed))
+    printf "] %d%% (%d/%d)" $percentage $current $total
+}
+
+# Step header function
+step_header() {
+    echo
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  $1"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
     echo "Please run this script with sudo"
@@ -12,13 +34,15 @@ fi
 # Get the actual username (the user who ran sudo)
 ACTUAL_USER=${SUDO_USER:-$(logname)}
 if [ -z "$ACTUAL_USER" ]; then
-    echo "Error: Could not determine username. Please run with: sudo -E ./install-beh-touch.sh"
+    echo "Error: Could not determine username. Please run with: sudo -E ./install-vin-touch.sh"
     exit 1
 fi
 
-echo "UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck Touch Version"
+clear
+echo "🎵 UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck Touch Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
 echo "This version includes Vinyl Deck audio setup with dynamic device detection"
+echo
 
 # Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
@@ -27,130 +51,169 @@ export APT_LISTCHANGES_FRONTEND=none
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
-# STEP 1: System Update
-echo "Step 1: System Update..."
-apt-get update
-# Skip upgrade - go straight to installing what we need
-# apt-get upgrade -y  # Commented out - causes hooks hang
-# apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
+# Set up logging
+INSTALL_LOG="/tmp/uhj-pi-install.log"
+echo "Installation started at $(date)" > $INSTALL_LOG
+echo "Log file: $INSTALL_LOG"
 
-# STEP 2: Disable Onboard and HDMI Audio
-echo "Step 2: Disabling onboard and HDMI audio..."
+step_header "STEP 1/7: System Update"
+echo "Updating package lists..."
+if apt-get update >> $INSTALL_LOG 2>&1; then
+    echo "✓ Package lists updated"
+else
+    echo "✗ Package update failed - check $INSTALL_LOG"
+    exit 1
+fi
+
+step_header "STEP 2/7: Disable Onboard and HDMI Audio"
+echo "Configuring audio settings..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
 fi
 if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
     echo "dtoverlay=vc4-kms-v3d,noaudio" >> /boot/firmware/config.txt
 fi
+echo "✓ Audio settings configured"
 
-# STEP 3: Install SuperCollider Dependencies
-echo "Step 3: Installing SuperCollider Dependencies..."
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev \
-    libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev \
-    libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev \
-    qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+step_header "STEP 3/7: Install Dependencies"
+echo "Installing SuperCollider and audio dependencies..."
 
-# STEP 4: Clone SuperCollider
-echo "Step 4: Cloning SuperCollider..."
+# List of packages to install
+packages=(
+    "build-essential" "cmake" "libjack-jackd2-dev" "libsndfile1-dev"
+    "libfftw3-dev" "libxt-dev" "libavahi-client-dev" "libudev-dev" 
+    "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
+    "jackd2" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
+    "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
+)
+
+total_packages=${#packages[@]}
+current_package=0
+
+for package in "${packages[@]}"; do
+    current_package=$((current_package + 1))
+    show_progress $current_package $total_packages
+    apt-get install -y "$package" >> $INSTALL_LOG 2>&1
+done
+echo
+echo "✓ All dependencies installed"
+
+step_header "STEP 4/7: Clone SuperCollider"
+echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
-    git clone --branch main --recurse-submodules https://github.com/supercollider/supercollider.git
+    git clone --branch main --recurse-submodules https://github.com/supercollider/supercollider.git > /dev/null 2>&1
 fi
+echo "✓ SuperCollider source downloaded"
+
+echo "Preparing build directory..."
 cd supercollider
 mkdir -p build
 cd build
 
-# STEP 5: Configure SuperCollider Build - FIXED: SC_QT=ON for Qt support without X11
-echo "Step 5: Configuring SuperCollider build..."
+step_header "STEP 5/7: Build SuperCollider"
+echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
-    -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..; then
-    echo "SuperCollider configuration successful"
+    -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
+    echo "✓ Configuration successful"
 else
-    echo "ERROR: SuperCollider configuration failed!"
+    echo "✗ Configuration failed"
     exit 1
 fi
 
-# STEP 6: Build SuperCollider
-echo "Step 6: Building SuperCollider..."
-if make -j2; then
-    echo "SuperCollider build successful"
+echo "Building SuperCollider (this will take 10-20 minutes)..."
+if make -j2 > /dev/null 2>&1; then
+    echo "✓ Build successful"
 else
-    echo "ERROR: SuperCollider build failed!"
+    echo "✗ Build failed"
     exit 1
 fi
 
-# STEP 7: Install SuperCollider
-echo "Step 7: Installing SuperCollider..."
-if make install; then
-    echo "SuperCollider installation successful"
-    ldconfig
+echo "Installing SuperCollider..."
+if make install > /dev/null 2>&1; then
+    echo "✓ SuperCollider installed"
+    ldconfig > /dev/null 2>&1
 else
-    echo "ERROR: SuperCollider installation failed!"
+    echo "✗ Installation failed"
     exit 1
 fi
 
-# STEP 8: Set up udev rules for HID and audio permissions
-echo "Step 8: Setting up udev rules..."
+step_header "STEP 6/7: System Configuration"
+echo "Setting up device permissions..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
-# STEP 9: Configure JACK Audio for Behringer devices
-echo "Step 9: Configuring JACK Audio for Behringer devices..."
-# Create JACK configuration for Behringer setup
+echo "Configuring audio groups and permissions..."
 cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
-# Behringer JACK configuration - will be overridden by audio setup script
-/usr/bin/jackd -P75 -d alsa -r 44100 -p 256 -n 2 -S &
+# Vinyl Deck JACK configuration - will be overridden by audio setup script
+/usr/bin/jackd -P75 -d alsa -r 44100 -p 1024 -n 3 -S &
 EOF
-usermod -aG audio,plugdev $ACTUAL_USER
+usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
+echo "✓ Audio configuration complete"
 
-# STEP 10: Install SC3 Plugins
-echo "Step 10: Installing SC3 Plugins..."
+echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
-    if git clone --recursive https://github.com/supercollider/sc3-plugins.git; then
-        echo "SC3 Plugins cloned successfully"
-    else
-        echo "ERROR: SC3 Plugins clone failed!"
-        exit 1
-    fi
+    git clone --recursive https://github.com/supercollider/sc3-plugins.git > /dev/null 2>&1
 fi
 cd sc3-plugins
-mkdir build && cd build
-if cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF ..; then
-    echo "SC3 Plugins configuration successful"
+mkdir -p build && cd build
+if cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF .. > /dev/null 2>&1; then
+    echo "✓ SC3 Plugins configured"
 else
-    echo "ERROR: SC3 Plugins configuration failed!"
+    echo "✗ SC3 Plugins configuration failed"
     exit 1
 fi
-if cmake --build . --config Release; then
-    echo "SC3 Plugins build successful"
+if cmake --build . --config Release > /dev/null 2>&1; then
+    echo "✓ SC3 Plugins built"
 else
-    echo "ERROR: SC3 Plugins build failed!"
+    echo "✗ SC3 Plugins build failed"
     exit 1
 fi
-if sudo cmake --build . --config Release --target install; then
-    echo "SC3 Plugins installation successful"
+if cmake --build . --config Release --target install > /dev/null 2>&1; then
+    echo "✓ SC3 Plugins installed"
 else
-    echo "ERROR: SC3 Plugins installation failed!"
+    echo "✗ SC3 Plugins installation failed"
     exit 1
 fi
 
-# STEP 11: Clone UHJ-Pi repository
-echo "Step 11: Cloning UHJ-Pi repository..."
+step_header "STEP 7/7: UHJ-Pi Application Setup"
+echo "Checking UHJ-Pi application..."
 cd /home/$ACTUAL_USER
-if [ ! -d "UHJ-Pi" ]; then
-    if git clone https://github.com/mikeuwins/UHJ-Pi.git; then
-        echo "UHJ-Pi repository cloned successfully"
-    else
-        echo "ERROR: UHJ-Pi repository clone failed!"
-        exit 1
-    fi
+
+# Check if we're already in the UHJ-Pi directory (likely case)
+if [ -d "UHJ-Pi" ]; then
+    echo "✓ UHJ-Pi repository already present"
+elif [ -f "start-vin.sh" ] && [ -f "ble-ht.sh" ]; then
+    echo "✓ UHJ-Pi files already present (running from repo directory)"
+else
+    echo "Downloading UHJ-Pi repository..."
+    # Try shallow clone first (faster, less data)
+    retry_count=0
+    max_retries=3
+    
+    while [ $retry_count -lt $max_retries ]; do
+        if git clone --depth 1 https://github.com/mikeuwins/UHJ-Pi.git; then
+            echo "✓ UHJ-Pi repository downloaded"
+            break
+        else
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+                echo "Download failed, retrying ($retry_count/$max_retries)..."
+                sleep 5
+                rm -rf UHJ-Pi 2>/dev/null
+            else
+                echo "✗ UHJ-Pi repository download failed after $max_retries attempts"
+                echo "Please check your internet connection and try again"
+                exit 1
+            fi
+        fi
+    done
 fi
 
-# STEP 12: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
-echo "Step 12: Installing ATK and handling GUI component cleanup..."
+echo "Installing SuperCollider extensions..."
 cd /home/$ACTUAL_USER
 
 # Create necessary directories
@@ -163,26 +226,24 @@ echo "Installing ATK and AmbiVerbSC using Quark system..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
 # Install ATK using Quark system (includes all dependencies)
-echo "Installing ATK quark..."
 if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
-EOF'; then
-    echo "ATK quark installed successfully"
+EOF' > /dev/null 2>&1; then
+    echo "✓ ATK quark installed"
 else
-    echo "ERROR: ATK quark installation failed!"
+    echo "✗ ATK quark installation failed"
     exit 1
 fi
 
 # Install AmbiVerbSC using Quark system
-echo "Installing AmbiVerbSC quark..."
 if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
-EOF'; then
-    echo "AmbiVerbSC quark installed successfully"
+EOF' > /dev/null 2>&1; then
+    echo "✓ AmbiVerbSC quark installed"
 else
-    echo "ERROR: AmbiVerbSC quark installation failed!"
+    echo "✗ AmbiVerbSC quark installation failed"
     exit 1
 fi
 
@@ -762,18 +823,24 @@ exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > /home/$U
 EOF
 chmod +x /usr/local/bin/start
 
-echo "Installation completed successfully!"
+clear
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🎵 UHJ-Pi Vinyl Deck Installation Complete! 🎵"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Vinyl Deck Audio Setup:"
-echo "  ✅ Dynamic device detection for turntables and output interfaces"
-echo "  ✅ Simple JACK configuration (no zita bridges needed)"
-echo "  ✅ Optimized for vinyl deck input + any USB audio output"
+echo "✅ Audio System:"
+echo "   • Dynamic device detection for turntables and output interfaces"
+echo "   • JACK audio server with stable 1024-frame buffers"
+echo "   • Optimized for vinyl deck input + any USB audio output"
 echo ""
-echo "SuperCollider Setup:"
-echo "  ✅ SuperCollider + ATK + AmbiVerbSC installed"
-echo "  ✅ Custom extensions installed"
-echo "  ✅ Custom fonts installed"
-echo "  ✅ Launcher created: /usr/local/bin/start"
+echo "✅ SuperCollider:"
+echo "   • SuperCollider with Qt GUI support"
+echo "   • ATK (Ambisonic Toolkit) + AmbiVerbSC extensions"
+echo "   • UHJ decoder with headtracker pairing support"
+echo ""
+echo "✅ Ready to use:"
+echo "   • Launcher: /usr/local/bin/start"
+echo "   • After reboot, simply run: start"
 echo ""
 echo "Next Steps:"
 echo "1. Reboot: sudo reboot"
