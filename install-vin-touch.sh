@@ -17,6 +17,40 @@ show_progress() {
     printf "] %d%% (%d/%d)" $percentage $current $total
 }
 
+# Build progress indicator with percentage and progress bar
+show_build_progress() {
+    local message=$1
+    local logfile=$2
+    local pid=$3
+    local last_percent=0
+    local width=30
+    
+    while kill -0 $pid 2>/dev/null; do
+        # Try to extract percentage from make output
+        if [ -f "$logfile" ]; then
+            local percent=$(tail -20 "$logfile" 2>/dev/null | grep -o '\[[0-9]\+%\]' | tail -1 | grep -o '[0-9]\+' || echo "")
+            if [ -n "$percent" ] && [ "$percent" -gt "$last_percent" ]; then
+                last_percent=$percent
+            fi
+        fi
+        
+        # Show progress bar
+        local completed=$((last_percent * width / 100))
+        printf "\r$message ["
+        printf "%*s" $completed | tr ' ' '='
+        if [ $completed -lt $width ]; then
+            printf ">"
+            printf "%*s" $((width - completed - 1))
+        fi
+        printf "] %d%%" $last_percent
+        
+        sleep 3
+    done
+    printf "\r$message ["
+    printf "%*s" $width | tr ' ' '='
+    printf "] 100%% ✓\n"
+}
+
 # Step header function
 step_header() {
     echo
@@ -76,7 +110,7 @@ fi
 echo "✓ Audio settings configured"
 
 step_header "STEP 3/7: Install Dependencies"
-echo "Installing SuperCollider and audio dependencies..."
+echo "Installing build tools and audio dependencies..."
 
 # List of packages to install
 packages=(
@@ -121,20 +155,28 @@ else
     exit 1
 fi
 
-echo "Building SuperCollider (this will take 10-20 minutes)..."
-if make -j2 > /dev/null 2>&1; then
+echo "Building SuperCollider..."
+make -j2 >> $INSTALL_LOG 2>&1 &
+BUILD_PID=$!
+show_build_progress "Building SuperCollider" $INSTALL_LOG $BUILD_PID
+wait $BUILD_PID
+if [ $? -eq 0 ]; then
     echo "✓ Build successful"
 else
-    echo "✗ Build failed"
+    echo "✗ Build failed - check $INSTALL_LOG"
     exit 1
 fi
 
 echo "Installing SuperCollider..."
-if make install > /dev/null 2>&1; then
+make install >> $INSTALL_LOG 2>&1 &
+INSTALL_PID=$!
+show_build_progress "Installing SuperCollider" $INSTALL_LOG $INSTALL_PID
+wait $INSTALL_PID
+if [ $? -eq 0 ]; then
     echo "✓ SuperCollider installed"
-    ldconfig > /dev/null 2>&1
+    ldconfig >> $INSTALL_LOG 2>&1
 else
-    echo "✗ Installation failed"
+    echo "✗ Installation failed - check $INSTALL_LOG"
     exit 1
 fi
 
@@ -166,16 +208,25 @@ else
     echo "✗ SC3 Plugins configuration failed"
     exit 1
 fi
-if cmake --build . --config Release > /dev/null 2>&1; then
+cmake --build . --config Release >> $INSTALL_LOG 2>&1 &
+BUILD_PID=$!
+show_build_progress "Building SC3 Plugins" $INSTALL_LOG $BUILD_PID
+wait $BUILD_PID
+if [ $? -eq 0 ]; then
     echo "✓ SC3 Plugins built"
 else
-    echo "✗ SC3 Plugins build failed"
+    echo "✗ SC3 Plugins build failed - check $INSTALL_LOG"
     exit 1
 fi
-if cmake --build . --config Release --target install > /dev/null 2>&1; then
+
+cmake --build . --config Release --target install >> $INSTALL_LOG 2>&1 &
+INSTALL_PID=$!
+show_build_progress "Installing SC3 Plugins" $INSTALL_LOG $INSTALL_PID
+wait $INSTALL_PID
+if [ $? -eq 0 ]; then
     echo "✓ SC3 Plugins installed"
 else
-    echo "✗ SC3 Plugins installation failed"
+    echo "✗ SC3 Plugins installation failed - check $INSTALL_LOG"
     exit 1
 fi
 
@@ -226,24 +277,34 @@ echo "Installing ATK and AmbiVerbSC using Quark system..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
 # Install ATK using Quark system (includes all dependencies)
-if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+echo "Installing ATK quark (Ambisonic Toolkit)..."
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
-EOF' > /dev/null 2>&1; then
+EOF' >> $INSTALL_LOG 2>&1 &
+QUARK_PID=$!
+show_build_progress "Installing ATK quark" $INSTALL_LOG $QUARK_PID
+wait $QUARK_PID
+if [ $? -eq 0 ]; then
     echo "✓ ATK quark installed"
 else
-    echo "✗ ATK quark installation failed"
+    echo "✗ ATK quark installation failed - check $INSTALL_LOG"
     exit 1
 fi
 
 # Install AmbiVerbSC using Quark system
-if sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+echo "Installing AmbiVerbSC quark..."
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
-EOF' > /dev/null 2>&1; then
+EOF' >> $INSTALL_LOG 2>&1 &
+QUARK_PID=$!
+show_build_progress "Installing AmbiVerbSC quark" $INSTALL_LOG $QUARK_PID
+wait $QUARK_PID
+if [ $? -eq 0 ]; then
     echo "✓ AmbiVerbSC quark installed"
 else
-    echo "✗ AmbiVerbSC quark installation failed"
+    echo "✗ AmbiVerbSC quark installation failed - check $INSTALL_LOG"
     exit 1
 fi
 
@@ -594,26 +655,25 @@ echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
 echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
 echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
 
-# STEP 21: Install custom fonts
-echo "Step 21: Installing custom fonts..."
+echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
 # Create fonts directory if it doesn't exist
-mkdir -p /usr/local/share/fonts/truetype/uhj-pi
+mkdir -p /usr/local/share/fonts/truetype/uhj-pi >> $INSTALL_LOG 2>&1
 
 # Copy custom fonts to system font directory
-cp lcd_segment_monospace/lcd-5x7-segment-monospace.ttf /usr/local/share/fonts/truetype/uhj-pi/
-cp "led_dot_matrix/LED Dot-Matrix.ttf" /usr/local/share/fonts/truetype/uhj-pi/
+cp lcd_segment_monospace/lcd-5x7-segment-monospace.ttf /usr/local/share/fonts/truetype/uhj-pi/ >> $INSTALL_LOG 2>&1
+cp "led_dot_matrix/LED Dot-Matrix.ttf" /usr/local/share/fonts/truetype/uhj-pi/ >> $INSTALL_LOG 2>&1
 
 # Install Arial font for power button
-echo "Installing Arial font..."
-apt-get install -y cabextract
-mkdir -p /usr/share/fonts/truetype/msttcorefonts
+apt-get install -y cabextract >> $INSTALL_LOG 2>&1
+mkdir -p /usr/share/fonts/truetype/msttcorefonts >> $INSTALL_LOG 2>&1
 cd /usr/share/fonts/truetype/msttcorefonts
-wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
+wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf >> $INSTALL_LOG 2>&1
 
-# Update font cache
-fc-cache -f -v
+# Update font cache (quietly)
+fc-cache -f >> $INSTALL_LOG 2>&1
+echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
 echo "Step 22: Installing Bluetooth pairing script..."
@@ -671,7 +731,8 @@ detect_vinyl_devices() {
     
     echo "=== USB Turntable Setup ==="
     echo ""
-    echo "Step 1: Connect your USB turntable/vinyl deck"
+    echo "Step 1: Connect your turntable with USB audio output"
+    echo "(This can be any USB audio interface with ALSA drivers)"
     read -p "Press Enter when your USB turntable is connected..."
     
     # Look for newly connected audio devices
@@ -683,7 +744,7 @@ detect_vinyl_devices() {
             local card_num="${BASH_REMATCH[1]}"
             local card_name="${BASH_REMATCH[2]}"
             
-            # Look for likely turntable/vinyl deck names
+            # Look for likely turntable names
             if [[ $card_name =~ CODEC|Turntable|Vinyl|DJ ]]; then
                 vinyl_card="$card_num"
                 echo "✓ Found USB turntable: hw:$vinyl_card ($card_name)"
@@ -767,23 +828,7 @@ killall jackd 2>/dev/null
 killall sclang 2>/dev/null
 sleep 2
 
-# Audio performance optimizations
-echo "Applying audio performance optimizations..."
-
-# Set CPU governor to performance mode for better real-time performance
-if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
-    echo "performance" > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || echo "Note: Could not set CPU governor (requires root)"
-fi
-
-# Increase audio thread priority limits
-if [ -f /etc/security/limits.conf ]; then
-    # Check if audio limits already exist
-    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
-        echo "Consider adding these lines to /etc/security/limits.conf for better audio performance:"
-        echo "  @audio   -  rtprio     95"
-        echo "  @audio   -  memlock    unlimited"
-    fi
-fi
+# Audio performance optimizations already applied during installation
 
 # Detect devices
 detect_vinyl_devices
@@ -818,7 +863,7 @@ jack_lsp 2>/dev/null || echo "jack_lsp not available"
 echo ""
 echo "🎵 Audio setup complete! Starting SuperCollider application..."
 
-# Launch SuperCollider with vinyl deck application
+# Launch SuperCollider with turntable application
 exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > /home/$USER/post_output.log 2>&1
 EOF
 chmod +x /usr/local/bin/start
@@ -831,7 +876,7 @@ echo ""
 echo "✅ Audio System:"
 echo "   • Dynamic device detection for turntables and output interfaces"
 echo "   • JACK audio server with stable 1024-frame buffers"
-echo "   • Optimized for vinyl deck input + any USB audio output"
+echo "   • Optimized for turntable input + any USB audio output"
 echo ""
 echo "✅ SuperCollider:"
 echo "   • SuperCollider with Qt GUI support"
@@ -840,19 +885,31 @@ echo "   • UHJ decoder with headtracker pairing support"
 echo ""
 echo "✅ Ready to use:"
 echo "   • Launcher: /usr/local/bin/start"
-echo "   • After reboot, simply run: start"
 echo ""
-echo "Next Steps:"
-echo "1. Reboot: sudo reboot"
-echo "2. After reboot, run: start"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🚀 INSTALLATION COMPLETE - REBOOT REQUIRED"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "The 'start' command will:"
-echo "  - Register your Behringer devices (first time only)"
-echo "  - Save device configuration for future use"
-echo "  - Start JACK server and zita bridges automatically"
-echo "  - Launch the SuperCollider app"
+echo "Your Pi will automatically reboot in 10 seconds..."
+echo "After reboot, log in and run: start"
 echo ""
-echo "Device registration is required only once - after that, the system"
-echo "remembers your device setup and works automatically on each boot!"
+echo "The first time you run 'start', it will help you configure your"
+echo "turntable and output interface. After that, just run 'start'"
+echo "whenever you want to use the UHJ-Pi application."
 echo ""
-echo "Your Behringer devices are now configured for quad ambisonic operation!"
+echo -n "Press any key to cancel automatic reboot... "
+
+# 10 second countdown with ability to cancel
+for i in {10..1}; do
+    if read -t 1 -n 1; then
+        echo ""
+        echo "Reboot cancelled. To reboot manually later, run: sudo reboot"
+        exit 0
+    fi
+    printf "\rRebooting in %d seconds... (Press any key to cancel)" $i
+done
+
+echo ""
+echo "Rebooting now..."
+sleep 1
+reboot
