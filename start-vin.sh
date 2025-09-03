@@ -178,4 +178,4 @@ echo ""
 echo "🎵 Audio setup complete! Starting SuperCollider application..."
 
 # Launch SuperCollider with vinyl deck application
-exec sclang /home/michael-uwins/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd
+exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd"
