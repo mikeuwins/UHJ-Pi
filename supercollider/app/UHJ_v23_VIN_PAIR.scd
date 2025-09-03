@@ -102,7 +102,7 @@ win.onClose_({
     if(~connectionMonitor.notNil) { ~connectionMonitor.stop; };
     if(~bluetoothMonitorPipe.notNil) { ~bluetoothMonitorPipe.close; };
     if(s.serverRunning) { s.quit; };
-    0.exit;
+    thisProcess.shutdown;
 });
 
 // Position at visible top-left corner

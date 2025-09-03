@@ -225,7 +225,7 @@ win.onClose_({
     // Stop connection monitor
     if(~connectionMonitor.notNil) { ~connectionMonitor.stop; };
     if(s.serverRunning) { s.quit; };
-    0.exit;
+    thisProcess.shutdown;
 });
 
 // Position at visible top-left corner
