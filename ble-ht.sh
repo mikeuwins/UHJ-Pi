@@ -25,18 +25,27 @@ fi
 
 echo "Found headtracker at $DEVICE_MAC"
 
-# Pair with the found device
-{
-    echo "pair $DEVICE_MAC"
-    sleep 3
-    echo "exit"
-} | bluetoothctl
+# Try pairing (with automatic retry)
+for attempt in 1 2; do
+    echo "Pairing attempt $attempt..."
+    
+    {
+        echo "pair $DEVICE_MAC"
+        sleep 3
+        echo "exit"
+    } | bluetoothctl
+    
+    # Check if pairing succeeded
+    if bluetoothctl info "$DEVICE_MAC" | grep -q "Paired: yes"; then
+        echo "PAIRED_AND_CONNECTED"
+        exit 0
+    fi
+    
+    if [ $attempt -eq 1 ]; then
+        echo "First attempt failed, retrying..."
+        sleep 1
+    fi
+done
 
-# Check if pairing succeeded
-if bluetoothctl info "$DEVICE_MAC" | grep -q "Paired: yes"; then
-    echo "PAIRED_AND_CONNECTED"
-    exit 0
-else
-    echo "PAIRING_FAILED"
-    exit 1
-fi
+echo "PAIRING_FAILED"
+exit 1
