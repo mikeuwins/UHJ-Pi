@@ -50,7 +50,7 @@ show_build_progress() {
             printf "]"
         fi
         
-        sleep 2
+        sleep 0.5
     done
     printf "\r$message ["
     printf "%*s" $width | tr ' ' '='
@@ -688,6 +688,53 @@ EOF
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.xinitrc
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackboxrc
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackbox
+
+# Detect architecture and set library paths
+ARCH=$(uname -m)
+if [ "$ARCH" = "aarch64" ]; then
+    LIB_PATH="/usr/lib/aarch64-linux-gnu"
+elif [ "$ARCH" = "armv7l" ]; then
+    LIB_PATH="/usr/lib/arm-linux-gnueabihf"
+else
+    LIB_PATH="/usr/lib/x86_64-linux-gnu"
+fi
+
+# Set Qt environment variables for the user
+echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.bashrc
+echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.bashrc
+
+# Also set in .profile for login sessions
+echo "export LD_LIBRARY_PATH=$LIB_PATH:\$LD_LIBRARY_PATH" >> /home/$ACTUAL_USER/.profile
+echo "export QT_PLUGIN_PATH=$LIB_PATH/qt6/plugins" >> /home/$ACTUAL_USER/.profile
+echo "export QT_QPA_PLATFORM=xcb" >> /home/$ACTUAL_USER/.profile
+echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
+
+echo "ARM64 library paths and Qt environment configured for $ARCH"
+
+# Create systemd service for auto-start
+echo "Creating systemd service for X11 auto-start..."
+cat > /etc/systemd/system/uhj-pi-x11.service << EOF
+[Unit]
+Description=UHJ-Pi X11 Session
+After=graphical.target
+
+[Service]
+Type=simple
+User=$ACTUAL_USER
+Environment=DISPLAY=:0
+Environment=QT_QPA_PLATFORM=xcb
+ExecStart=/usr/bin/startx -- :0
+Restart=no
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable uhj-pi-x11.service
+echo "✓ X11 auto-start service configured"
 
 echo "✓ X11 and Blackbox configuration complete"
 
