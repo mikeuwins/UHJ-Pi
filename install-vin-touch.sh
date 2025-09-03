@@ -96,7 +96,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/20: System Update"
+step_header "STEP 1/18: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -105,7 +105,7 @@ else
     exit 1
 fi
 
-step_header "STEP 2/20: Disable Onboard and HDMI Audio"
+step_header "STEP 2/18: Disable Onboard and HDMI Audio"
 echo "Configuring audio settings..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -115,7 +115,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
 fi
 echo "✓ Audio settings configured"
 
-step_header "STEP 3/20: Install Dependencies"
+step_header "STEP 3/18: Install Dependencies"
 echo "Installing build tools and audio dependencies..."
 
 # Audio performance optimizations
@@ -162,7 +162,7 @@ done
 echo
 echo "✓ All dependencies installed"
 
-step_header "STEP 4/20: Clone SuperCollider"
+step_header "STEP 4/18: Clone SuperCollider"
 echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
@@ -175,7 +175,7 @@ cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 5/20: Build SuperCollider"
+step_header "STEP 5/18: Build SuperCollider"
 echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
     -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
@@ -196,9 +196,14 @@ else
     exit 1
 fi
 
+echo -n "Installing SuperCollider... "
 make install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
-show_build_progress "Installing SuperCollider" $INSTALL_LOG $INSTALL_PID
+while kill -0 $INSTALL_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
+echo " done"
 wait $INSTALL_PID
 if [ $? -eq 0 ]; then
     echo "✓ SuperCollider installed"
@@ -231,9 +236,14 @@ else
     exit 1
 fi
 
+echo -n "Installing SC3 Plugins... "
 cmake --build . --config Release --target install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
-show_build_progress "Installing SC3 Plugins" $INSTALL_LOG $INSTALL_PID
+while kill -0 $INSTALL_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
+echo " done"
 wait $INSTALL_PID
 if [ $? -eq 0 ]; then
     echo "✓ SC3 Plugins installed"
@@ -242,7 +252,7 @@ else
     exit 1
 fi
 
-step_header "STEP 6/20: System Configuration"
+step_header "STEP 6/18: Setting up Audio and Device Permissions"
 echo "Setting up device permissions..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -257,7 +267,7 @@ EOF
 usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
 echo "✓ Audio configuration complete"
 
-step_header "STEP 7/20: UHJ-Pi Application Setup"
+step_header "STEP 7/18: Setting up SuperCollider Environment"
 echo "Checking UHJ-Pi application..."
 cd /home/$ACTUAL_USER
 
@@ -359,67 +369,7 @@ if [ -d "wslib" ]; then
     echo "Removed entire wslib directory (conflict-prone)"
 fi
 
-# Download ATK assets manually (kernels and matrices only)
-echo "Downloading ATK kernels and matrices manually..."
-cd /home/$ACTUAL_USER/.local/share/ATK
 
-# Download kernels
-echo "Downloading ATK kernels v1.2.1..."
-if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
-    echo "Extracting kernels..."
-    if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
-        sudo -u $ACTUAL_USER rm kernels.zip
-        echo "✓ ATK kernels installed"
-    else
-        echo "✗ ATK kernels extraction failed!"
-        exit 1
-    fi
-else
-    echo "✗ ATK kernels download failed!"
-    exit 1
-fi
-
-# Download matrices  
-echo "Downloading ATK matrices v1.0.3..."
-if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
-    echo "Extracting matrices..."
-    if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
-        sudo -u $ACTUAL_USER rm matrices.zip
-        echo "✓ ATK matrices installed"
-    else
-        echo "✗ ATK matrices extraction failed!"
-        exit 1
-    fi
-else
-    echo "✗ ATK matrices download failed!"
-    exit 1
-fi
-
-# Download ATK sounds (complete repository)
-echo "Downloading ATK sounds repository..."
-cd /tmp
-if curl -s -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
-    echo "Extracting sounds..."
-    sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
-    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
-    rm -f atk-sounds.zip
-    echo "✓ ATK sounds installed"
-    
-    # Organize sounds into proper subdirectory structure (like working SD card)
-    echo "Organizing sounds into proper directory structure..."
-    cd /home/$ACTUAL_USER/.local/share/ATK
-    if [ ! -d "sounds" ]; then
-        sudo -u $ACTUAL_USER mkdir sounds
-    fi
-    # Move WAV files and documentation to sounds subdirectory
-    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
-    sudo -u $ACTUAL_USER mv LICENSE.md sounds/ 2>/dev/null || true
-    sudo -u $ACTUAL_USER mv README.md sounds/ 2>/dev/null || true
-    echo "Sounds organized into sounds/ subdirectory"
-else
-    echo "ATK sounds download failed - continuing without sounds"
-fi
 
 # CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
 echo "Moving ATK classes from downloaded-quarks to Extensions..."
@@ -462,32 +412,10 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 13: Install Custom UHJ Test Sounds
-step_header "STEP 8/20: Installing Custom UHJ Test Sounds"
-echo "Installing custom UHJ test sounds..."
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
-echo "Custom UHJ test sounds installed successfully"
-
-# Move custom sounds to sounds subdirectory to match working SD card structure
-echo "Moving custom sounds to sounds/ subdirectory..."
-cd /home/$ACTUAL_USER/.local/share/ATK
-if [ -d "sounds" ]; then
-    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
-    echo "Custom UHJ sounds moved to sounds/ subdirectory"
-else
-    echo "WARNING: sounds/ directory not found - creating it and moving sounds"
-    sudo -u $ACTUAL_USER mkdir sounds
-    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
-    echo "Custom UHJ sounds moved to sounds/ subdirectory"
-fi
-
-# AmbiVerbSC now installed via Quark system above
+# Custom UHJ test sounds will be installed after ATK sounds (step 10)
 
 # STEP 14: Install custom user classes
-step_header "STEP 9/20: Installing Custom User Classes"
+step_header "STEP 8/18: Installing Custom User Classes"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -525,7 +453,7 @@ fi
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 10: Install ATK kernels and matrices
-step_header "STEP 10/20: Installing ATK Kernels and Matrices"
+step_header "STEP 9/18: Installing ATK Kernels and Matrices"
 echo "Downloading ATK kernels and matrices..."
 cd /home/$ACTUAL_USER/.local/share/ATK
 
@@ -627,17 +555,16 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-# STEP 11: Install Custom UHJ Test Sounds
-step_header "STEP 11/20: Installing Custom UHJ Test Sounds"
+# STEP 10: Install Custom UHJ Test Sounds (after ATK sounds are downloaded and sounds/ directory exists)
+step_header "STEP 10/18: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
 echo "Custom UHJ test sounds installed successfully"
 
-# Move custom sounds to sounds subdirectory to match working SD card structure
+# Move custom sounds to sounds subdirectory (now that it exists from ATK sounds download)
 echo "Moving custom sounds to sounds/ subdirectory..."
 cd /home/$ACTUAL_USER/.local/share/ATK
 if [ -d "sounds" ]; then
@@ -650,40 +577,8 @@ else
     echo "Custom UHJ sounds moved to sounds/ subdirectory"
 fi
 
-# AmbiVerbSC now installed via Quark system above
-
-# STEP 12: Install custom user classes
-step_header "STEP 12/20: Installing Custom User Classes"
-echo "Installing custom user classes..."
-cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
-
-# Ensure SuperCollider Extensions directory exists
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-
-# Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
-echo "Installing custom extensions..."
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
-    echo "Installing ServerMeter2..."
-    cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "ServerMeter2 installation completed"
-else
-    echo "ServerMeter2 already exists, skipping"
-fi
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
-    echo "Installing MaplinMatrix..."
-    cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "MaplinMatrix installation completed"
-else
-    echo "MaplinMatrix already exists, skipping"
-fi
-
-# Set proper ownership
-chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-
 # STEP 13: Install UHJ-Pi application files
-step_header "STEP 13/20: Installing UHJ-Pi Application Files"
+step_header "STEP 11/18: Installing UHJ-Pi Application Files"
 echo "Installing UHJ-Pi application files..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/app
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
@@ -691,7 +586,7 @@ sudo -u $ACTUAL_USER cp *.scd /home/$ACTUAL_USER/.local/share/SuperCollider/Exte
 echo "✓ UHJ-Pi application files installed"
 
 # STEP 14: Configure JACK audio
-step_header "STEP 14/20: Configuring JACK Audio"
+step_header "STEP 12/18: Configuring JACK Audio"
 echo "Configuring JACK audio..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.config/jack
 cat > /home/$ACTUAL_USER/.config/jack/jackdrc << 'EOF'
@@ -700,7 +595,7 @@ EOF
 echo "✓ JACK configuration complete"
 
 # STEP 15: Configure ALSA
-step_header "STEP 15/20: Configuring ALSA"
+step_header "STEP 13/18: Configuring ALSA"
 echo "Configuring ALSA..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
 cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
@@ -716,14 +611,14 @@ EOF
 echo "✓ ALSA configuration complete"
 
 # STEP 16: Configure Bluetooth
-step_header "STEP 16/20: Configuring Bluetooth"
+step_header "STEP 14/18: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth
 systemctl start bluetooth
 echo "✓ Bluetooth configured"
 
 # STEP 17: Configure Qt platform for headless operation
-step_header "STEP 17/20: Configuring Qt Platform for Headless Operation"
+step_header "STEP 15/18: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -753,7 +648,7 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-step_header "STEP 18/20: Installing Bluetooth Pairing Script"
+step_header "STEP 16/18: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -782,7 +677,7 @@ EOF
 fi
 
 # STEP 23: Install launcher script
-step_header "STEP 19/20: Installing Launcher Script"
+step_header "STEP 17/18: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
@@ -839,7 +734,9 @@ done
 
 echo ""
 echo "Rebooting now..."
-sleep 1
-# Force immediate reboot
+# Clear input buffer and force immediate reboot
+stty -echo 2>/dev/null || true
+while read -t 0; do read -n 1; done 2>/dev/null || true
+stty echo 2>/dev/null || true
 sync
-reboot -f
+systemctl reboot --force
