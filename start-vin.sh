@@ -88,10 +88,17 @@ detect_vinyl_devices() {
     sleep 2
     
     # Look for any device that's not the input device
+    echo "DEBUG: Looking for output device (input device is card $vinyl_card)"
+    echo "DEBUG: Available devices:"
+    cat /proc/asound/cards
+    echo ""
+    
     while IFS= read -r line; do
         if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
             local card_num="${BASH_REMATCH[1]}"
             local card_name="${BASH_REMATCH[2]}"
+            
+            echo "DEBUG: Checking card $card_num ($card_name)"
             
             # Skip the input device card
             if [ "$card_num" != "$vinyl_card" ]; then
@@ -100,6 +107,8 @@ detect_vinyl_devices() {
                 echo "✓ Found output device: hw:$output_card ($output_name)"
                 show_device_info "$card_num" "$card_name"
                 break
+            else
+                echo "DEBUG: Skipping card $card_num (this is the input device)"
             fi
         fi
     done < /proc/asound/cards
