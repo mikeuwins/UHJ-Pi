@@ -121,6 +121,10 @@ dtparam=audio=off
 dtoverlay=vc4-kms-v3d
 max_framebuffers=2
 
+# Don't have the firmware create an initial video= setting in cmdline.txt
+# Use the kernel's default instead
+disable_fw_kms_setup=1
+
 # HDMI display settings
 hdmi_force_hotplug=1
 hdmi_drive=2
@@ -657,11 +661,13 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.blackbox/styles
 cat > /home/$ACTUAL_USER/.blackbox/styles/NoDecorations << 'EOF'
 ! NoDecorations style
 window.title.marginWidth: 0
-window.title.marginHeight: 0
-window.label.text.justify: Center
-window.label.text.font: fixed
-window.label.text.color: white
-window.label.disabled.text.color: #666666
+window.handleHeight: 0
+window.grip.marginWidth: 0
+window.frame.borderWidth: 0
+borderWidth: 0
+bevelWidth: 0
+handleWidth: 0
+frameWidth: 0
 EOF
 
 # Create .blackboxrc with working settings
@@ -682,6 +688,7 @@ export DISPLAY=:0
 blackbox &
 sleep 0.1
 xsetroot -solid black
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > ~/post_output.log 2>&1
 EOF
 
 # Set ownership of the new files
