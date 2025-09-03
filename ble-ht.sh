@@ -37,7 +37,7 @@ find_headtracker() {
     log "Scanning for headtracker '$DEVICE_NAME'..."
     
     # Start scan
-    run_bt_cmd "scan on" >/dev/null &
+    run_bt_cmd "scan on" >/dev/null
     sleep $SCAN_TIME
     run_bt_cmd "scan off" >/dev/null
     
