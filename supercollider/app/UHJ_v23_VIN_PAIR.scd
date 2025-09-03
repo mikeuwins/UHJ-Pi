@@ -22,7 +22,7 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
-// --- Maplin button overlay ---
+// --- Maplin button overlay --- grep hid, i get uhid 4
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
 ~powerBtnPressed = false;
@@ -2738,7 +2738,7 @@ Tdef( 'tryOpenHID' , {
                };
                keepLooking = false;
             }{
-               3.0.wait;
+               1.0.wait;
             };
          }{
             3.0.wait;
