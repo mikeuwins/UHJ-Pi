@@ -34,21 +34,28 @@ check_bluetooth() {
 
 # Find ONLY the headtracker
 find_headtracker() {
-    log "Scanning for headtracker '$DEVICE_NAME'..."
+    log "Looking for headtracker '$DEVICE_NAME'..."
     
-    # Start scan
-    run_bt_cmd "scan on" >/dev/null
-    sleep $SCAN_TIME
-    run_bt_cmd "scan off" >/dev/null
+    # First check existing devices
+    log "Checking already discovered devices..."
+    local devices=$(timeout 10 bluetoothctl devices 2>/dev/null)
+    log "Existing devices: '$devices'"
     
-    # Brief pause to let device list update
-    sleep 1
+    # If no devices found, try scanning
+    if [[ -z "$devices" || "$devices" == " " ]]; then
+        log "No existing devices, starting scan..."
+        timeout 3 bluetoothctl scan on >/dev/null &
+        sleep $SCAN_TIME
+        bluetoothctl scan off >/dev/null
+        
+        # Brief pause to let device list update
+        sleep 1
+        
+        log "Re-checking after scan..."
+        devices=$(timeout 10 bluetoothctl devices 2>/dev/null)
+    fi
     
-    # Get all devices and check each one
-    log "Running 'bluetoothctl devices' command..."
-    local devices=$(run_bt_cmd "devices")
-    log "Checking discovered devices..."
-    log "Raw device list: '$devices'"
+    log "Final device list: '$devices'"
     log "Device count: $(echo "$devices" | wc -l)"
     
     # Look through each device
