@@ -45,9 +45,11 @@ find_headtracker() {
     sleep 1
     
     # Get all devices and check each one
+    log "Running 'bluetoothctl devices' command..."
     local devices=$(run_bt_cmd "devices")
     log "Checking discovered devices..."
-    log "Raw device list: $devices"
+    log "Raw device list: '$devices'"
+    log "Device count: $(echo "$devices" | wc -l)"
     
     # Look through each device
     while read -r line; do
