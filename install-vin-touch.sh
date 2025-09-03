@@ -96,7 +96,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/7: System Update"
+step_header "STEP 1/20: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -105,7 +105,7 @@ else
     exit 1
 fi
 
-step_header "STEP 2/7: Disable Onboard and HDMI Audio"
+step_header "STEP 2/20: Disable Onboard and HDMI Audio"
 echo "Configuring audio settings..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -115,7 +115,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
 fi
 echo "✓ Audio settings configured"
 
-step_header "STEP 3/7: Install Dependencies"
+step_header "STEP 3/20: Install Dependencies"
 echo "Installing build tools and audio dependencies..."
 
 # Audio performance optimizations
@@ -162,7 +162,7 @@ done
 echo
 echo "✓ All dependencies installed"
 
-step_header "STEP 4/7: Clone SuperCollider"
+step_header "STEP 4/20: Clone SuperCollider"
 echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
@@ -175,7 +175,7 @@ cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 5/7: Build SuperCollider"
+step_header "STEP 5/20: Build SuperCollider"
 echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
     -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
@@ -242,7 +242,7 @@ else
     exit 1
 fi
 
-step_header "STEP 6/7: System Configuration"
+step_header "STEP 6/20: System Configuration"
 echo "Setting up device permissions..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -257,7 +257,7 @@ EOF
 usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
 echo "✓ Audio configuration complete"
 
-step_header "STEP 7/7: UHJ-Pi Application Setup"
+step_header "STEP 7/20: UHJ-Pi Application Setup"
 echo "Checking UHJ-Pi application..."
 cd /home/$ACTUAL_USER
 
@@ -462,7 +462,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 13: Install Custom UHJ Test Sounds
-step_header "STEP 13/23: Installing Custom UHJ Test Sounds"
+step_header "STEP 8/20: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -487,7 +487,7 @@ fi
 # AmbiVerbSC now installed via Quark system above
 
 # STEP 14: Install custom user classes
-step_header "STEP 14/23: Installing Custom User Classes"
+step_header "STEP 9/20: Installing Custom User Classes"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -524,163 +524,206 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-# STEP 17: Install zita-ajbridge for Behringer audio setup
-step_header "STEP 17/23: Installing zita-ajbridge"
-echo "Installing zita-ajbridge..."
-apt-get install -y zita-ajbridge
+# STEP 10: Install ATK kernels and matrices
+step_header "STEP 10/20: Installing ATK Kernels and Matrices"
+echo "Downloading ATK kernels and matrices..."
+cd /home/$ACTUAL_USER/.local/share/ATK
 
-# STEP 18: Create Behringer udev rules for persistent device naming
-step_header "STEP 18/23: Creating Behringer udev rules"
-echo "Creating Behringer udev rules..."
-cat > /etc/udev/rules.d/60-behringer-audio.rules << 'EOF'
-# Behringer UFO202 and UCA202 persistent naming
-# UFO202 on USB controller 0000:00:1a.7
-SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="1397", ATTRS{idProduct}=="0501", ENV{ID_PATH}=="*1a.7*", SYMLINK+="sound/ufo202"
-
-# UCA202 on USB controller 0000:00:1d.7
-SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="1397", ATTRS{idProduct}=="0502", ENV{ID_PATH}=="*1d.7*", SYMLINK+="sound/uca202"
-
-# Alternative method using USB port directly
-SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="1397", ENV{ID_PATH}=="*1a.7*", ENV{ALSA_NAME}="UFO202"
-SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="1397", ENV{ID_PATH}=="*1d.7*", ENV{ALSA_NAME}="UCA202"
-EOF
-
-# Reload udev rules
-udevadm control --reload-rules
-udevadm trigger
-
-# STEP 19: Configure Behringer audio setup automatically
-step_header "STEP 19/23: Configuring Behringer Audio Setup"
-echo "Configuring Behringer audio setup..."
-echo "Setting up UFO202 (phono) + UCA202 (line) for SuperCollider..."
-
-# Function to check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Check dependencies
-echo "Checking audio dependencies..."
-if ! command_exists jackd; then
-    echo "ERROR: JACK not installed. Run: sudo apt install jackd2"
-    exit 1
-fi
-
-if ! command_exists zita-a2j; then
-    echo "ERROR: zita-ajbridge not installed. Run: sudo apt install zita-ajbridge"
-    exit 1
-fi
-
-# Stop any existing audio processes
-echo "Stopping existing audio processes..."
-pkill jackd 2>/dev/null
-pkill zita-a2j 2>/dev/null
-pkill zita-j2a 2>/dev/null
-pkill qjackctl 2>/dev/null
-sleep 2
-
-# Detect Behringer devices by USB controller
-echo "Detecting Behringer devices..."
-
-# Simple method: extract card number from the line that contains the USB controller
-UCA_CARD=""
-UFO_CARD=""
-
-# Parse /proc/asound/cards line by line
-while IFS= read -r line; do
-    if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[ ]]; then
-        current_card="${BASH_REMATCH[1]}"
-    elif [[ $line =~ 1d\.7 ]]; then
-        UCA_CARD="$current_card"
-    elif [[ $line =~ 1a\.7 ]]; then
-        UFO_CARD="$current_card"
-    fi
-done < /proc/asound/cards
-
-if [ -z "$UCA_CARD" ] || [ -z "$UFO_CARD" ]; then
-    echo "WARNING: Could not detect both Behringer devices"
-    echo "Make sure both UFO202 and UCA202 are connected"
-    echo "Current audio cards:"
-    cat /proc/asound/cards
-    echo "Audio setup will need to be configured manually after reboot"
-else
-    echo "Detected devices:"
-    echo "  UCA202 (Line Input) = Card $UCA_CARD (USB controller 0000:00:1d.7)"
-    echo "  UFO202 (Phono Input) = Card $UFO_CARD (USB controller 0000:00:1a.7)"
-
-    # Start JACK on UCA202 (line device) as master
-    echo "Starting JACK server on UCA202 (Card $UCA_CARD) at 44100 Hz..."
-    jackd -d alsa -d hw:$UCA_CARD -r 44100 -p 256 -n 2 > /tmp/jack.log 2>&1 &
-    JACK_PID=$!
-
-    # Wait for JACK to initialize
-    sleep 3
-
-    # Check if JACK started successfully
-    if ! ps -p $JACK_PID > /dev/null; then
-        echo "WARNING: JACK failed to start. Check /tmp/jack.log"
-        echo "Audio setup will need to be configured manually after reboot"
+# Download kernels
+echo "Downloading ATK kernels v1.2.1..."
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+    echo "Extracting kernels..."
+    if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
+        sudo -u $ACTUAL_USER rm kernels.zip
+        echo "✓ ATK kernels installed"
     else
-        echo "JACK server started successfully (PID: $JACK_PID)"
-
-        # Start zita bridges for UFO202
-        echo "Starting zita bridges for UFO202 (Card $UFO_CARD)..."
-
-        # Bridge UFO202 inputs to JACK (phono inputs)
-        echo "Starting zita-a2j for UFO202 inputs..."
-        zita-a2j -j ufo_phono -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-a2j.log 2>&1 &
-        ZITA_A2J_PID=$!
-
-        # Bridge JACK outputs to UFO202 (additional outputs)
-        echo "Starting zita-j2a for UFO202 outputs..."
-        zita-j2a -j ufo_out -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-j2a.log 2>&1 &
-        ZITA_J2A_PID=$!
-
-        # Wait for zita bridges to initialize
-        sleep 2
-
-        # Check if zita processes started successfully
-        if ! ps -p $ZITA_A2J_PID > /dev/null; then
-            echo "WARNING: zita-a2j failed to start. Check /tmp/zita-a2j.log"
-        fi
-
-        if ! ps -p $ZITA_J2A_PID > /dev/null; then
-            echo "WARNING: zita-j2a failed to start. Check /tmp/zita-j2a.log"
-        fi
-
-        if ps -p $ZITA_A2J_PID > /dev/null && ps -p $ZITA_J2A_PID > /dev/null; then
-            echo "Zita bridges started successfully"
-            
-            # Wait a moment for everything to sync
-            sleep 2
-
-            # Verify JACK ports
-            echo "Verifying JACK configuration..."
-            if command_exists jack_lsp; then
-                PORTS=$(jack_lsp | wc -l)
-                echo "Available JACK ports:"
-                jack_lsp | sort
-
-                if [ $PORTS -ge 8 ]; then
-                    echo "✅ SUCCESS: All ports available ($PORTS total)"
-                else
-                    echo "⚠️  WARNING: Expected 8+ ports, found $PORTS"
-                fi
-            else
-                echo "jack_lsp not available, cannot verify ports"
-            fi
-
-            # Stop audio processes for now (will be restarted after reboot)
-            echo "Stopping audio processes (will restart after reboot)..."
-            pkill jackd 2>/dev/null
-            pkill zita-a2j 2>/dev/null
-            pkill zita-j2a 2>/dev/null
-        fi
+        echo "✗ ATK kernels extraction failed!"
+        exit 1
     fi
+else
+    echo "✗ ATK kernels download failed!"
+    exit 1
 fi
 
-# STEP 20: Configure Qt platform for headless operation
-step_header "STEP 20/23: Configuring Qt Platform for Headless Operation"
+# Download matrices  
+echo "Downloading ATK matrices v1.0.3..."
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+    echo "Extracting matrices..."
+    if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
+        sudo -u $ACTUAL_USER rm matrices.zip
+        echo "✓ ATK matrices installed"
+    else
+        echo "✗ ATK matrices extraction failed!"
+        exit 1
+    fi
+else
+    echo "✗ ATK matrices download failed!"
+    exit 1
+fi
+
+# Download ATK sounds (complete repository)
+echo "Downloading ATK sounds repository..."
+cd /tmp
+if curl -s -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "Extracting sounds..."
+    sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
+    sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+    rm -f atk-sounds.zip
+    echo "✓ ATK sounds installed"
+    
+    # Organize sounds into proper subdirectory structure (like working SD card)
+    echo "Organizing sounds into proper directory structure..."
+    cd /home/$ACTUAL_USER/.local/share/ATK
+    if [ ! -d "sounds" ]; then
+        sudo -u $ACTUAL_USER mkdir sounds
+    fi
+    # Move WAV files and documentation to sounds subdirectory
+    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
+    sudo -u $ACTUAL_USER mv LICENSE.md sounds/ 2>/dev/null || true
+    sudo -u $ACTUAL_USER mv README.md sounds/ 2>/dev/null || true
+    echo "Sounds organized into sounds/ subdirectory"
+else
+    echo "ATK sounds download failed - continuing without sounds"
+fi
+
+# CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
+echo "Moving ATK classes from downloaded-quarks to Extensions..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider
+
+# Move the clean, working classes to Extensions
+echo "Moving ATK dependencies to Extensions..."
+if [ -d "downloaded-quarks/MathLib" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/MathLib Extensions/
+    echo "Moved MathLib to Extensions"
+fi
+if [ -d "downloaded-quarks/MatrixArray" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/MatrixArray Extensions/
+    echo "Moved MatrixArray to Extensions"
+fi
+if [ -d "downloaded-quarks/SignalBox" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SignalBox Extensions/
+    echo "Moved SignalBox to Extensions"
+fi
+if [ -d "downloaded-quarks/SphericalDesign" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SphericalDesign Extensions/
+    echo "Moved SphericalDesign to Extensions"
+fi
+if [ -d "downloaded-quarks/atk-sc3" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/atk-sc3 Extensions/
+    echo "Moved atk-sc3 to Extensions"
+fi
+if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
+    echo "Moved AmbiVerbSC to Extensions"
+fi
+
+# Set proper ownership for Extensions
+echo "Setting proper ownership for Extensions..."
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
+
+# ATK classes are now properly located in Extensions
+
+# Return to ATK directory for custom sounds
+cd /home/$ACTUAL_USER/.local/share/ATK
+
+# STEP 11: Install Custom UHJ Test Sounds
+step_header "STEP 11/20: Installing Custom UHJ Test Sounds"
+echo "Installing custom UHJ test sounds..."
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
+echo "Custom UHJ test sounds installed successfully"
+
+# Move custom sounds to sounds subdirectory to match working SD card structure
+echo "Moving custom sounds to sounds/ subdirectory..."
+cd /home/$ACTUAL_USER/.local/share/ATK
+if [ -d "sounds" ]; then
+    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
+    echo "Custom UHJ sounds moved to sounds/ subdirectory"
+else
+    echo "WARNING: sounds/ directory not found - creating it and moving sounds"
+    sudo -u $ACTUAL_USER mkdir sounds
+    sudo -u $ACTUAL_USER mv *.wav sounds/ 2>/dev/null || true
+    echo "Custom UHJ sounds moved to sounds/ subdirectory"
+fi
+
+# AmbiVerbSC now installed via Quark system above
+
+# STEP 12: Install custom user classes
+step_header "STEP 12/20: Installing Custom User Classes"
+echo "Installing custom user classes..."
+cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
+
+# Ensure SuperCollider Extensions directory exists
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+
+# Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
+echo "Installing custom extensions..."
+
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
+    echo "Installing ServerMeter2..."
+    cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "ServerMeter2 installation completed"
+else
+    echo "ServerMeter2 already exists, skipping"
+fi
+
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
+    echo "Installing MaplinMatrix..."
+    cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "MaplinMatrix installation completed"
+else
+    echo "MaplinMatrix already exists, skipping"
+fi
+
+# Set proper ownership
+chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+
+# STEP 13: Install UHJ-Pi application files
+step_header "STEP 13/20: Installing UHJ-Pi Application Files"
+echo "Installing UHJ-Pi application files..."
+cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/app
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
+sudo -u $ACTUAL_USER cp *.scd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
+echo "✓ UHJ-Pi application files installed"
+
+# STEP 14: Configure JACK audio
+step_header "STEP 14/20: Configuring JACK Audio"
+echo "Configuring JACK audio..."
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.config/jack
+cat > /home/$ACTUAL_USER/.config/jack/jackdrc << 'EOF'
+/usr/bin/jackd -P75 -d alsa -r 44100 -p 1024 -n 3 -S
+EOF
+echo "✓ JACK configuration complete"
+
+# STEP 15: Configure ALSA
+step_header "STEP 15/20: Configuring ALSA"
+echo "Configuring ALSA..."
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
+cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
+pcm.!default {
+    type hw
+    card 0
+}
+ctl.!default {
+    type hw
+    card 0
+}
+EOF
+echo "✓ ALSA configuration complete"
+
+# STEP 16: Configure Bluetooth
+step_header "STEP 16/20: Configuring Bluetooth"
+echo "Configuring Bluetooth..."
+systemctl enable bluetooth
+systemctl start bluetooth
+echo "✓ Bluetooth configured"
+
+# STEP 17: Configure Qt platform for headless operation
+step_header "STEP 17/20: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -710,7 +753,7 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-step_header "STEP 22/23: Installing Bluetooth Pairing Script"
+step_header "STEP 18/20: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -739,7 +782,7 @@ EOF
 fi
 
 # STEP 23: Install launcher script
-step_header "STEP 23/23: Installing Launcher Script"
+step_header "STEP 19/20: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
@@ -778,7 +821,11 @@ echo ""
 echo -n "Press any key to cancel automatic reboot... "
 
 # Clear any cached input before countdown
+stty -echo 2>/dev/null || true
 while read -t 0; do read -n 1; done 2>/dev/null || true
+stty echo 2>/dev/null || true
+# Additional buffer clearing
+dd if=/dev/tty of=/dev/null bs=1 count=1 2>/dev/null || true
 
 # 10 second countdown with ability to cancel
 for i in {10..1}; do
@@ -793,4 +840,6 @@ done
 echo ""
 echo "Rebooting now..."
 sleep 1
-reboot
+# Force immediate reboot
+sync
+reboot -f
