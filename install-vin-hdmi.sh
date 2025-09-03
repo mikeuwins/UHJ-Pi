@@ -713,12 +713,36 @@ echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
 
 echo "ARM64 library paths and Qt environment configured for $ARCH"
 
+# Create X11 configuration directory
+mkdir -p /etc/X11/xorg.conf.d
+
+# Create X11 wrapper configuration
+cat > /etc/X11/Xwrapper.config << 'EOF'
+allowed_users=anybody
+needs_root_rights=yes
+EOF
+
+# Configure unclutter for cursor management
+cat > /etc/default/unclutter << 'EOF'
+# Unclutter configuration for UHJ-Pi
+UNCLUTTER_ARGS="-idle 1 -root"
+EOF
+
+# Set audio limits for real-time processing
+cat > /etc/security/limits.d/audio.conf << 'EOF'
+# Audio group real-time limits
+@audio - rtprio 95
+@audio - memlock unlimited
+@audio - nice -19
+EOF
+
 # Create systemd service for auto-start
 echo "Creating systemd service for X11 auto-start..."
 cat > /etc/systemd/system/uhj-pi-x11.service << EOF
 [Unit]
 Description=UHJ-Pi X11 Session
-After=graphical.target
+After=graphical-session.target
+Wants=graphical-session.target
 
 [Service]
 Type=simple
