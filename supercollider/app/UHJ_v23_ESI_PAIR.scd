@@ -1264,12 +1264,32 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                     nil 
                 });
                 
+                // First attempt
                 try {
                     result = ("timeout 45 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                     success = result.contains("PAIRED_AND_CONNECTED");
                 } { |error|
                     ("Pairing script error: " ++ error).postln;
                     success = false;
+                };
+                
+                // If first attempt failed, automatically retry once
+                if (success.not) {
+                    ("First pairing attempt failed, retrying automatically...").postln;
+                    1.wait; // Brief pause between attempts
+                    
+                    try {
+                        result = ("timeout 45 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                        success = result.contains("PAIRED_AND_CONNECTED");
+                        if (success) {
+                            ("Second attempt succeeded!").postln;
+                        } {
+                            ("Both pairing attempts failed").postln;
+                        };
+                    } { |error|
+                        ("Retry script error: " ++ error).postln;
+                        success = false;
+                    };
                 };
                 
                 // Always update button, even if script failed
