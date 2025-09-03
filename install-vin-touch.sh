@@ -96,7 +96,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/18: System Update"
+step_header "STEP 1/17: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -105,7 +105,7 @@ else
     exit 1
 fi
 
-step_header "STEP 2/18: Disable Onboard and HDMI Audio"
+step_header "STEP 2/17: Disable Onboard and HDMI Audio"
 echo "Configuring audio settings..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -115,7 +115,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
 fi
 echo "✓ Audio settings configured"
 
-step_header "STEP 3/18: Install Dependencies"
+step_header "STEP 3/17: Install Dependencies"
 echo "Installing build tools and audio dependencies..."
 
 # Audio performance optimizations
@@ -162,7 +162,7 @@ done
 echo
 echo "✓ All dependencies installed"
 
-step_header "STEP 4/18: Clone SuperCollider"
+step_header "STEP 4/17: Clone SuperCollider"
 echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
@@ -175,7 +175,7 @@ cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 5/18: Build SuperCollider"
+step_header "STEP 5/17: Build SuperCollider"
 echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
     -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
@@ -252,7 +252,7 @@ else
     exit 1
 fi
 
-step_header "STEP 6/18: Setting up Audio and Device Permissions"
+step_header "STEP 6/17: Setting up Audio and Device Permissions"
 echo "Setting up device permissions..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -267,7 +267,7 @@ EOF
 usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
 echo "✓ Audio configuration complete"
 
-step_header "STEP 7/18: Setting up SuperCollider Environment"
+step_header "STEP 7/17: Setting up SuperCollider Environment"
 echo "Checking UHJ-Pi application..."
 cd /home/$ACTUAL_USER
 
@@ -415,7 +415,7 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 # Custom UHJ test sounds will be installed after ATK sounds (step 10)
 
 # STEP 14: Install custom user classes
-step_header "STEP 8/18: Installing Custom User Classes"
+step_header "STEP 8/17: Installing Custom User Classes"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -453,7 +453,7 @@ fi
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 10: Install ATK kernels and matrices
-step_header "STEP 9/18: Installing ATK Kernels and Matrices"
+step_header "STEP 9/17: Installing ATK Kernels and Matrices"
 echo "Downloading ATK kernels and matrices..."
 cd /home/$ACTUAL_USER/.local/share/ATK
 
@@ -556,7 +556,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 10: Install Custom UHJ Test Sounds (after ATK sounds are downloaded and sounds/ directory exists)
-step_header "STEP 10/18: Installing Custom UHJ Test Sounds"
+step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -578,7 +578,7 @@ else
 fi
 
 # STEP 13: Install UHJ-Pi application files
-step_header "STEP 11/18: Installing UHJ-Pi Application Files"
+step_header "STEP 11/17: Installing UHJ-Pi Application Files"
 echo "Installing UHJ-Pi application files..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/app
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
@@ -586,7 +586,7 @@ sudo -u $ACTUAL_USER cp *.scd /home/$ACTUAL_USER/.local/share/SuperCollider/Exte
 echo "✓ UHJ-Pi application files installed"
 
 # STEP 14: Configure JACK audio
-step_header "STEP 12/18: Configuring JACK Audio"
+step_header "STEP 12/17: Configuring JACK Audio"
 echo "Configuring JACK audio..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.config/jack
 cat > /home/$ACTUAL_USER/.config/jack/jackdrc << 'EOF'
@@ -595,7 +595,7 @@ EOF
 echo "✓ JACK configuration complete"
 
 # STEP 15: Configure ALSA
-step_header "STEP 13/18: Configuring ALSA"
+step_header "STEP 13/17: Configuring ALSA"
 echo "Configuring ALSA..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
 cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
@@ -611,14 +611,14 @@ EOF
 echo "✓ ALSA configuration complete"
 
 # STEP 16: Configure Bluetooth
-step_header "STEP 14/18: Configuring Bluetooth"
+step_header "STEP 14/17: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth
 systemctl start bluetooth
 echo "✓ Bluetooth configured"
 
 # STEP 17: Configure Qt platform for headless operation
-step_header "STEP 15/18: Configuring Qt Platform for Headless Operation"
+step_header "STEP 15/17: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -648,7 +648,7 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-step_header "STEP 16/18: Installing Bluetooth Pairing Script"
+step_header "STEP 16/17: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -677,7 +677,7 @@ EOF
 fi
 
 # STEP 23: Install launcher script
-step_header "STEP 17/18: Installing Launcher Script"
+step_header "STEP 17/17: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
