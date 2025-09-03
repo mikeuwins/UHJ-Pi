@@ -87,20 +87,29 @@ detect_vinyl_devices() {
     echo "Scanning for output interface..."
     sleep 2
     
-    # Get the second device (card 1 if turntable is card 0)
-    local second_card=$((vinyl_card + 1))
-    local second_line=$(cat /proc/asound/cards | sed -n "${second_card}p")
+    # Look for any device that's not the turntable
+    echo "Available devices:"
+    cat /proc/asound/cards
+    echo ""
     
-    if [[ $second_line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
-        output_card="${BASH_REMATCH[1]}"
-        output_name="${BASH_REMATCH[2]}"
-        echo "✓ Found output interface: hw:$output_card ($output_name)"
-        show_device_info "$output_card" "$output_name"
-    else
-        echo "No second device found. Available devices:"
-        cat /proc/asound/cards
-        echo ""
-        echo "Please connect your USB audio interface and try again."
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
+            local card_num="${BASH_REMATCH[1]}"
+            local card_name="${BASH_REMATCH[2]}"
+            
+            # Skip the turntable card
+            if [ "$card_num" != "$vinyl_card" ]; then
+                output_card="$card_num"
+                output_name="$card_name"
+                echo "✓ Found output interface: hw:$output_card ($output_name)"
+                show_device_info "$card_num" "$card_name"
+                break
+            fi
+        fi
+    done < /proc/asound/cards
+    
+    if [ -z "$output_card" ]; then
+        echo "No second device found. Please connect your USB audio interface and try again."
         exit 1
     fi
     
