@@ -91,11 +91,15 @@ detect_vinyl_devices() {
     echo "Available devices:"
     cat /proc/asound/cards
     echo ""
+    echo "Looking for output interface (any device that's not the turntable)..."
+    sleep 2
     
     while IFS= read -r line; do
         if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
             local card_num="${BASH_REMATCH[1]}"
             local card_name="${BASH_REMATCH[2]}"
+            
+            echo "Checking device: hw:$card_num ($card_name)"
             
             # Skip the turntable card
             if [ "$card_num" != "$vinyl_card" ]; then
@@ -104,6 +108,8 @@ detect_vinyl_devices() {
                 echo "✓ Found output interface: hw:$output_card ($output_name)"
                 show_device_info "$card_num" "$card_name"
                 break
+            else
+                echo "  (Skipping - this is the turntable)"
             fi
         fi
     done < /proc/asound/cards
