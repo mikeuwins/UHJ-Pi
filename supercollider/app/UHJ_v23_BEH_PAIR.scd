@@ -1405,25 +1405,25 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     var checkResult, isConnected, isPaired;
     
     // Wait a bit before starting monitoring to avoid startup delays
-    10.wait;
+    3.wait;
     
     // Simple monitoring loop
     loop {
         5.wait; // Check every 5 seconds
         
         // Only check if button exists, shows paired status and not currently pairing
-        {
-            if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-                isConnected = checkResult.contains("Connected: yes");
-                isPaired = checkResult.contains("Paired: yes");
-                
-                if (isPaired.not || isConnected.not) {
-                    // Device is disconnected/removed - reset button
+        if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
+            checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+            isConnected = checkResult.contains("Connected: yes");
+            isPaired = checkResult.contains("Paired: yes");
+            
+            if (isPaired.not || isConnected.not) {
+                // Device is disconnected/removed - reset button (GUI update on main thread)
+                {
                     ~headtrackPairBtn.value_(0);
-                };
+                }.defer;
             };
-        }.defer;
+        };
     };
 }).play;
 
