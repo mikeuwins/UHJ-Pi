@@ -28,7 +28,9 @@ show_build_progress() {
     while kill -0 $pid 2>/dev/null; do
         # Try to extract percentage from make output
         if [ -f "$logfile" ]; then
-            local percent=$(tail -20 "$logfile" 2>/dev/null | grep -o '\[[0-9]\+%\]' | tail -1 | grep -o '[0-9]\+' || echo "")
+            # Look for various percentage formats: [45%], 45%, (45%), etc.
+            # Also look for make progress: [ 45%] Building...
+            local percent=$(tail -50 "$logfile" 2>/dev/null | grep -oE '\[\s*[0-9]+%\]|\[[0-9]+%\]|[0-9]+%' | tail -1 | grep -o '[0-9]\+' || echo "")
             if [ -n "$percent" ] && [ "$percent" -gt "$last_percent" ]; then
                 last_percent=$percent
             fi
@@ -42,9 +44,13 @@ show_build_progress() {
             printf ">"
             printf "%*s" $((width - completed - 1))
         fi
-        printf "] %d%%" $last_percent
+        if [ $last_percent -gt 0 ]; then
+            printf "] %d%%" $last_percent
+        else
+            printf "] Building..."
+        fi
         
-        sleep 3
+        sleep 2
     done
     printf "\r$message ["
     printf "%*s" $width | tr ' ' '='
@@ -359,44 +365,46 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
-if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
-    if sudo -u $ACTUAL_USER unzip -o kernels.zip; then
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+    echo "Extracting kernels..."
+    if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
         sudo -u $ACTUAL_USER rm kernels.zip
-        echo "ATK kernels downloaded and extracted successfully"
+        echo "✓ ATK kernels installed"
     else
-        echo "ERROR: ATK kernels extraction failed!"
+        echo "✗ ATK kernels extraction failed!"
         exit 1
     fi
 else
-    echo "ERROR: ATK kernels download failed!"
+    echo "✗ ATK kernels download failed!"
     exit 1
 fi
 
 # Download matrices  
 echo "Downloading ATK matrices v1.0.3..."
-if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
-    if sudo -u $ACTUAL_USER unzip -o matrices.zip; then
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+    echo "Extracting matrices..."
+    if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
         sudo -u $ACTUAL_USER rm matrices.zip
-        echo "ATK matrices downloaded and extracted successfully"
+        echo "✓ ATK matrices installed"
     else
-        echo "ERROR: ATK matrices extraction failed!"
+        echo "✗ ATK matrices extraction failed!"
         exit 1
     fi
 else
-    echo "ERROR: ATK matrices download failed!"
+    echo "✗ ATK matrices download failed!"
     exit 1
 fi
 
 # Download ATK sounds (complete repository)
 echo "Downloading ATK sounds repository..."
 cd /tmp
-if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
-    echo "ATK sounds downloaded successfully - extracting..."
-    sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
+if curl -s -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "Extracting sounds..."
+    sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
-            sudo -u $ACTUAL_USER rm -rf atk-sounds-master
-        rm -f atk-sounds.zip
-    echo "ATK sounds installed successfully"
+    sudo -u $ACTUAL_USER rm -rf atk-sounds-master
+    rm -f atk-sounds.zip
+    echo "✓ ATK sounds installed"
     
     # Organize sounds into proper subdirectory structure (like working SD card)
     echo "Organizing sounds into proper directory structure..."
@@ -454,7 +462,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 13: Install Custom UHJ Test Sounds
-echo "Step 13: Installing Custom UHJ Test Sounds..."
+step_header "STEP 13/23: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -479,7 +487,8 @@ fi
 # AmbiVerbSC now installed via Quark system above
 
 # STEP 14: Install custom user classes
-echo "Step 14: Installing custom user classes..."
+step_header "STEP 14/23: Installing Custom User Classes"
+echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
 # Ensure SuperCollider Extensions directory exists
@@ -516,11 +525,13 @@ fi
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 17: Install zita-ajbridge for Behringer audio setup
-echo "Step 17: Installing zita-ajbridge..."
+step_header "STEP 17/23: Installing zita-ajbridge"
+echo "Installing zita-ajbridge..."
 apt-get install -y zita-ajbridge
 
 # STEP 18: Create Behringer udev rules for persistent device naming
-echo "Step 18: Creating Behringer udev rules..."
+step_header "STEP 18/23: Creating Behringer udev rules"
+echo "Creating Behringer udev rules..."
 cat > /etc/udev/rules.d/60-behringer-audio.rules << 'EOF'
 # Behringer UFO202 and UCA202 persistent naming
 # UFO202 on USB controller 0000:00:1a.7
@@ -539,7 +550,8 @@ udevadm control --reload-rules
 udevadm trigger
 
 # STEP 19: Configure Behringer audio setup automatically
-echo "Step 19: Configuring Behringer audio setup..."
+step_header "STEP 19/23: Configuring Behringer Audio Setup"
+echo "Configuring Behringer audio setup..."
 echo "Setting up UFO202 (phono) + UCA202 (line) for SuperCollider..."
 
 # Function to check if command exists
@@ -668,7 +680,8 @@ else
 fi
 
 # STEP 20: Configure Qt platform for headless operation
-echo "Step 20: Configuring Qt platform for headless operation..."
+step_header "STEP 20/23: Configuring Qt Platform for Headless Operation"
+echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
@@ -697,7 +710,8 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-echo "Step 22: Installing Bluetooth pairing script..."
+step_header "STEP 22/23: Installing Bluetooth Pairing Script"
+echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
@@ -709,8 +723,24 @@ echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-re
 chmod 440 /etc/sudoers.d/uhj-pi-reboot
 echo "✓ Passwordless reboot configured"
 
+# Configure automatic login
+echo "Configuring automatic login..."
+if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then
+    echo "Automatic login already configured"
+else
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $ACTUAL_USER --noclear %I \$TERM
+EOF
+    systemctl enable getty@tty1.service
+    echo "✓ Automatic login configured for user $ACTUAL_USER"
+fi
+
 # STEP 23: Install launcher script
-echo "Step 23: Installing launcher script..."
+step_header "STEP 23/23: Installing Launcher Script"
+echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
