@@ -173,9 +173,23 @@ connect_headtracker() {
             log "✗ Connect command failed"
         fi
         
-        log "--- Attempt $attempt failed, waiting before retry ---"
+        log "--- Attempt $attempt failed ---"
+        
+        # If this is the second attempt and we're still failing, try removing the device
+        if [ $attempt -eq 2 ]; then
+            log "Multiple failures detected - removing device to reset pairing state..."
+            bluetoothctl disconnect "$mac" >/dev/null 2>&1
+            sleep 1
+            bluetoothctl remove "$mac" >/dev/null 2>&1
+            sleep 2
+            log "Device removed - will attempt fresh pairing on next retry"
+        fi
+        
         attempt=$((attempt + 1))
-        sleep 3
+        if [ $attempt -le $MAX_RETRIES ]; then
+            log "Waiting before retry..."
+            sleep 3
+        fi
     done
     
     log "✗ FINAL RESULT: Failed to connect after $MAX_RETRIES attempts"
