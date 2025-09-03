@@ -142,23 +142,7 @@ killall jackd 2>/dev/null
 killall sclang 2>/dev/null
 sleep 2
 
-# Audio performance optimizations
-echo "Applying audio performance optimizations..."
-
-# Set CPU governor to performance mode for better real-time performance
-if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
-    echo "performance" > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || echo "Note: Could not set CPU governor (requires root)"
-fi
-
-# Increase audio thread priority limits
-if [ -f /etc/security/limits.conf ]; then
-    # Check if audio limits already exist
-    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
-        echo "Consider adding these lines to /etc/security/limits.conf for better audio performance:"
-        echo "  @audio   -  rtprio     95"
-        echo "  @audio   -  memlock    unlimited"
-    fi
-fi
+# Audio performance optimizations already applied during installation
 
 # Detect devices
 detect_vinyl_devices

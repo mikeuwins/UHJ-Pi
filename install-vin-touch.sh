@@ -112,6 +112,27 @@ echo "✓ Audio settings configured"
 step_header "STEP 3/7: Install Dependencies"
 echo "Installing build tools and audio dependencies..."
 
+# Audio performance optimizations
+echo "Configuring audio performance optimizations..."
+
+# Set CPU governor to performance mode for better real-time performance
+if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+    echo "performance" > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || echo "Note: Could not set CPU governor"
+fi
+
+# Configure audio thread priority limits
+if [ -f /etc/security/limits.conf ]; then
+    # Check if audio limits already exist
+    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
+        echo "Adding audio performance limits to /etc/security/limits.conf..."
+        echo "@audio   -  rtprio     95" >> /etc/security/limits.conf
+        echo "@audio   -  memlock    unlimited" >> /etc/security/limits.conf
+        echo "✓ Audio performance limits configured"
+    else
+        echo "✓ Audio performance limits already configured"
+    fi
+fi
+
 # List of packages to install
 packages=(
     "build-essential" "cmake" "libjack-jackd2-dev" "libsndfile1-dev"
