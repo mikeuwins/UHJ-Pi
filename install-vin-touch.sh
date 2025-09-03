@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck Touch Version
-# Based on install-beh-touch.sh with Vinyl Deck audio setup integrated
+# UHJ-Pi Raspberry Pi Setup Script - USB Turntable Touch Version
+# Based on install-beh-touch.sh with USB turntable audio setup integrated
 
 # Progress bar function
 show_progress() {
@@ -47,7 +47,7 @@ show_build_progress() {
         if [ $last_percent -gt 0 ]; then
             printf "] %d%%" $last_percent
         else
-            printf "] Building..."
+            printf "]"
         fi
         
         sleep 2
@@ -79,9 +79,9 @@ if [ -z "$ACTUAL_USER" ]; then
 fi
 
 clear
-echo "🎵 UHJ-Pi Raspberry Pi Setup Script - Vinyl Deck Touch Version 🎵"
+echo "🎵 UHJ-Pi Raspberry Pi Setup Script - USB Turntable Touch Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
-echo "This version includes Vinyl Deck audio setup with dynamic device detection"
+echo "This version includes USB turntable audio setup with dynamic device detection"
 echo
 
 # Configure non-interactive package installation
@@ -122,9 +122,12 @@ echo "Installing build tools and audio dependencies..."
 echo "Configuring audio performance optimizations..."
 
 # Set CPU governor to performance mode for better real-time performance
-if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
-    echo "performance" > /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || echo "Note: Could not set CPU governor"
-fi
+for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    if [ -f "$cpu" ]; then
+        echo "performance" > "$cpu" 2>/dev/null || true
+    fi
+done
+echo "✓ CPU governor set to performance mode"
 
 # Configure audio thread priority limits
 if [ -f /etc/security/limits.conf ]; then
@@ -182,7 +185,6 @@ else
     exit 1
 fi
 
-echo "Building SuperCollider..."
 make -j2 >> $INSTALL_LOG 2>&1 &
 BUILD_PID=$!
 show_build_progress "Building SuperCollider" $INSTALL_LOG $BUILD_PID
@@ -194,7 +196,6 @@ else
     exit 1
 fi
 
-echo "Installing SuperCollider..."
 make install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 show_build_progress "Installing SuperCollider" $INSTALL_LOG $INSTALL_PID
@@ -207,22 +208,6 @@ else
     exit 1
 fi
 
-step_header "STEP 6/7: System Configuration"
-echo "Setting up device permissions..."
-cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="audio", MODE="0666"
-EOF
-
-echo "Configuring audio groups and permissions..."
-cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
-# Vinyl Deck JACK configuration - will be overridden by audio setup script
-/usr/bin/jackd -P75 -d alsa -r 44100 -p 1024 -n 3 -S &
-EOF
-usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
-echo "✓ Audio configuration complete"
-
-echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
     git clone --recursive https://github.com/supercollider/sc3-plugins.git > /dev/null 2>&1
@@ -256,6 +241,21 @@ else
     echo "✗ SC3 Plugins installation failed - check $INSTALL_LOG"
     exit 1
 fi
+
+step_header "STEP 6/7: System Configuration"
+echo "Setting up device permissions..."
+cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="audio", MODE="0666"
+EOF
+
+echo "Configuring audio groups and permissions..."
+cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
+# USB Turntable JACK configuration - will be overridden by audio setup script
+/usr/bin/jackd -P75 -d alsa -r 44100 -p 1024 -n 3 -S &
+EOF
+usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
+echo "✓ Audio configuration complete"
 
 step_header "STEP 7/7: UHJ-Pi Application Setup"
 echo "Checking UHJ-Pi application..."
@@ -748,7 +748,7 @@ echo "Launcher script installed to /usr/local/bin/start"
 
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎵 UHJ-Pi Vinyl Deck Installation Complete! 🎵"
+echo "🎵 UHJ-Pi USB Turntable Installation Complete! 🎵"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "✅ Audio System:"
@@ -776,6 +776,9 @@ echo "turntable and output interface. After that, just run 'start'"
 echo "whenever you want to use the UHJ-Pi application."
 echo ""
 echo -n "Press any key to cancel automatic reboot... "
+
+# Clear any cached input before countdown
+while read -t 0; do read -n 1; done 2>/dev/null || true
 
 # 10 second countdown with ability to cancel
 for i in {10..1}; do
