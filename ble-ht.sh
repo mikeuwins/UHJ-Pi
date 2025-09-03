@@ -41,9 +41,13 @@ find_headtracker() {
     sleep $SCAN_TIME
     run_bt_cmd "scan off" >/dev/null
     
+    # Brief pause to let device list update
+    sleep 1
+    
     # Get all devices and check each one
     local devices=$(run_bt_cmd "devices")
     log "Checking discovered devices..."
+    log "Raw device list: $devices"
     
     # Look through each device
     while read -r line; do
