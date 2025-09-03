@@ -47,7 +47,7 @@ detect_vinyl_devices() {
     
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Step 1: Connect your input device (turntable, microphone, etc.)"
+    echo "Step 1: Connect your USB turntable (input)"
     read -p "Press Enter when your input device is connected..."
     
     # Look for newly connected audio devices
@@ -80,12 +80,17 @@ detect_vinyl_devices() {
     
     echo "=== Output Device Setup ==="
     echo ""
-    echo "Step 2: Connect your output device (audio interface, soundcard, etc.)"
+    echo "Step 2: Connect your USB audio interface (output)"
     read -p "Press Enter when your output device is connected..."
     
     # Look for the output device (second device connected)
     echo "Scanning for output interface..."
     sleep 2
+    
+    # Trigger ALSA to detect newly connected devices
+    echo "Triggering device detection..."
+    alsactl restore 2>/dev/null || true
+    sleep 1
     
     # Look for any device that's not the input device
     echo "DEBUG: Looking for output device (input device is card $vinyl_card)"
