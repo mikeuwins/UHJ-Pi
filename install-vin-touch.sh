@@ -613,8 +613,8 @@ echo "✓ ALSA configuration complete"
 # STEP 16: Configure Bluetooth
 step_header "STEP 14/17: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
-systemctl enable bluetooth
-systemctl start bluetooth
+systemctl enable bluetooth >> $INSTALL_LOG 2>&1
+systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
 # STEP 17: Configure Qt platform for headless operation
@@ -706,37 +706,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "🚀 INSTALLATION COMPLETE - REBOOT REQUIRED"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Your Pi will automatically reboot in 10 seconds..."
 echo "After reboot, log in and run: start"
 echo ""
 echo "The first time you run 'start', it will help you configure your"
 echo "turntable and output interface. After that, just run 'start'"
 echo "whenever you want to use the UHJ-Pi application."
 echo ""
-echo -n "Press any key to cancel automatic reboot... "
-
-# Clear any cached input before countdown
-stty -echo 2>/dev/null || true
-while read -t 0; do read -n 1; done 2>/dev/null || true
-stty echo 2>/dev/null || true
-# Additional buffer clearing
-dd if=/dev/tty of=/dev/null bs=1 count=1 2>/dev/null || true
-
-# 10 second countdown with ability to cancel
-for i in {10..1}; do
-    if read -t 1 -n 1; then
-        echo ""
-        echo "Reboot cancelled. To reboot manually later, run: sudo reboot"
-        exit 0
-    fi
-    printf "\rRebooting in %d seconds... (Press any key to cancel)" $i
-done
+echo -n "Press any key to reboot... "
+read -n 1
 
 echo ""
 echo "Rebooting now..."
-# Clear input buffer and force immediate reboot
-stty -echo 2>/dev/null || true
-while read -t 0; do read -n 1; done 2>/dev/null || true
-stty echo 2>/dev/null || true
 sync
-systemctl reboot --force
+echo b > /proc/sysrq-trigger
