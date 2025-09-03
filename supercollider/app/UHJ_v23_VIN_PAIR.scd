@@ -102,7 +102,7 @@ win.onClose_({
     if(~connectionMonitor.notNil) { ~connectionMonitor.stop; };
     if(~bluetoothMonitorPipe.notNil) { ~bluetoothMonitorPipe.close; };
     if(s.serverRunning) { s.quit; };
-    thisProcess.shutdown;
+    0.exit;
 });
 
 // Position at visible top-left corner
@@ -2790,8 +2790,10 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        win.close;
+        "Rebooting system...".postln;
+        "sudo reboot".unixCmd;
     })
     .touchBeginAction_({ |view, x, y, pressure, id|
-        win.close;
+        "Rebooting system...".postln;
+        "sudo reboot".unixCmd;
     });

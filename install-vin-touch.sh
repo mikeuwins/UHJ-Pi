@@ -703,6 +703,12 @@ chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
+# Configure passwordless sudo for reboot
+echo "Configuring passwordless sudo for reboot..."
+echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-reboot
+chmod 440 /etc/sudoers.d/uhj-pi-reboot
+echo "✓ Passwordless reboot configured"
+
 # STEP 23: Install launcher script
 echo "Step 23: Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
