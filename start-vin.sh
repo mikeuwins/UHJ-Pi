@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 CONFIG_FILE="$HOME/.uhj-vin-audio.conf"
-echo "Starting Vinyl Deck audio setup..."
+clear
+echo "Starting UHJ-Pi audio setup..."
 
 # Function to show device information
 show_device_info() {
@@ -44,10 +45,10 @@ detect_vinyl_devices() {
     local output_card=""
     local output_name=""
     
-    echo "=== USB Turntable Setup ==="
+    echo "=== Input Device Setup ==="
     echo ""
-    echo "Step 1: Connect your USB turntable/vinyl deck"
-    read -p "Press Enter when your USB turntable is connected..."
+    echo "Step 1: Connect your input device (turntable, microphone, etc.)"
+    read -p "Press Enter when your input device is connected..."
     
     # Look for newly connected audio devices
     echo "Scanning for audio devices..."
@@ -77,56 +78,45 @@ detect_vinyl_devices() {
         show_device_info "$vinyl_card" "$card_name"
     fi
     
-    echo "=== USB Audio Interface Setup ==="
+    echo "=== Output Device Setup ==="
     echo ""
-    echo "Step 2: Connect your USB audio interface for output"
-    echo "(This can be any USB soundcard - Behringer, UMC, etc.)"
-    read -p "Press Enter when your USB audio interface is connected..."
+    echo "Step 2: Connect your output device (audio interface, soundcard, etc.)"
+    read -p "Press Enter when your output device is connected..."
     
     # Look for the output device (second device connected)
     echo "Scanning for output interface..."
     sleep 2
     
-    # Look for any device that's not the turntable
-    echo "Available devices:"
-    cat /proc/asound/cards
-    echo ""
-    echo "Looking for output interface (any device that's not the turntable)..."
-    sleep 2
-    
+    # Look for any device that's not the input device
     while IFS= read -r line; do
         if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
             local card_num="${BASH_REMATCH[1]}"
             local card_name="${BASH_REMATCH[2]}"
             
-            echo "Checking device: hw:$card_num ($card_name)"
-            
-            # Skip the turntable card
+            # Skip the input device card
             if [ "$card_num" != "$vinyl_card" ]; then
                 output_card="$card_num"
                 output_name="$card_name"
-                echo "✓ Found output interface: hw:$output_card ($output_name)"
+                echo "✓ Found output device: hw:$output_card ($output_name)"
                 show_device_info "$card_num" "$card_name"
                 break
-            else
-                echo "  (Skipping - this is the turntable)"
             fi
         fi
     done < /proc/asound/cards
     
     if [ -z "$output_card" ]; then
-        echo "No second device found. Please connect your USB audio interface and try again."
+        echo "No output device found. Please connect your output device and try again."
         exit 1
     fi
     
     if [ -z "$vinyl_card" ]; then
-        echo "ERROR: Turntable not configured"
+        echo "ERROR: Input device not configured"
         exit 1
     fi
     
     if [ -z "$output_card" ]; then
-        echo "ERROR: No output interface found"
-        echo "Please connect a USB audio interface and try again"
+        echo "ERROR: No output device found"
+        echo "Please connect an output device and try again"
         exit 1
     fi
     
@@ -137,8 +127,8 @@ detect_vinyl_devices() {
     
     echo ""
     echo "=== Configuration Complete ==="
-    echo "✓ Turntable: hw:$vinyl_card (input)"
-    echo "✓ Audio Interface: hw:$output_card ($output_name) (output)"
+    echo "✓ Input Device: hw:$vinyl_card"
+    echo "✓ Output Device: hw:$output_card ($output_name)"
     echo ""
 }
 
