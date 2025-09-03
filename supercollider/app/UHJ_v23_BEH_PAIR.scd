@@ -1404,14 +1404,8 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 ~connectionMonitor = Routine({
     var checkResult, isConnected, isPaired;
     
-    // Initial status check
-    checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-    {
-        if (checkResult.contains("Connected: yes") && 
-            checkResult.contains("Paired: yes")) {
-            ~headtrackPairBtn.value_(2); // Show paired status
-        };
-    }.defer;
+    // Wait a bit before starting monitoring to avoid startup delays
+    10.wait;
     
     // Simple monitoring loop
     loop {
