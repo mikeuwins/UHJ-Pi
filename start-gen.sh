@@ -137,7 +137,7 @@ echo "Available JACK ports:"; jack_lsp 2>/dev/null || echo "jack_lsp not availab
 # Export capability flag to the app environment
 export HAS_INPUT_GAIN
 
-echo "Launching SuperCollider app..."
-exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd"
+echo "Launching SuperCollider app (GEN variant)..."
+exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v23_GEN_PAIR.scd"
 
 
