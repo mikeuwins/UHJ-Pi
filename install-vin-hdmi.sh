@@ -36,14 +36,11 @@ show_build_progress() {
             fi
         fi
         
-        # Show progress bar
+        # Show progress bar (no arrow)
         local completed=$((last_percent * width / 100))
         printf "\r$message ["
         printf "%*s" $completed | tr ' ' '='
-        if [ $completed -lt $width ]; then
-            printf ">"
-            printf "%*s" $((width - completed - 1))
-        fi
+        printf "%*s" $((width - completed))
         if [ $last_percent -gt 0 ]; then
             printf "] %d%%" $last_percent
         else
