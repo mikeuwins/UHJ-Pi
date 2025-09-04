@@ -163,15 +163,7 @@ echo "✓ CPU governor set to performance mode"
 
 # Configure audio thread priority limits
 if [ -f /etc/security/limits.conf ]; then
-    # Check if audio limits already exist
-    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
-        echo "Adding audio performance limits to /etc/security/limits.conf..."
-        echo "@audio   -  rtprio     95" >> /etc/security/limits.conf
-        echo "@audio   -  memlock    unlimited" >> /etc/security/limits.conf
-        echo "✓ Audio performance limits configured"
-    else
-        echo "✓ Audio performance limits already configured"
-    fi
+    # Audio limits will be configured later in the X11 setup section
 fi
 
 # List of packages to install
@@ -181,7 +173,7 @@ packages=(
     "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
     "jackd2" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
     "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
-    "xserver-xorg" "x11-xserver-utils" "xinit" "blackbox" "blackbox-themes"
+    "xserver-xorg" "x11-xserver-utils" "xinit" "blackbox" "blackbox-themes" "unclutter" "unclutter-xfixes" "bsetroot"
 )
 
 total_packages=${#packages[@]}
@@ -688,6 +680,7 @@ export DISPLAY=:0
 blackbox &
 sleep 0.1
 xsetroot -solid black
+sleep 0.1
 exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > ~/post_output.log 2>&1
 EOF
 
@@ -766,6 +759,29 @@ EOF
 
 systemctl enable uhj-pi-x11.service
 echo "✓ X11 auto-start service configured"
+
+# Configure Qt accessibility
+echo "Configuring Qt accessibility..."
+mkdir -p /etc/X11/Xsession.d
+cat > /etc/X11/Xsession.d/90qt-a11y.sh << 'EOF'
+#!/bin/bash
+# Xsession.d script to set the env variables to enable accessibility for Qt
+#
+# This file is sourced by Xsession(5), not executed.
+
+QT_ACCESSIBILITY=1
+
+export QT_ACCESSIBILITY
+
+if [ -x "/usr/bin/dbus-update-activation-environment" ]; then
+        dbus-update-activation-environment --verbose --systemd QT_ACCESSIBILITY
+fi
+EOF
+
+mkdir -p /etc/environment.d
+cat > /etc/environment.d/90qt-a11y.conf << 'EOF'
+QT_ACCESSIBILITY=1
+EOF
 
 echo "✓ X11 and Blackbox configuration complete"
 
