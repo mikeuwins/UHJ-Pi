@@ -279,7 +279,7 @@ if [ $? -eq 0 ]; then
     echo "✓ SC3 Plugins installed"
 else
     echo "✗ SC3 Plugins installation failed - check $INSTALL_LOG"
-    exit 1
+        exit 1
 fi
 
 step_header "STEP 6/17: Setting up Audio and Device Permissions"
@@ -754,7 +754,7 @@ Type=simple
 User=$ACTUAL_USER
 Environment=DISPLAY=:0
 Environment=QT_QPA_PLATFORM=xcb
-ExecStart=/usr/local/bin/start
+ExecStart=/usr/bin/startx -- :0
 Restart=no
 RestartSec=10
 
@@ -762,8 +762,8 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-systemctl enable uhj-pi-x11.service
-echo "✓ X11 auto-start service configured"
+# Do not enable auto-start for HDMI installer; user will run 'start' manually
+echo "X11 auto-start service installed (disabled). Run 'start' after login."
 
 # Configure Qt accessibility
 echo "Configuring Qt accessibility..."
@@ -981,11 +981,11 @@ detect_vinyl_devices() {
     echo "OUTPUT_NAME=$output_name" >> "$CONFIG_FILE"
     echo "Device configuration saved to $CONFIG_FILE"
     
-    echo ""
+            echo ""
     echo "=== Configuration Complete ==="
     echo "✓ Turntable: hw:$vinyl_card (input)"
     echo "✓ Audio Interface: hw:$output_card ($output_name) (output)"
-    echo ""
+            echo ""
 }
 
 # Kill any existing audio processes
