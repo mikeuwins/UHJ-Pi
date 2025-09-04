@@ -163,7 +163,15 @@ echo "✓ CPU governor set to performance mode"
 
 # Configure audio thread priority limits
 if [ -f /etc/security/limits.conf ]; then
-    # Audio limits will be configured later in the X11 setup section
+    # Check if audio limits already exist
+    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
+        echo "Adding audio performance limits to /etc/security/limits.conf..."
+        echo "@audio   -  rtprio     95" >> /etc/security/limits.conf
+        echo "@audio   -  memlock    unlimited" >> /etc/security/limits.conf
+        echo "✓ Audio performance limits configured"
+    else
+        echo "✓ Audio performance limits already configured"
+    fi
 fi
 
 # List of packages to install
