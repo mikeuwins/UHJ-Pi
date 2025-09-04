@@ -47,7 +47,7 @@ detect_vinyl_devices() {
     
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Step 1: Connect your USB turntable (input)"
+    echo "Step 1: Connect your input device (turntable, microphone, etc.)"
     read -p "Press Enter when your input device is connected..."
     
     # Look for newly connected audio devices
@@ -78,59 +78,56 @@ detect_vinyl_devices() {
         show_device_info "$vinyl_card" "$card_name"
     fi
     
-    echo "=== Output Device Setup ==="
+    echo "=== USB Audio Interface Setup ==="
     echo ""
-    echo "Step 2: Connect your USB audio interface (output)"
-    read -p "Press Enter when your output device is connected..."
+    echo "Step 2: Connect your USB audio interface for output"
+    echo "(This can be any USB soundcard - Behringer, UMC, etc.)"
+    read -p "Press Enter when your USB audio interface is connected..."
     
     # Look for the output device (second device connected)
     echo "Scanning for output interface..."
     sleep 2
     
-    # Trigger ALSA to detect newly connected devices
-    echo "Triggering device detection..."
-    alsactl restore 2>/dev/null || true
-    sleep 1
-    
-    # Look for any device that's not the input device
-    echo "DEBUG: Looking for output device (input device is card $vinyl_card)"
-    echo "DEBUG: Available devices:"
+    # Look for any device that's not the turntable
+    echo "Available devices:"
     cat /proc/asound/cards
     echo ""
+    echo "Looking for output interface (any device that's not the turntable)..."
+    sleep 2
     
     while IFS= read -r line; do
         if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
             local card_num="${BASH_REMATCH[1]}"
             local card_name="${BASH_REMATCH[2]}"
             
-            echo "DEBUG: Checking card $card_num ($card_name)"
+            echo "Checking device: hw:$card_num ($card_name)"
             
-            # Skip the input device card
+            # Skip the turntable card
             if [ "$card_num" != "$vinyl_card" ]; then
                 output_card="$card_num"
                 output_name="$card_name"
-                echo "✓ Found output device: hw:$output_card ($output_name)"
+                echo "✓ Found output interface: hw:$output_card ($output_name)"
                 show_device_info "$card_num" "$card_name"
                 break
             else
-                echo "DEBUG: Skipping card $card_num (this is the input device)"
+                echo "  (Skipping - this is the turntable)"
             fi
         fi
     done < /proc/asound/cards
     
     if [ -z "$output_card" ]; then
-        echo "No output device found. Please connect your output device and try again."
+        echo "No second device found. Please connect your USB audio interface and try again."
         exit 1
     fi
     
     if [ -z "$vinyl_card" ]; then
-        echo "ERROR: Input device not configured"
+        echo "ERROR: Turntable not configured"
         exit 1
     fi
     
     if [ -z "$output_card" ]; then
-        echo "ERROR: No output device found"
-        echo "Please connect an output device and try again"
+        echo "ERROR: No output interface found"
+        echo "Please connect a USB audio interface and try again"
         exit 1
     fi
     
@@ -141,8 +138,8 @@ detect_vinyl_devices() {
     
     echo ""
     echo "=== Configuration Complete ==="
-    echo "✓ Input Device: hw:$vinyl_card"
-    echo "✓ Output Device: hw:$output_card ($output_name)"
+    echo "✓ Turntable: hw:$vinyl_card (input)"
+    echo "✓ Audio Interface: hw:$output_card ($output_name) (output)"
     echo ""
 }
 

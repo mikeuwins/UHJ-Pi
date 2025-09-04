@@ -9,7 +9,8 @@ hey there - we have just been working on this code in Claude.ai - but  moving it
 
 ---
 
-**Cursor**
+ we had dodot
+ tachedable **Cursor**
 
 I'll help you check and correct the pairing issue in your Bluetooth headtracker script. Let me first read the current script to understand what's happening.
 

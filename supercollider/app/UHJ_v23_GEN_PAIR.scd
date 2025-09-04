@@ -9,7 +9,8 @@ var win, mainView,
     decoderChanged,
     isUpdating, lastInputCmd, linkFaders, lastInL, lastInR, minIn, maxIn, lastFaderGroup,
     voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
-    dbValue, cliToDb, cliToDbMaster, formatDbValue;
+    dbValue, cliToDb, cliToDbMaster, formatDbValue,
+    hasInputGain, hasInputMute, inputCard, inputControl;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~maplinOverlay = nil;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
@@ -55,11 +56,55 @@ var win, mainView,
 // --- Initial values for input section ---
 isUpdating = false;
 linkFaders = true;
-lastInL = 112;
-lastInR = 112;
-minIn = 60;
-maxIn = 127;
+lastInL = 127; // Start at max (0dB)
+lastInR = 127; // Start at max (0dB)
+minIn = 0;   // ALSA: 0 = -60dB
+maxIn = 127; // ALSA: 127 = 0dB
 lastFaderGroup = \none;
+
+// Read environment variables from start-gen.sh
+hasInputGain = (Platform.case(\linux, { "HAS_INPUT_GAIN".getenv ? "0" }, { "0" }) == "1");
+hasInputMute = (Platform.case(\linux, { "HAS_INPUT_MUTE".getenv ? "0" }, { "0" }) == "1");
+inputCard = Platform.case(\linux, { "INPUT_CARD".getenv ? "0" }, { "0" });
+inputControl = Platform.case(\linux, { "INPUT_CONTROL".getenv ? "" }, { "" });
+
+// Initialize ALSA mixer to 0dB (127) on boot if input gain control is available
+if(hasInputGain and: {inputControl.notEmpty}) {
+    ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' 127").unixCmdGetStdOut;
+    lastInL = 127; // Set initial value
+    lastInR = 127; // Set initial value
+};
+
+// Debug: print what we read
+"=== ENVIRONMENT VARIABLES DEBUG ===".postln;
+"hasInputGain: ".post; hasInputGain.postln;
+"hasInputMute: ".post; hasInputMute.postln;
+"inputCard: ".post; inputCard.postln;
+"inputControl: ".post; inputControl.postln;
+"=== END DEBUG ===".postln;
+
+// ALSA control functions for generic input devices
+~setInputLevel = { |level|
+    if(hasInputGain and: {inputControl.notEmpty}) {
+        var alsaLevel = level.linlin(0, 1, minIn, maxIn).round.asInteger;
+        ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ alsaLevel).unixCmdGetStdOut;
+        lastInL = alsaLevel; // Use existing variable
+    };
+};
+
+~setInputMute = { |muted|
+    if(hasInputMute and: {inputControl.notEmpty}) {
+        var cmd = if(muted) { "nocap" } { "cap" };
+        ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ cmd).unixCmdGetStdOut;
+    } {
+        // Fallback: use level control for mute
+        if(hasInputGain and: {inputControl.notEmpty}) {
+            var cmd = if(muted) { "0" } { lastInL.asString };
+            ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ cmd).unixCmdGetStdOut;
+        };
+    };
+};
+
 
 // Audio engine initial values
 voltmp = 1.0; // 0dB = 1.0 amplitude
@@ -73,8 +118,8 @@ outputs = 2;            // Default output channels
 // Honest dB conversion - work with the hardware resolution we actually have
 cliToDb = { |cliValue|
     var dbValue;
-    // Direct linear mapping: 60->-40dB, 127->+12dB
-    dbValue = cliValue.linlin(60, 127, -40, 12);
+    // ALSA mapping: 0->-60dB, 127->0dB
+    dbValue = cliValue.linlin(0, 127, -60, 0);
     // Don't pretend we have 0.5dB resolution - round to 1dB which we can actually achieve
     dbValue.round(1);
 };
@@ -163,6 +208,12 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
             dbValue = cliToDbMaster.(lastInL);
             ~leftValue.string = formatDbValue.(dbValue);
         }
+    })
+    .mouseUpAction_({ |sl|
+        // Control ALSA input level only on mouse release
+        if(hasInputGain) {
+            ~setInputLevel.value(sl.value);
+        };
     });
 
 ~rightSlider = Slider(mainView, Rect(120, 70, 24, 300))
@@ -189,6 +240,12 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
             dbValue = cliToDbMaster.(lastInR);
             ~rightValue.string = formatDbValue.(dbValue);
         }
+    })
+    .mouseUpAction_({ |sl|
+        // Control ALSA input level only on mouse release
+        if(hasInputGain) {
+            ~setInputLevel.value(sl.value);
+        };
     });
 
 ~leftValue = StaticText(mainView, Rect(65, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
@@ -196,6 +253,7 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
 
 // Add "dB" label between the faders, vertically aligned with the values
 StaticText(mainView, Rect(95, 380, 24, 24)).string_("dB").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
+
 
 // Visual tick marks between faders using proper drawn lines
 UserView(mainView, Rect(98, 70, 18, 300))
@@ -243,7 +301,7 @@ mainView.mouseUpAction_({
         AppClock.sched(0.1, {
             var dbValue;
             // Reset fader values to 0dB
-            lastInL = 112; lastInR = 112;
+            lastInL = 127; lastInR = 127;
             ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
             ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
             dbValue = cliToDb.value(lastInL);
@@ -265,24 +323,38 @@ mainView.mouseUpAction_({
     .focusColor_(Color.clear)
     .action_({ |btn|
         if(btn.value == 1) {
-            // Muting: set synth amplitude to zero
-            if(~synth.notNil) {
-                ~synth.set(\amp, 0);
+            // Muting: control ALSA input mute or set synth amplitude to zero
+            if(hasInputMute or: {hasInputGain}) {
+                ~setInputMute.value(true);
+            } {
+                if(~synth.notNil) {
+                    ~synth.set(\amp, 0);
+                };
             };
         } {
-            // Unmuting: restore synth amplitude to current level
-            if(~synth.notNil) {
-                ~synth.set(\amp, voltmp);
+            // Unmuting: control ALSA input mute or restore synth amplitude
+            if(hasInputMute or: {hasInputGain}) {
+                ~setInputMute.value(false);
+            } {
+                if(~synth.notNil) {
+                    ~synth.set(\amp, voltmp);
+                };
             };
         }
     });
 
-~linkBtn = Button(mainView, Rect(18, 350, 40, 20))
-    .states_([["LINK", Color.cyan, Color.black], ["LINK", Color.black, Color.cyan]])
-    .font_(Font("Helvetica", 10))
-    .focusColor_(Color.clear)
-    .value_(linkFaders.asInteger)
-    .action_({ |btn| linkFaders = btn.value == 1; });
+// Link faders button - only show if input is not stereo control
+if(hasInputGain.not or: {inputControl.contains("Stereo").not}) {
+    ~linkBtn = Button(mainView, Rect(18, 350, 40, 20))
+        .states_([["LINK", Color.cyan, Color.black], ["LINK", Color.black, Color.cyan]])
+        .font_(Font("Helvetica", 10))
+        .focusColor_(Color.clear)
+        .value_(linkFaders.asInteger)
+        .action_({ |btn| linkFaders = btn.value == 1; });
+} {
+    // For stereo input controls, always keep faders linked
+    linkFaders = true;
+};
 
 // --- ENCODER/DECODER MENUS ---
 StaticText(mainView, Rect(180, 10, 140, 28))
@@ -1040,8 +1112,8 @@ StaticText(~meterContainer, Rect(8, 110, 24, 14)) // halfway up (approx)
     .string_("dB");
 
 // Initialize input defaults (vinyl deck)
-lastInL = 112; // 0dB equivalent (matches original ESI logic)
-lastInR = 112; // 0dB equivalent (matches original ESI logic)
+lastInL = 127; // 0dB equivalent (ALSA: 127 = 0dB)
+lastInR = 127; // 0dB equivalent (ALSA: 127 = 0dB)
 ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
 ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
 // Display initial dB values using logarithmic scaling
@@ -1058,21 +1130,24 @@ dbValue = cliToDbMaster.(lastInL);
 
 // Initialize vinyl deck state (no hardware control needed)
 
-// Create overlay to dim input faders (no hardware control available on vinyl deck)
-// Leave INPUT label visible, only cover faders and controls
-~inputOverlay = View(mainView, Rect(65, 40, 84, 365))
-    .background_(Color.black.alpha_(0.7))
-    .alpha_(1.0)
-    .mouseDownAction_({ |view, x, y| 
-        // Prevent clicks from reaching underlying controls
-    });
-
-// Add explanatory text on the overlay
-StaticText(~inputOverlay, Rect(5, 170, 74, 40))
-    .string_("SET INPUT\nGAIN USING\nTURNTABLE")
-    .align_(\center)
-    .stringColor_(Color.cyan.alpha_(0.8))
-    .font_(Font("Helvetica", 9));
+// Create overlay to dim input faders only if no software input gain control is available
+if(hasInputGain.not) {
+    // Leave INPUT label visible, only cover faders and controls
+    ~inputOverlay = View(mainView, Rect(65, 40, 84, 365))
+        .background_(Color.black.alpha_(0.7))
+        .alpha_(1.0)
+        .mouseDownAction_({ |view, x, y| 
+            "Use input level controls on USB audio device".postln;
+        });
+    
+    // Add text overlay with solid black background
+    StaticText(~inputOverlay, Rect(5, 150, 74, 80))
+        .string_("USE INPUT\nLEVEL CONTROLS\nON USB\nAUDIO DEVICE")
+        .align_(\center)
+        .stringColor_(Color.cyan)
+        .background_(Color.black)
+        .font_(Font("Helvetica", 9));
+};
 
 // Start audio engine with initial configuration after a short delay
 {
@@ -2792,8 +2867,7 @@ HIDdef.usage( \hidTumble, { |val|
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         "Rebooting system...".postln;
         "sudo reboot".unixCmd;
-    })
-    .touchBeginAction_({ |view, x, y, pressure, id|
+    })    .touchBeginAction_({ |view, x, y, pressure, id|
         "Rebooting system...".postln;
         "sudo reboot".unixCmd;
     });
