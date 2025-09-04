@@ -118,7 +118,7 @@ cat >> /boot/firmware/config.txt << 'EOF'
 dtparam=audio=off
 
 # Enable DRM VC4 V3D driver for HDMI
-dtoverlay=vc4-kms-v3d
+dtoverlay=vc4-kms-v3d,noaudio
 max_framebuffers=2
 
 # Don't have the firmware create an initial video= setting in cmdline.txt
@@ -818,10 +818,198 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-# STEP 23: Install launcher script
+# STEP 23: Create launcher with persistent audio setup
 step_header "STEP 17/17: Installing Launcher Script"
-echo "Installing launcher script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
+echo "Creating launcher with persistent audio setup..."
+cat > /usr/local/bin/start << 'EOF'
+#!/usr/bin/env bash
+
+CONFIG_FILE="$HOME/.uhj-vin-audio.conf"
+clear
+echo "Starting UHJ-Pi audio setup..."
+
+# Function to show device information
+show_device_info() {
+    local card_num=$1
+    local card_name=$2
+    
+    echo "Device Information:"
+    echo "  Name: $card_name"
+    echo "  Card: hw:$card_num"
+    
+    # Show playback capabilities
+    if aplay -l | grep -q "card $card_num:"; then
+        local playback_info=$(aplay -l | grep "card $card_num:" | head -1)
+        echo "  Playback: Available"
+    else
+        echo "  Playback: Not available"
+    fi
+    
+    # Show capture capabilities  
+    if arecord -l | grep -q "card $card_num:"; then
+        local capture_info=$(arecord -l | grep "card $card_num:" | head -1)
+        echo "  Capture: Available"
+    else
+        echo "  Capture: Not available"
+    fi
+    
+    # Try to get more detailed info from amixer
+    if command -v amixer >/dev/null 2>&1; then
+        local controls=$(amixer -c $card_num controls 2>/dev/null | wc -l)
+        if [ "$controls" -gt 0 ]; then
+            echo "  Controls: $controls available"
+        fi
+    fi
+    echo ""
+}
+
+# Interactive device detection
+detect_vinyl_devices() {
+    local vinyl_card=""
+    local output_card=""
+    local output_name=""
+    
+    echo "=== Input Device Setup ==="
+    echo ""
+    echo "Step 1: Connect your input device (turntable, microphone, etc.)"
+    read -p "Press Enter when your input device is connected..."
+    
+    # Look for newly connected audio devices
+    echo "Scanning for audio devices..."
+    sleep 2
+    
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
+            local card_num="${BASH_REMATCH[1]}"
+            local card_name="${BASH_REMATCH[2]}"
+            
+            # Look for likely turntable/vinyl deck names
+            if [[ $card_name =~ CODEC|Turntable|Vinyl|DJ ]]; then
+                vinyl_card="$card_num"
+                echo "✓ Found USB turntable: hw:$vinyl_card ($card_name)"
+                show_device_info "$card_num" "$card_name"
+                break
+            fi
+        fi
+    done < /proc/asound/cards
+    
+    # If no obvious turntable found, use the first available device
+    if [ -z "$vinyl_card" ]; then
+        echo "Could not automatically detect turntable by name. Using first available device..."
+        vinyl_card="0"  # ALSA assigns card numbers in connection order
+        local card_name=$(cat /proc/asound/cards | head -1 | sed 's/.*\[\([^]]*\)\].*/\1/')
+        echo "✓ Using first device as turntable: hw:$vinyl_card ($card_name)"
+        show_device_info "$vinyl_card" "$card_name"
+    fi
+    
+    echo "=== USB Audio Interface Setup ==="
+    echo ""
+    echo "Step 2: Connect your USB audio interface for output"
+    echo "(This can be any USB soundcard - Behringer, UMC, etc.)"
+    read -p "Press Enter when your USB audio interface is connected..."
+    
+    # Look for the output device (second device connected)
+    echo "Scanning for output interface..."
+    sleep 2
+    
+    # Look for any device that's not the turntable
+    echo "Available devices:"
+    cat /proc/asound/cards
+    echo ""
+    echo "Looking for output interface (any device that's not the turntable)..."
+    sleep 2
+    
+    while IFS= read -r line; do
+        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
+            local card_num="${BASH_REMATCH[1]}"
+            local card_name="${BASH_REMATCH[2]}"
+            
+            echo "Checking device: hw:$card_num ($card_name)"
+            
+            # Skip the turntable card
+            if [ "$card_num" != "$vinyl_card" ]; then
+                output_card="$card_num"
+                output_name="$card_name"
+                echo "✓ Found output interface: hw:$output_card ($output_name)"
+                show_device_info "$card_num" "$card_name"
+                break
+            else
+                echo "  (Skipping - this is the turntable)"
+            fi
+        fi
+    done < /proc/asound/cards
+    
+    if [ -z "$output_card" ]; then
+        echo "No second device found. Please connect your USB audio interface and try again."
+        exit 1
+    fi
+    
+    if [ -z "$vinyl_card" ]; then
+        echo "ERROR: Turntable not configured"
+        exit 1
+    fi
+    
+    if [ -z "$output_card" ]; then
+        echo "ERROR: No output interface found"
+        echo "Please connect a USB audio interface and try again"
+        exit 1
+    fi
+    
+    echo "VINYL_CARD=$vinyl_card" > "$CONFIG_FILE"
+    echo "OUTPUT_CARD=$output_card" >> "$CONFIG_FILE"
+    echo "OUTPUT_NAME=$output_name" >> "$CONFIG_FILE"
+    echo "Device configuration saved to $CONFIG_FILE"
+    
+    echo ""
+    echo "=== Configuration Complete ==="
+    echo "✓ Turntable: hw:$vinyl_card (input)"
+    echo "✓ Audio Interface: hw:$output_card ($output_name) (output)"
+    echo ""
+}
+
+# Kill any existing audio processes
+echo "Stopping existing audio processes..."
+killall jackd 2>/dev/null
+killall sclang 2>/dev/null
+sleep 2
+
+# Detect devices
+detect_vinyl_devices
+
+# Load configuration
+source "$CONFIG_FILE"
+
+echo "Starting JACK with:"
+echo "  Input: hw:$VINYL_CARD (Vinyl Deck)"
+echo "  Output: hw:$OUTPUT_CARD ($OUTPUT_NAME)"
+
+# Start JACK - simple input/output configuration like ESI  
+# Large buffer for stability (1024 frames = ~23ms latency, 3 periods)
+jackd -P75 -d alsa -C hw:$VINYL_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S &
+
+# Wait for JACK to start
+sleep 3
+
+# Check if JACK started successfully
+if ! pgrep jackd > /dev/null; then
+    echo "ERROR: JACK failed to start. Check /tmp/jack.log for details."
+    exit 1
+fi
+
+echo "✓ JACK started successfully"
+
+# Show available JACK ports
+echo ""
+echo "Available JACK ports:"
+jack_lsp 2>/dev/null || echo "jack_lsp not available"
+
+echo ""
+echo "🎵 Audio setup complete! Starting X11 session..."
+
+# Start the X11 session (this will use the xinitrc we created)
+startx -- :0
+EOF
+
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
