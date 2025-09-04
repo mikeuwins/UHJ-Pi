@@ -683,9 +683,9 @@ command -v unclutter >/dev/null 2>&1 && unclutter -idle 1 -root &
 export QT_QPA_PLATFORM=xcb
 export DISPLAY=:0
 blackbox &
-sleep 0.1
+sleep 0.5
 xsetroot -solid black
-sleep 0.1
+sleep 0.2
 exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > ~/post_output.log 2>&1
 EOF
 
