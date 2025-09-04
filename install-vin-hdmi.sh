@@ -754,7 +754,7 @@ Type=simple
 User=$ACTUAL_USER
 Environment=DISPLAY=:0
 Environment=QT_QPA_PLATFORM=xcb
-ExecStart=/usr/bin/startx -- :0
+ExecStart=/usr/local/bin/start
 Restart=no
 RestartSec=10
 
