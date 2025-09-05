@@ -3,6 +3,68 @@
 # UHJ-Pi Raspberry Pi Setup Script - Behringer + HDMI Version
 # Combines HDMI display setup with Behringer audio configuration
 
+# Progress bar function
+show_progress() {
+    local current=$1
+    local total=$2
+    local width=50
+    local percentage=$((current * 100 / total))
+    local completed=$((current * width / total))
+    
+    printf "\r["
+    printf "%*s" $completed | tr ' ' '='
+    printf "%*s" $((width - completed))
+    printf "] %d%% (%d/%d)" $percentage $current $total
+}
+
+# Build progress indicator with percentage and progress bar
+show_build_progress() {
+    local message=$1
+    local logfile=$2
+    local pid=$3
+    local last_percent=0
+    local width=30
+    
+    while kill -0 $pid 2>/dev/null; do
+        # Try to extract percentage from make output
+        if [ -f "$logfile" ]; then
+            # Look for various percentage formats: [45%], 45%, (45%), etc.
+            # Also look for make progress: [ 45%] Building...
+            local percent=$(tail -50 "$logfile" 2>/dev/null | grep -oE '\[\s*[0-9]+%\]|\[[0-9]+%\]|[0-9]+%' | tail -1 | grep -o '[0-9]\+' || echo "")
+            if [ -n "$percent" ] && [ "$percent" -gt "$last_percent" ]; then
+                last_percent=$percent
+            fi
+        fi
+        
+        # Show progress bar
+        local completed=$((last_percent * width / 100))
+        printf "\r$message ["
+        printf "%*s" $completed | tr ' ' '='
+        if [ $completed -lt $width ]; then
+            printf ">"
+            printf "%*s" $((width - completed - 1))
+        fi
+        if [ $last_percent -gt 0 ]; then
+            printf "] %d%%" $last_percent
+        else
+            printf "]"
+        fi
+        
+        sleep 2
+    done
+    printf "\r$message ["
+    printf "%*s" $width | tr ' ' '='
+    printf "] 100%% ✓\n"
+}
+
+# Step header function
+step_header() {
+    echo
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  $1"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
     echo "Please run this script with sudo"
@@ -16,9 +78,11 @@ if [ -z "$ACTUAL_USER" ]; then
     exit 1
 fi
 
-echo "UHJ-Pi Raspberry Pi Setup Script - Behringer + HDMI Version"
+clear
+echo "🎵 UHJ-Pi Raspberry Pi Setup Script - Behringer + HDMI Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
 echo "This version combines HDMI display setup with Behringer audio configuration"
+echo
 
 # Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
@@ -27,15 +91,15 @@ export APT_LISTCHANGES_FRONTEND=none
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
-# STEP 1: System Update
-echo "Step 1: System Update..."
+step_header "STEP 1/24: System Update"
+echo "Updating package lists..."
 apt-get update
 # Skip upgrade - go straight to installing what we need
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
-# STEP 2: Configure Boot Configuration for HDMI
-echo "Step 2: Configuring boot configuration for HDMI..."
+step_header "STEP 2/24: Configure Boot Configuration for HDMI"
+echo "Configuring boot configuration for HDMI..."
 # Backup existing config
 cp /boot/firmware/config.txt /boot/firmware/config.txt.backup
 
@@ -76,21 +140,22 @@ EOF
 
 echo "Boot configuration updated for HDMI"
 
-# STEP 3: Install X11 and Blackbox
+step_header "STEP 3/24: Install X11 and Desktop Environment"
+echo "Installing X11 and Blackbox..."
 apt install -y xserver-xorg x11-xserver-utils xinit blackbox blackbox-themes
 
-# STEP 3.5: Install additional X11 utilities
+echo "Installing additional X11 utilities..."
 apt install -y unclutter unclutter-xfixes bsetroot
 
-# STEP 4: Install SuperCollider Dependencies
-echo "Step 4: Installing SuperCollider Dependencies..."
+step_header "STEP 4/24: Install SuperCollider Dependencies"
+echo "Installing SuperCollider Dependencies..."
 apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev \
     libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev \
     libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev \
     qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
 
-# STEP 5: Clone SuperCollider
-echo "Step 5: Cloning SuperCollider..."
+step_header "STEP 5/24: Clone SuperCollider"
+echo "Cloning SuperCollider..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
     git clone --branch main --recurse-submodules https://github.com/supercollider/supercollider.git
@@ -99,8 +164,8 @@ cd supercollider
 mkdir -p build
 cd build
 
-# STEP 6: Configure SuperCollider Build - Qt with X11 for HDMI
-echo "Step 6: Configuring SuperCollider build..."
+step_header "STEP 6/24: Configure SuperCollider Build"
+echo "Configuring SuperCollider build (Qt with X11 for HDMI)..."
 echo "Note: Qt6 runtime libraries are provided by dev packages on Pi OS Lite"
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
     -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=OFF -DSC_QT=ON ..; then
@@ -110,8 +175,8 @@ else
     exit 1
 fi
 
-# STEP 7: Build SuperCollider
-echo "Step 7: Building SuperCollider..."
+step_header "STEP 7/24: Build SuperCollider"
+echo "Building SuperCollider..."
 if make -j2; then
     echo "SuperCollider build successful"
 else
@@ -119,8 +184,8 @@ else
     exit 1
 fi
 
-# STEP 8: Install SuperCollider
-echo "Step 8: Installing SuperCollider..."
+step_header "STEP 8/24: Install SuperCollider"
+echo "Installing SuperCollider..."
 if make install; then
     echo "SuperCollider installation successful"
     ldconfig
@@ -129,8 +194,8 @@ else
     exit 1
 fi
 
-# STEP 9: Set up ARM64 library paths and Qt environment
-echo "Step 9: Setting up ARM64 library paths and Qt environment..."
+step_header "STEP 9/24: Set up ARM64 library paths and Qt environment"
+echo "Setting up ARM64 library paths and Qt environment..."
 # Detect architecture and set correct library paths
 ARCH=$(uname -m)
 if [ "$ARCH" = "aarch64" ]; then
@@ -155,21 +220,21 @@ echo "export DISPLAY=:0" >> /home/$ACTUAL_USER/.profile
 
 echo "ARM64 library paths and Qt environment configured for $ARCH"
 
-# STEP 10: Set up udev rules for HID and audio permissions
-echo "Step 10: Setting up udev rules..."
+step_header "STEP 10/24: Set up udev rules for HID and audio permissions"
+echo "Setting up udev rules..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
-# STEP 11: Configure JACK Audio
-echo "Step 11: Configuring JACK Audio..."
+step_header "STEP 11/24: Configure JACK Audio"
+echo "Configuring JACK Audio..."
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
 usermod -aG audio,plugdev $ACTUAL_USER
 
-# STEP 12: Install SC3 Plugins
-echo "Step 12: Installing SC3 Plugins..."
+step_header "STEP 12/24: Install SC3 Plugins"
+echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
     if git clone --recursive https://github.com/supercollider/sc3-plugins.git; then
@@ -200,8 +265,8 @@ else
     exit 1
 fi
 
-# STEP 13: Clone UHJ-Pi repository and install Behringer audio setup
-echo "Step 13: Cloning UHJ-Pi repository and installing Behringer audio setup..."
+step_header "STEP 13/24: Clone UHJ-Pi repository and install Behringer audio setup"
+echo "Cloning UHJ-Pi repository and installing Behringer audio setup..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
     if git clone https://github.com/mikeuwins/UHJ-Pi.git; then
@@ -238,8 +303,8 @@ udevadm trigger
 
 echo "Behringer audio setup completed successfully"
 
-# STEP 14: Install ATK and handle GUI component cleanup (MANUAL APPROACH)
-echo "Step 14: Installing ATK and handling GUI component cleanup (manual approach)..."
+step_header "STEP 14/24: Install ATK and handle GUI component cleanup"
+echo "Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
 # Create necessary directories
@@ -392,8 +457,8 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-# STEP 15: Install Custom UHJ Test Sounds
-echo "Step 15: Installing Custom UHJ Test Sounds..."
+step_header "STEP 15/24: Install Custom UHJ Test Sounds"
+echo "Installing Custom UHJ Test Sounds..."
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -417,8 +482,8 @@ fi
 
 # AmbiVerbSC now installed via Quark system above
 
-# STEP 16: Install custom user classes
-echo "Step 16: Installing custom user classes..."
+step_header "STEP 16/24: Install custom user classes"
+echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
 # Ensure SuperCollider Extensions directory exists
@@ -454,8 +519,8 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-# STEP 17: Install custom fonts
-echo "Step 17: Installing custom fonts..."
+step_header "STEP 17/24: Install custom fonts"
+echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
 # Create fonts directory if it doesn't exist
@@ -475,8 +540,8 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-# STEP 18: Configure X11 and Blackbox with all refinements
-echo "Step 18: Configuring X11 and Blackbox with all refinements..."
+step_header "STEP 18/24: Configure X11 and Blackbox with all refinements"
+echo "Configuring X11 and Blackbox with all refinements..."
 
 # Create X11 configuration directory
 mkdir -p /etc/X11/xorg.conf.d
@@ -501,8 +566,8 @@ cat > /etc/security/limits.d/audio.conf << 'EOF'
 @audio - nice -19
 EOF
 
-# STEP 19: Create custom Blackbox configuration
-echo "Step 19: Creating custom Blackbox configuration..."
+step_header "STEP 19/24: Create custom Blackbox configuration"
+echo "Creating custom Blackbox configuration..."
 
 # Create blackbox directory and configuration
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.blackbox/styles
@@ -531,8 +596,8 @@ EOF
 
 # Username is already set correctly in blackboxrc
 
-# STEP 20: Create refined .xinitrc with proper startup sequence
-echo "Step 20: Creating refined .xinitrc..."
+step_header "STEP 20/24: Create refined .xinitrc with proper startup sequence"
+echo "Creating refined .xinitrc..."
 
 cat > /home/$ACTUAL_USER/.xinitrc << 'EOF'
 command -v unclutter >/dev/null 2>&1 && unclutter -idle 1 -root &
@@ -550,8 +615,8 @@ chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.xinitrc
 chown $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackboxrc
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.blackbox
 
-# STEP 21: Create systemd service for X11 auto-start (disabled by default for debugging)
-echo "Step 21: Creating systemd service for X11 auto-start (disabled by default for debugging)..."
+step_header "STEP 21/24: Create systemd service for X11 auto-start"
+echo "Creating systemd service for X11 auto-start (disabled by default for debugging)..."
 
 cat > /etc/systemd/system/uhj-pi-x11.service << EOF
 [Unit]
@@ -580,8 +645,8 @@ echo "To enable kiosk mode later, run: sudo systemctl enable uhj-pi-x11.service"
 echo "Auto-start X11 session service created but NOT enabled (for debugging)"
 echo "To enable kiosk mode later, run: sudo systemctl enable uhj-pi-x11.service"
 
-# STEP 22: Set up X11 session environment
-echo "Step 22: Setting up X11 session environment..."
+step_header "STEP 22/24: Set up X11 session environment"
+echo "Setting up X11 session environment..."
 
 # Create X11 session directory
 mkdir -p /etc/X11/Xsession.d
@@ -610,15 +675,15 @@ EOF
 
 echo "X11 session environment configured"
 
-# STEP 23: Install Bluetooth pairing script
-echo "Step 23: Installing Bluetooth pairing script..."
+step_header "STEP 23/24: Install Bluetooth pairing script"
+echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
-# STEP 24: Install launcher script
-echo "Step 24: Installing launcher script..."
+step_header "STEP 24/24: Install launcher script"
+echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
@@ -667,4 +732,10 @@ echo "  3. The start command will:"
 echo "     - Detect and verify Behringer devices"
 echo "     - Set up JACK + zita bridges"
 echo "     - Launch X11 session with UHJ app"
-echo "  4. Behringer audio setup will be handled automatically by the app" 
+echo "  4. Behringer audio setup will be handled automatically by the app"
+echo ""
+echo "Press any key to reboot the system..."
+read -n 1 -s
+echo ""
+echo "Rebooting..."
+reboot 
