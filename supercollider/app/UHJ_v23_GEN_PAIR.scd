@@ -1334,44 +1334,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         ~headtrackPairBtn.value_(1); // Show working
         
         Task({
-            var deviceInfo, isPaired, isConnected, result, success = false, htMac;
+            var result, success = false;
             
-            // First, find the headtracker MAC address dynamically
-            htMac = "bluetoothctl devices | grep HT | awk '{print $2}'".unixCmdGetStdOut.strip;
+            // Just run the pairing script - it handles everything
+            result = "/usr/local/bin/ble-ht.sh".unixCmdGetStdOut;
+            ("Pairing result: " ++ result).postln;
             
-            if (htMac.isEmpty) {
-                ("No headtracker found").postln;
-                success = false;
+            if (result.contains("PAIRED_AND_CONNECTED")) {
+                success = true;
             } {
-                // Check the ACTUAL device status
-                deviceInfo = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
-                isPaired = deviceInfo.contains("Paired: yes");
-                isConnected = deviceInfo.contains("Connected: yes");
+                success = false;
             };
-            
-            if (isPaired) {
-                // Device is paired - UNPAIR (remove device)
-                ("Device is paired - removing...").postln;
-                try {
-                    // Disconnect first, then remove
-                    ("Disconnecting headtracker...").postln;
-                    result = ("bluetoothctl disconnect " ++ htMac).unixCmdGetStdOut;
-                    ("Disconnect result: " ++ result).postln;
-                    1.wait; // Wait for disconnect to complete
-                    
-                    ("Removing headtracker...").postln;
-                    result = ("bluetoothctl remove " ++ htMac).unixCmdGetStdOut;
-                    ("Remove result: " ++ result).postln;
-                    1.wait; // Wait for removal to complete
-                    
-                    // Check if it's really gone
-                    result = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
-                    ("Final status: " ++ result).postln;
-                    success = true;
-                } { |error|
-                    ("Unpair error: " ++ error).postln;
-                    success = false;
-                };
                 
                 {
                     ~pairingInProgress = false;
