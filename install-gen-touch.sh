@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# UHJ-Pi Raspberry Pi Setup Script - USB Turntable Touch Version
-# Based on install-beh-touch.sh with USB turntable audio setup integrated
+# UHJ-Pi Raspberry Pi Setup Script - Generic Touch Version
+# Based on install-beh-touch.sh with generic audio setup integrated
 
 # Progress bar function
 show_progress() {
@@ -79,9 +79,9 @@ if [ -z "$ACTUAL_USER" ]; then
 fi
 
 clear
-echo "🎵 UHJ-Pi Raspberry Pi Setup Script - USB Turntable Touch Version 🎵"
+echo "🎵 UHJ-Pi Raspberry Pi Setup Script - Generic Touch Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
-echo "This version includes USB turntable audio setup with dynamic device detection"
+echo "This version includes generic audio setup with dynamic device detection"
 echo
 
 # Configure non-interactive package installation
@@ -711,7 +711,7 @@ echo ""
 echo "After reboot, log in and run: start"
 echo ""
 echo "The first time you run 'start', it will help you configure your"
-echo "turntable and output interface. After that, just run 'start'"
+echo "audio input and output devices. After that, just run 'start'"
 echo "whenever you want to use the UHJ-Pi application."
 echo ""
 echo -n "Press any key to reboot... "

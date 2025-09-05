@@ -76,9 +76,9 @@ if [ -z "$ACTUAL_USER" ]; then
 fi
 
 clear
-echo "🎵 UHJ-Pi Raspberry Pi Setup Script - USB Turntable HDMI Version 🎵"
+echo "🎵 UHJ-Pi Raspberry Pi Setup Script - Generic HDMI Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
-echo "This version includes USB turntable audio setup with HDMI display configuration"
+echo "This version includes generic audio setup with HDMI display configuration"
 echo
 
 # Configure non-interactive package installation

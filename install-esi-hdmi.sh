@@ -82,7 +82,7 @@ fi
 clear
 echo "🎵 UHJ-Pi Raspberry Pi Setup Script - ESI HDMI Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
-echo "This version includes all X11 and QT configuration refinements"
+echo "This version includes ESI audio setup with HDMI display configuration"
 echo
 
 # Configure non-interactive package installation
