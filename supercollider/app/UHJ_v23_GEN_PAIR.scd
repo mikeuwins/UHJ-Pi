@@ -1450,7 +1450,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 
 // Simple connection monitor - checks initial status and monitors ongoing
 ~connectionMonitor = Routine({
-    var checkResult, isConnected, isPaired, htMac;
+    var checkResult, isConnected, isPaired, htMac, pairedDevices, deviceList, foundPaired;
     
     // Wait a bit before starting monitoring to avoid startup delays
     3.wait;
