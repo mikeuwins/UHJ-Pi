@@ -24,7 +24,7 @@ var win, mainView,
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
 // --- Headtracker MAC address (detected at startup) ---
-~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
+~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
 // --- Maplin button overlay --- grep hid, i get uhid 4
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
