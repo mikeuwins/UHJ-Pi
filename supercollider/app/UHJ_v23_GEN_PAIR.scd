@@ -1334,12 +1334,21 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         ~headtrackPairBtn.value_(1); // Show working
         
         Task({
-            var deviceInfo, isPaired, isConnected, result, success = false;
+            var deviceInfo, isPaired, isConnected, result, success = false, htMac;
             
-            // First, check the ACTUAL device status
-            deviceInfo = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-            isPaired = deviceInfo.contains("Paired: yes");
-            isConnected = deviceInfo.contains("Connected: yes");
+            // Dynamically find headtracker MAC address by device name
+            htMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
+            
+            if (htMac.isEmpty) {
+                // No headtracker found - proceed to pair
+                isPaired = false;
+                isConnected = false;
+            } {
+                // Check the ACTUAL device status using dynamic MAC
+                deviceInfo = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
+                isPaired = deviceInfo.contains("Paired: yes");
+                isConnected = deviceInfo.contains("Connected: yes");
+            };
             
             if (isPaired) {
                 // Device is paired - UNPAIR (remove device)
@@ -1347,17 +1356,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 try {
                     // Disconnect first, then remove
                     ("Disconnecting headtracker...").postln;
-                    result = "bluetoothctl disconnect E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl disconnect " ++ htMac).unixCmdGetStdOut;
                     ("Disconnect result: " ++ result).postln;
                     1.wait; // Wait for disconnect to complete
                     
                     ("Removing headtracker...").postln;
-                    result = "bluetoothctl remove E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl remove " ++ htMac).unixCmdGetStdOut;
                     ("Remove result: " ++ result).postln;
                     1.wait; // Wait for removal to complete
                     
                     // Check if it's really gone
-                    result = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
                     ("Final status: " ++ result).postln;
                     success = true;
                 } { |error|
