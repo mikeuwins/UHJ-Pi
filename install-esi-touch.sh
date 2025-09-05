@@ -95,7 +95,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/22: System Update"
+step_header "STEP 1/21: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -107,7 +107,7 @@ fi
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
-step_header "STEP 2/22: Disable Onboard and HDMI Audio"
+step_header "STEP 2/21: Disable Onboard and HDMI Audio"
 echo "Disabling onboard and HDMI audio..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -116,16 +116,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
     echo "dtoverlay=vc4-kms-v3d,noaudio" >> /boot/firmware/config.txt
 fi
 
-step_header "STEP 3/22: Install X11 and Blackbox"
-echo "Installing X11 and Blackbox..."
-if apt install -y xserver-xorg x11-xserver-utils xinit blackbox >> $INSTALL_LOG 2>&1; then
-    echo "✓ X11 and Blackbox installed"
-else
-    echo "✗ X11 and Blackbox installation failed - check $INSTALL_LOG"
-    exit 1
-fi
-
-step_header "STEP 4/22: Install SuperCollider Dependencies"
+step_header "STEP 3/21: Install SuperCollider Dependencies"
 echo "Installing SuperCollider Dependencies..."
 if apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev >> $INSTALL_LOG 2>&1; then
     echo "✓ SuperCollider Dependencies installed"
@@ -134,7 +125,7 @@ else
     exit 1
 fi
 
-step_header "STEP 5/22: Clone SuperCollider"
+step_header "STEP 4/21: Clone SuperCollider"
 echo "Cloning SuperCollider..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
@@ -144,7 +135,7 @@ cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 6/22: Configure SuperCollider Build"
+step_header "STEP 5/21: Configure SuperCollider Build"
 echo "Configuring SuperCollider build (SC_QT=ON for Qt support without X11)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..; then
     echo "SuperCollider configuration successful"
@@ -153,7 +144,7 @@ else
     exit 1
 fi
 
-step_header "STEP 7/22: Build SuperCollider"
+step_header "STEP 7/21: Build SuperCollider"
 echo "Building SuperCollider..."
 if make -j2; then
     echo "SuperCollider build successful"
@@ -162,7 +153,7 @@ else
     exit 1
 fi
 
-step_header "STEP 8/22: Install SuperCollider"
+step_header "STEP 8/21: Install SuperCollider"
 echo "Installing SuperCollider..."
 if make install; then
     echo "SuperCollider installation successful"
@@ -172,7 +163,7 @@ else
     exit 1
 fi
 
-step_header "STEP 9/22: Set up udev rules for HID and audio permissions"
+step_header "STEP 9/21: Set up udev rules for HID and audio permissions"
 echo "Setting up udev rules..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
@@ -180,12 +171,12 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
-step_header "STEP 10/22: Configure JACK Audio"
+step_header "STEP 10/21: Configure JACK Audio"
 echo "Configuring JACK Audio..."
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
 usermod -aG audio,plugdev $ACTUAL_USER
 
-step_header "STEP 11/22: Install SC3 Plugins"
+step_header "STEP 11/21: Install SC3 Plugins"
 echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
@@ -217,7 +208,7 @@ else
     exit 1
 fi
 
-step_header "STEP 12/22: Clone UHJ-Pi repository and build phono-control CLI"
+step_header "STEP 12/21: Clone UHJ-Pi repository and build phono-control CLI"
 echo "Cloning UHJ-Pi repository and building phono-control CLI..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
@@ -242,7 +233,7 @@ else
     exit 1
 fi
 
-step_header "STEP 13/22: Install ATK and handle GUI component cleanup"
+step_header "STEP 13/21: Install ATK and handle GUI component cleanup"
 echo "Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
@@ -404,7 +395,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-step_header "STEP 14/22: Install Custom UHJ Test Sounds"
+step_header "STEP 14/21: Install Custom UHJ Test Sounds"
 echo "Installing Custom UHJ Test Sounds..."
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
@@ -429,7 +420,7 @@ fi
 
 # AmbiVerbSC now installed via Quark system above
 
-step_header "STEP 15/22: Install custom user classes"
+step_header "STEP 15/21: Install custom user classes"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -467,7 +458,7 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-step_header "STEP 16/22: Configure Qt platform for headless operation"
+step_header "STEP 16/21: Configure Qt platform for headless operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -476,7 +467,7 @@ echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
 echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
 echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
 
-step_header "STEP 17/22: Install custom fonts"
+step_header "STEP 17/21: Install custom fonts"
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
@@ -508,7 +499,7 @@ echo "Reboot required. Run: sudo reboot"
 echo "After reboot and login, run:"
 echo "  start"
 
-step_header "STEP 18/22: Install Bluetooth pairing script"
+step_header "STEP 18/21: Install Bluetooth pairing script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -536,7 +527,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 19/22: Install launcher script"
+step_header "STEP 19/21: Install launcher script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
