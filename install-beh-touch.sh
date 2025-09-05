@@ -91,9 +91,19 @@ export APT_LISTCHANGES_FRONTEND=none
 echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
 
+# Set up logging
+INSTALL_LOG="/tmp/uhj-pi-install.log"
+echo "Installation started at $(date)" > $INSTALL_LOG
+echo "Log file: $INSTALL_LOG"
+
 step_header "STEP 1/22: System Update"
 echo "Updating package lists..."
-apt-get update
+if apt-get update >> $INSTALL_LOG 2>&1; then
+    echo "✓ Package lists updated"
+else
+    echo "✗ Package update failed - check $INSTALL_LOG"
+    exit 1
+fi
 # Skip upgrade - go straight to installing what we need
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
@@ -109,10 +119,15 @@ fi
 
 step_header "STEP 3/22: Install SuperCollider Dependencies"
 echo "Installing SuperCollider Dependencies..."
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev \
+if apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev \
     libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev \
     libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev \
-    qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+    qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev >> $INSTALL_LOG 2>&1; then
+    echo "✓ SuperCollider Dependencies installed"
+else
+    echo "✗ SuperCollider Dependencies installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 
 step_header "STEP 4/22: Clone SuperCollider"
 echo "Cloning SuperCollider..."
@@ -438,7 +453,12 @@ chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider
 
 step_header "STEP 15/22: Install zita-ajbridge for Behringer audio setup"
 echo "Installing zita-ajbridge..."
-apt-get install -y zita-ajbridge
+if apt-get install -y zita-ajbridge >> $INSTALL_LOG 2>&1; then
+    echo "✓ zita-ajbridge installed"
+else
+    echo "✗ zita-ajbridge installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 
 step_header "STEP 16/22: Create Behringer udev rules for persistent device naming"
 echo "Creating Behringer udev rules..."
@@ -481,7 +501,12 @@ cp "led_dot_matrix/LED Dot-Matrix.ttf" /usr/local/share/fonts/truetype/uhj-pi/
 
 # Install Arial font for power button
 echo "Installing Arial font..."
-apt-get install -y cabextract
+if apt-get install -y cabextract >> $INSTALL_LOG 2>&1; then
+    echo "✓ cabextract installed"
+else
+    echo "✗ cabextract installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 mkdir -p /usr/share/fonts/truetype/msttcorefonts
 cd /usr/share/fonts/truetype/msttcorefonts
 wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
@@ -495,6 +520,27 @@ cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
+
+# Configure passwordless sudo for reboot
+echo "Configuring passwordless sudo for reboot..."
+echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-reboot
+chmod 440 /etc/sudoers.d/uhj-pi-reboot
+echo "✓ Passwordless reboot configured"
+
+# Configure automatic login
+echo "Configuring automatic login..."
+if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then
+    echo "Automatic login already configured"
+else
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $ACTUAL_USER --noclear %I \$TERM
+EOF
+    systemctl enable getty@tty1.service
+    echo "✓ Automatic login configured for user $ACTUAL_USER"
+fi
 
 step_header "STEP 20/22: Install launcher script"
 echo "Installing launcher script..."
@@ -517,9 +563,10 @@ echo "  ✅ Custom fonts installed"
 echo "  ✅ Launcher created: /usr/local/bin/start"
 echo ""
 echo "Next Steps:"
-echo "1. After reboot, run: start"
-echo "2. Connect Behringer devices when prompted"
-echo "3. Pair headtracker with: ble-ht.sh"
+echo "1. System will auto-login after reboot"
+echo "2. Run: start"
+echo "3. Connect Behringer devices when prompted"
+echo "4. Pair headtracker with: ble-ht.sh"
 echo ""
 echo "The system will automatically detect and configure your Behringer audio devices!"
 echo ""
