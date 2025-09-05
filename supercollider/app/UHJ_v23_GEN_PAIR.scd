@@ -1450,13 +1450,22 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 
 // Simple connection monitor - checks initial status and monitors ongoing
 ~connectionMonitor = Routine({
-    var checkResult, isConnected, isPaired, htMac, pairedDevices, deviceList, foundPaired;
+    var checkResult, isConnected, isPaired, htMac;
     
     // Wait a bit before starting monitoring to avoid startup delays
     3.wait;
     
+    // Additional short delay for headtracker detection to stabilize
+    2.wait;
+    
     // Check initial pairing status on first run
+    // First try to find HT device, if not found, check all paired devices for HT
     htMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
+    if (htMac.isEmpty) {
+        // If no HT found in devices, check paired devices
+        htMac = "bluetoothctl paired-devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
+    };
+    
     if (htMac.notEmpty) {
         checkResult = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
         isConnected = checkResult.contains("Connected: yes");
