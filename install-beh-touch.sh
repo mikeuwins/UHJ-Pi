@@ -514,7 +514,16 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-step_header "STEP 19/22: Install Bluetooth pairing script"
+step_header "STEP 19/22: Configure Qt platform for headless operation"
+echo "Configuring Qt platform for headless operation..."
+# Set Qt platform to eglfs for the user's shell
+echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
+echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
+# Clear X11 display variable to force EGLFS
+echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
+echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
+
+step_header "STEP 20/22: Install Bluetooth pairing script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -542,7 +551,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 20/22: Install launcher script"
+step_header "STEP 21/22: Install launcher script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
