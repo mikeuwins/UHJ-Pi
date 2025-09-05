@@ -22,6 +22,8 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
+// --- Headtracker MAC address (detected at startup) ---
+~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
 // --- Maplin button overlay ---
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
@@ -1213,10 +1215,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         Task({
             var deviceInfo, isPaired, isConnected, result, success = false;
             
-            // First, check the ACTUAL device status
-            deviceInfo = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-            isPaired = deviceInfo.contains("Paired: yes");
-            isConnected = deviceInfo.contains("Connected: yes");
+            // Use the MAC address detected at startup
+            if (~headtrackerMac.notEmpty) {
+                // Check the ACTUAL device status using startup MAC
+                deviceInfo = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+                isPaired = deviceInfo.contains("Paired: yes");
+                isConnected = deviceInfo.contains("Connected: yes");
+            } {
+                // No headtracker found - proceed to pair
+                isPaired = false;
+                isConnected = false;
+            };
             
             if (isPaired) {
                 // Device is paired - UNPAIR (remove device)
@@ -1224,17 +1233,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 try {
                     // Disconnect first, then remove
                     ("Disconnecting headtracker...").postln;
-                    result = "bluetoothctl disconnect E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl disconnect " ++ ~headtrackerMac).unixCmdGetStdOut;
                     ("Disconnect result: " ++ result).postln;
                     1.wait; // Wait for disconnect to complete
                     
                     ("Removing headtracker...").postln;
-                    result = "bluetoothctl remove E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl remove " ++ ~headtrackerMac).unixCmdGetStdOut;
                     ("Remove result: " ++ result).postln;
                     1.wait; // Wait for removal to complete
                     
                     // Check if it's really gone
-                    result = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
                     ("Final status: " ++ result).postln;
                     success = true;
                 } { |error|
@@ -1327,12 +1336,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Use defer to safely access GUI properties
         {
             if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-                isConnected = checkResult.contains("Connected: yes");
-                isPaired = checkResult.contains("Paired: yes");
-                
-                if (isPaired.not || isConnected.not) {
-                    // Device is disconnected/removed - reset button
+                if (~headtrackerMac.notEmpty) {
+                    checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+                    isConnected = checkResult.contains("Connected: yes");
+                    isPaired = checkResult.contains("Paired: yes");
+                    
+                    if (isPaired.not || isConnected.not) {
+                        // Device is disconnected/removed - reset button
+                        ~headtrackPairBtn.value_(0);
+                    };
+                } {
+                    // No headtracker MAC - reset button
                     ~headtrackPairBtn.value_(0);
                 };
             };
