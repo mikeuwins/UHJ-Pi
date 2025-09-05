@@ -1459,21 +1459,9 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     2.wait;
     
     // Check initial pairing status on first run
-    // First try to find HT device, if not found, check all paired devices for HT
-    htMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
-    if (htMac.isEmpty) {
-        // If no HT found in devices, check paired devices
-        htMac = "bluetoothctl paired-devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
-    };
-    
-    if (htMac.notEmpty) {
-        checkResult = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
-        isConnected = checkResult.contains("Connected: yes");
-        isPaired = checkResult.contains("Paired: yes");
-    } {
-        isConnected = false;
-        isPaired = false;
-    };
+    checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+    isConnected = checkResult.contains("Connected: yes");
+    isPaired = checkResult.contains("Paired: yes");
     
     if (isPaired && isConnected) {
         // Device is already paired and connected - show paired state
@@ -1490,18 +1478,12 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Use defer to access GUI elements from background thread
         {
             if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                htMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
-                if (htMac.notEmpty) {
-                    checkResult = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
-                    isConnected = checkResult.contains("Connected: yes");
-                    isPaired = checkResult.contains("Paired: yes");
-                    
-                    if (isPaired.not || isConnected.not) {
-                        // Device is disconnected/removed - reset button
-                        ~headtrackPairBtn.value_(0);
-                    };
-                } {
-                    // No headtracker found - reset button
+                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                isConnected = checkResult.contains("Connected: yes");
+                isPaired = checkResult.contains("Paired: yes");
+                
+                if (isPaired.not || isConnected.not) {
+                    // Device is disconnected/removed - reset button
                     ~headtrackPairBtn.value_(0);
                 };
             };
