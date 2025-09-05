@@ -1485,12 +1485,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Use defer to access GUI elements from background thread
         {
             if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-                isConnected = checkResult.contains("Connected: yes");
-                isPaired = checkResult.contains("Paired: yes");
-                
-                if (isPaired.not || isConnected.not) {
-                    // Device is disconnected/removed - reset button
+                if (~headtrackerMac.notEmpty) {
+                    checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+                    isConnected = checkResult.contains("Connected: yes");
+                    isPaired = checkResult.contains("Paired: yes");
+                    
+                    if (isPaired.not || isConnected.not) {
+                        // Device is disconnected/removed - reset button
+                        ~headtrackPairBtn.value_(0);
+                    };
+                } {
+                    // No headtracker MAC - reset button
                     ~headtrackPairBtn.value_(0);
                 };
             };
