@@ -1481,7 +1481,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Use defer to access GUI elements from background thread
         {
             if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                var htMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
+                htMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
                 if (htMac.notEmpty) {
                     checkResult = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
                     isConnected = checkResult.contains("Connected: yes");
