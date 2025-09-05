@@ -1,18 +1,13 @@
 #!/bin/bash
 
-# Automated headtracker pairing script using EOF approach
+# Automated headtracker pairing script using timeout approach
 DEVICE_NAME="HT"
 
 echo "=== Headtracker Pairing ==="
 echo "Looking for headtracker '$DEVICE_NAME'..."
 
-# Scan for devices using EOF
-bluetoothctl << EOF
-scan on
-sleep 5
-scan off
-exit
-EOF
+# Scan for devices with timeout
+timeout 5 bluetoothctl scan on > /dev/null 2>&1
 
 # Find the HT device MAC address
 DEVICE_MAC=$(bluetoothctl devices | grep "$DEVICE_NAME" | awk '{print $2}')
@@ -25,12 +20,8 @@ fi
 
 echo "Found headtracker at $DEVICE_MAC"
 
-# Pair with the found device using EOF
-bluetoothctl << EOF
-pair $DEVICE_MAC
-sleep 3
-exit
-EOF
+# Pair with the found device using timeout
+timeout 10 bluetoothctl pair "$DEVICE_MAC" > /dev/null 2>&1
 
 # Check if pairing succeeded
 if bluetoothctl info "$DEVICE_MAC" | grep -q "Paired: yes"; then
