@@ -515,6 +515,27 @@ chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
+# Configure passwordless sudo for reboot
+echo "Configuring passwordless sudo for reboot..."
+echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-reboot
+chmod 440 /etc/sudoers.d/uhj-pi-reboot
+echo "✓ Passwordless reboot configured"
+
+# Configure automatic login
+echo "Configuring automatic login..."
+if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then
+    echo "Automatic login already configured"
+else
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $ACTUAL_USER --noclear %I \$TERM
+EOF
+    systemctl enable getty@tty1.service
+    echo "✓ Automatic login configured for user $ACTUAL_USER"
+fi
+
 step_header "STEP 19/22: Install launcher script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
@@ -536,9 +557,10 @@ echo "  ✅ Custom fonts installed"
 echo "  ✅ Launcher created: /usr/local/bin/start"
 echo ""
 echo "Next Steps:"
-echo "1. After reboot, run: start"
-echo "2. Connect ESI devices when prompted"
-echo "3. Pair headtracker with: ble-ht.sh"
+echo "1. System will auto-login after reboot"
+echo "2. Run: start"
+echo "3. Connect ESI devices when prompted"
+echo "4. Pair headtracker with: ble-ht.sh"
 echo ""
 echo "The system will automatically detect and configure your ESI audio devices!"
 echo ""
