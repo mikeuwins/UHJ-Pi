@@ -1,5 +1,5 @@
 // ============================================================================
-// UHJ v23 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
+....  what if  will always ne// UHJ v23 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
@@ -1336,10 +1336,18 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         Task({
             var deviceInfo, isPaired, isConnected, result, success = false;
             
-            // First, check the ACTUAL device status
-            deviceInfo = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-            isPaired = deviceInfo.contains("Paired: yes");
-            isConnected = deviceInfo.contains("Connected: yes");
+            // First, find the headtracker MAC address dynamically
+            var htMac = "bluetoothctl devices | grep HT | awk '{print $2}'".unixCmdGetStdOut.strip;
+            
+            if (htMac.isEmpty) {
+                ("No headtracker found").postln;
+                success = false;
+            } {
+                // Check the ACTUAL device status
+                deviceInfo = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
+                isPaired = deviceInfo.contains("Paired: yes");
+                isConnected = deviceInfo.contains("Connected: yes");
+            };
             
             if (isPaired) {
                 // Device is paired - UNPAIR (remove device)
@@ -1347,17 +1355,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 try {
                     // Disconnect first, then remove
                     ("Disconnecting headtracker...").postln;
-                    result = "bluetoothctl disconnect E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl disconnect " ++ htMac).unixCmdGetStdOut;
                     ("Disconnect result: " ++ result).postln;
                     1.wait; // Wait for disconnect to complete
                     
                     ("Removing headtracker...").postln;
-                    result = "bluetoothctl remove E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl remove " ++ htMac).unixCmdGetStdOut;
                     ("Remove result: " ++ result).postln;
                     1.wait; // Wait for removal to complete
                     
                     // Check if it's really gone
-                    result = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                    result = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
                     ("Final status: " ++ result).postln;
                     success = true;
                 } { |error|
@@ -1450,18 +1458,42 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Use defer to access GUI elements from background thread
         {
             if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-                isConnected = checkResult.contains("Connected: yes");
-                isPaired = checkResult.contains("Paired: yes");
+                var htMac = "bluetoothctl devices | grep HT | awk '{print $2}'".unixCmdGetStdOut.strip;
                 
-                if (isPaired.not || isConnected.not) {
-                    // Device is disconnected/removed - reset button
+                if (htMac.notEmpty) {
+                    checkResult = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
+                    isConnected = checkResult.contains("Connected: yes");
+                    isPaired = checkResult.contains("Paired: yes");
+                    
+                    if (isPaired.not || isConnected.not) {
+                        // Device is disconnected/removed - reset button
+                        ~headtrackPairBtn.value_(0);
+                    };
+                } {
+                    // No headtracker found - reset button
                     ~headtrackPairBtn.value_(0);
                 };
             };
         }.defer;
     };
 }).play;
+
+// Initial pairing status check on startup
+{
+    var checkResult, isPaired, htMac;
+    
+    // Find headtracker MAC address dynamically
+    htMac = "bluetoothctl devices | grep HT | awk '{print $2}'".unixCmdGetStdOut.strip;
+    
+    if (htMac.notEmpty) {
+        checkResult = ("bluetoothctl info " ++ htMac).unixCmdGetStdOut;
+        isPaired = checkResult.contains("Paired: yes");
+        
+        if (isPaired) {
+            ~headtrackPairBtn.value_(2);
+        };
+    };
+}.defer;
 
 // --- CONTROL LABELS ---
 StaticText(mainView, Rect(594, 80, 55, 20)).string_("ROTATE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
