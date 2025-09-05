@@ -68,11 +68,11 @@ hasInputMute = (Platform.case(\linux, { "HAS_INPUT_MUTE".getenv ? "0" }, { "0" }
 inputCard = Platform.case(\linux, { "INPUT_CARD".getenv ? "0" }, { "0" });
 inputControl = Platform.case(\linux, { "INPUT_CONTROL".getenv ? "" }, { "" });
 
-// Initialize ALSA mixer to 0dB (127) on boot if input gain control is available
+// Initialize ALSA mixer to 100% on boot if input gain control is available
 if(hasInputGain and: {inputControl.notEmpty}) {
-    ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' 127").unixCmdGetStdOut;
-    lastInL = 127; // Set initial value
-    lastInR = 127; // Set initial value
+    ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' 100%").unixCmdGetStdOut;
+    lastInL = 100; // Set initial value (100%)
+    lastInR = 100; // Set initial value (100%)
 };
 
 // Debug: print what we read
@@ -86,9 +86,33 @@ if(hasInputGain and: {inputControl.notEmpty}) {
 // ALSA control functions for generic input devices
 ~setInputLevel = { |level|
     if(hasInputGain and: {inputControl.notEmpty}) {
-        var alsaLevel = level.linlin(0, 1, minIn, maxIn).round.asInteger;
-        ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ alsaLevel).unixCmdGetStdOut;
-        lastInL = alsaLevel; // Use existing variable
+        // Use percentage - works with any range
+        var percentage = (level * 100).round.asInteger; // 0-100% range
+        var cmd = "amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ percentage ++ "%";
+        "DEBUG: Running ALSA command: ".post; cmd.postln;
+        cmd.unixCmdGetStdOut;
+        lastInL = percentage; // Use existing variable
+    } {
+        "DEBUG: Not calling ALSA - hasInputGain: ".post; hasInputGain.postln; " inputControl: ".post; inputControl.postln;
+    };
+};
+
+// Individual channel control for unlinked faders
+~setInputLevelLeftOnly = { |level|
+    if(hasInputGain and: {inputControl.notEmpty}) {
+        var percentage = (level * 100).round.asInteger;
+        var cmd = "amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ percentage ++ "%," ++ lastInR ++ "%";
+        cmd.unixCmdGetStdOut;
+        lastInL = percentage;
+    };
+};
+
+~setInputLevelRightOnly = { |level|
+    if(hasInputGain and: {inputControl.notEmpty}) {
+        var percentage = (level * 100).round.asInteger;
+        var cmd = "amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ lastInL ++ "%," ++ percentage ++ "%";
+        cmd.unixCmdGetStdOut;
+        lastInR = percentage;
     };
 };
 
@@ -212,7 +236,13 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
     .mouseUpAction_({ |sl|
         // Control ALSA input level only on mouse release
         if(hasInputGain) {
-            ~setInputLevel.value(sl.value);
+            if(linkFaders) {
+                // When linked, control both channels together
+                ~setInputLevel.value(sl.value);
+            } {
+                // When unlinked, control left channel only
+                ~setInputLevelLeftOnly.value(sl.value);
+            };
         };
     });
 
@@ -244,9 +274,21 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
     .mouseUpAction_({ |sl|
         // Control ALSA input level only on mouse release
         if(hasInputGain) {
-            ~setInputLevel.value(sl.value);
+            if(linkFaders) {
+                // When linked, control both channels together
+                ~setInputLevel.value(sl.value);
+            } {
+                // When unlinked, control right channel only
+                ~setInputLevelRightOnly.value(sl.value);
+            };
         };
     });
+
+// Initialize slider positions to match ALSA mixer (100%)
+if(hasInputGain and: {inputControl.notEmpty}) {
+    ~leftSlider.value = 1.0; // 100% = 1.0
+    ~rightSlider.value = 1.0; // 100% = 1.0
+};
 
 ~leftValue = StaticText(mainView, Rect(65, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
 ~rightValue = StaticText(mainView, Rect(115, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
@@ -343,7 +385,7 @@ mainView.mouseUpAction_({
         }
     });
 
-// Link faders button - only show if input is not stereo control
+// Link faders button - show for all cases except stereo input controls
 if(hasInputGain.not or: {inputControl.contains("Stereo").not}) {
     ~linkBtn = Button(mainView, Rect(18, 350, 40, 20))
         .states_([["LINK", Color.cyan, Color.black], ["LINK", Color.black, Color.cyan]])
@@ -1412,18 +1454,19 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         5.wait; // Check every 5 seconds
         
         // Only check if button exists, shows paired status and not currently pairing
-        if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-            checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-            isConnected = checkResult.contains("Connected: yes");
-            isPaired = checkResult.contains("Paired: yes");
-            
-            if (isPaired.not || isConnected.not) {
-                // Device is disconnected/removed - reset button (GUI update on main thread)
-                {
+        // Use defer to access GUI elements from background thread
+        {
+            if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
+                checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
+                isConnected = checkResult.contains("Connected: yes");
+                isPaired = checkResult.contains("Paired: yes");
+                
+                if (isPaired.not || isConnected.not) {
+                    // Device is disconnected/removed - reset button
                     ~headtrackPairBtn.value_(0);
-                }.defer;
+                };
             };
-        };
+        }.defer;
     };
 }).play;
 
@@ -2867,7 +2910,16 @@ HIDdef.usage( \hidTumble, { |val|
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         "Rebooting system...".postln;
         "sudo reboot".unixCmd;
-    })    .touchBeginAction_({ |view, x, y, pressure, id|
-        "Rebooting system...".postln;
-        "sudo reboot".unixCmd;
     });
+    
+// Add touch support only if touchscreen is available
+if(Platform.case(\linux, { true }, { false })) {
+    // Check if touchscreen is available by looking for touch devices
+    var touchDevices = "ls /dev/input/by-path/ | grep touch".unixCmdGetStdOut;
+    if(touchDevices.notEmpty) {
+        ~rebootBtn.touchBeginAction_({ |view, x, y, pressure, id|
+            "Rebooting system...".postln;
+            "sudo reboot".unixCmd;
+        });
+    };
+};

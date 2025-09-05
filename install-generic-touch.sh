@@ -679,18 +679,20 @@ fi
 # STEP 23: Install launcher script
 step_header "STEP 17/17: Installing Launcher Script"
 echo "Installing launcher script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
+cp /home/$ACTUAL_USER/UHJ-Pi/start-gen.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
 
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎵 UHJ-Pi USB Turntable Installation Complete! 🎵"
+echo "🎵 UHJ-Pi Generic Audio Installation Complete! 🎵"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "✅ Audio System:"
-echo "   • Dynamic device detection for turntables and output interfaces"
+echo "   • Generic USB audio device detection and configuration"
+echo "   • Automatic input/output device pairing"
+echo "   • Software input gain control when available"
 echo "   • JACK audio server with stable 1024-frame buffers"
 echo "   • Optimized for turntable input + any USB audio output"
 echo ""

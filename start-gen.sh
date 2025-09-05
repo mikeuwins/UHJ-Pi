@@ -135,17 +135,36 @@ detect_generic_devices() {
                     continue
                 fi
                 
-                # Check if this control has capture volume
+                # Skip PCM controls - these are routing/processing, not physical inputs
+                if [[ "$control_name" == "PCM" ]] || [[ "$control_name" == *"PCM"* ]]; then
+                    continue
+                fi
+                
+                # Skip Speaker controls - these are output controls, not input sources
+                if [[ "$control_name" == "Speaker" ]]; then
+                    continue
+                fi
+                
+                # Skip enum-only controls that are routing selectors (like "PCM Capture Source")
+                # but keep physical inputs like "IEC958 In" even if they're enum
+                if echo "$control_info" | grep -A 20 "Simple mixer control '$full_control_name'" | grep -q "Capabilities.*enum" && ! echo "$control_info" | grep -A 20 "Simple mixer control '$full_control_name'" | grep -q "cvolume"; then
+                    # Allow IEC958 In (SPDIF) as it's a physical input
+                    if [[ "$control_name" != "IEC958 In" ]]; then
+                        continue
+                    fi
+                fi
+                
+                # Check if this control has capture volume (cvolume) - needed for input faders
                 if echo "$control_info" | grep -A 20 "Simple mixer control '$full_control_name'" | grep -q "cvolume"; then
                     # Check if it has capture channels (not just playback)
                     if echo "$control_info" | grep -A 20 "Simple mixer control '$full_control_name'" | grep -q "Capture channels"; then
                         # Get channel info to distinguish between stereo/mono
                         local channel_info=$(echo "$control_info" | grep -A 5 "Simple mixer control '$full_control_name'" | grep "Capture channels:" | head -1)
                         if echo "$channel_info" | grep -q "Front Left - Front Right"; then
-                            input_options+=("$control_name (Stereo)")
+                            input_options+=("$control_name")
                             seen_controls+=("$control_name")
                         elif echo "$channel_info" | grep -q "Mono"; then
-                            input_options+=("$control_name (Mono)")
+                            input_options+=("$control_name")
                             seen_controls+=("$control_name")
                         else
                             input_options+=("$control_name")
@@ -156,17 +175,8 @@ detect_generic_devices() {
             fi
         done <<< "$control_info"
         
-        # Check if we have a stereo input available (prefer stereo over mono)
-        if echo "${input_options[@]}" | grep -q "Stereo"; then
-            # We have a stereo input - use it automatically
-            for option in "${input_options[@]}"; do
-                if echo "$option" | grep -q "Stereo"; then
-                    input_source="$option"
-                    break
-                fi
-            done
-            echo "✓ Using stereo input"
-        elif [ ${#input_options[@]} -gt 1 ]; then
+        # Always ask user to choose if multiple options available
+        if [ ${#input_options[@]} -gt 1 ]; then
             echo "Multiple input options detected:"
             for i in "${!input_options[@]}"; do
                 echo "  $((i+1)). ${input_options[$i]}"
@@ -180,37 +190,54 @@ detect_generic_devices() {
             fi
         elif [ ${#input_options[@]} -eq 1 ]; then
             input_source="${input_options[0]}"
+            echo "✓ Selected input: ${input_source}"
         fi
         
-        # Extract the actual control name (remove the display suffix)
-        input_source=$(echo "$input_source" | sed 's/ (Stereo)//' | sed 's/ (Mono)//')
+        # Use the selected input source directly
+        input_source="$input_source"
         
         if [ -n "$input_source" ]; then
+            # Use the selected input source for gain control
             input_control="$input_source"
             input_pair="$input_source"
             has_input_gain=1
             echo "✓ Selected input: $input_source"
             
-            # Check if this input control has a mute/capture switch
+            # Check if the input control (PCM or fallback) has a mute/capture switch
             has_input_mute=0
-            if echo "$control_info" | grep -A 20 "Simple mixer control '$input_source'" | grep -q "cswitch"; then
+            if echo "$control_info" | grep -A 20 "Simple mixer control '$input_control'" | grep -q "cswitch"; then
                 has_input_mute=1
-                echo "✓ Input mute control detected"
+                echo "✓ Input mute control detected on $input_control"
             else
-                echo "• No input mute control detected"
+                echo "• No input mute control detected on $input_control"
             fi
             
             # Actually switch ALSA to use the selected input source
             echo "Switching to $input_source input..."
-            # First set the capture source to the selected input
-            amixer -c "$input_card" sset "PCM Capture Source" "$input_source" >/dev/null 2>&1 || true
+            
+            # Find the capture source control name dynamically
+            capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
+            if [ -n "$capture_source_control" ]; then
+                echo "Setting $capture_source_control to: $input_source"
+                amixer -c "$input_card" sset "$capture_source_control" "$input_source" >/dev/null 2>&1 || true
+            fi
+            
             # Then enable capture on that input
+            echo "Enabling capture on: $input_source"
             amixer -c "$input_card" sset "$input_source" cap >/dev/null 2>&1 || true
             amixer -c "$input_card" sset "$input_source" 80% >/dev/null 2>&1 || true
             echo "✓ Input switched to $input_source"
         else
             echo "• No input volume controls detected"
+            has_input_gain=0
             has_input_mute=0
+        fi
+        
+        # For cards with only physical controls (no software gain), don't use ALSA mute
+        # Let the synth handle mute instead
+        if [ "$has_input_gain" -eq 0 ]; then
+            has_input_mute=0
+            echo "• Using synth mute (no software input controls detected)"
         fi
     fi
 
