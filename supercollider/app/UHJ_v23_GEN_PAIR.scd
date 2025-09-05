@@ -1376,7 +1376,11 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 
                 {
                     ~pairingInProgress = false;
-                    ~headtrackPairBtn.value_(0); // Reset to PAIR after unpair
+                    if (success) {
+                        ~headtrackPairBtn.value_(0); // Reset to PAIR only if unpair succeeded
+                    } {
+                        ~headtrackPairBtn.value_(2); // Keep paired state if unpair failed
+                    };
                 }.defer;
                 
             } {
