@@ -1334,10 +1334,10 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         ~headtrackPairBtn.value_(1); // Show working
         
         Task({
-            var deviceInfo, isPaired, isConnected, result, success = false;
+            var deviceInfo, isPaired, isConnected, result, success = false, htMac;
             
             // First, find the headtracker MAC address dynamically
-            var htMac = "bluetoothctl devices | grep HT | awk '{print $2}'".unixCmdGetStdOut.strip;
+            htMac = "bluetoothctl devices | grep HT | awk '{print $2}'".unixCmdGetStdOut.strip;
             
             if (htMac.isEmpty) {
                 ("No headtracker found").postln;
