@@ -1,5 +1,5 @@
-// ============================================================================
-....  what if  will always ne// UHJ v23 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
+// ===========================================================================
+// UHJ v23 - PSEUDO-SURROUND ENCODER WITH HEADTRACKER KNOBS
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
