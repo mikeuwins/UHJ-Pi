@@ -75,13 +75,6 @@ if(hasInputGain and: {inputControl.notEmpty}) {
     lastInR = 100; // Set initial value (100%)
 };
 
-// Debug: print what we read
-"=== ENVIRONMENT VARIABLES DEBUG ===".postln;
-"hasInputGain: ".post; hasInputGain.postln;
-"hasInputMute: ".post; hasInputMute.postln;
-"inputCard: ".post; inputCard.postln;
-"inputControl: ".post; inputControl.postln;
-"=== END DEBUG ===".postln;
 
 // ALSA control functions for generic input devices
 ~setInputLevel = { |level|

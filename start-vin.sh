@@ -47,7 +47,7 @@ detect_vinyl_devices() {
     
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Step 1: Connect your input device (turntable, microphone, etc.)"
+    echo "Step 1: Connect your USB equipped turntable"
     read -p "Press Enter when your input device is connected..."
     
     # Look for newly connected audio devices
@@ -80,45 +80,38 @@ detect_vinyl_devices() {
     
     echo "=== USB Audio Interface Setup ==="
     echo ""
-    echo "Step 2: Connect your USB audio interface for output"
-    echo "(This can be any USB soundcard - Behringer, UMC, etc.)"
-    read -p "Press Enter when your USB audio interface is connected..."
+    echo "Step 2: Connect the USB audio device you want to use for output"
+    echo "(or just press Enter if using the same device for input and output)"
     
-    # Look for the output device (second device connected)
-    echo "Scanning for output interface..."
-    sleep 2
-    
-    # Look for any device that's not the turntable
-    echo "Available devices:"
-    cat /proc/asound/cards
-    echo ""
-    echo "Looking for output interface (any device that's not the turntable)..."
-    sleep 2
-    
-    while IFS= read -r line; do
-        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
-            local card_num="${BASH_REMATCH[1]}"
-            local card_name="${BASH_REMATCH[2]}"
-            
-            echo "Checking device: hw:$card_num ($card_name)"
-            
-            # Skip the turntable card
-            if [ "$card_num" != "$vinyl_card" ]; then
-                output_card="$card_num"
-                output_name="$card_name"
-                echo "✓ Found output interface: hw:$output_card ($output_name)"
-                show_device_info "$card_num" "$card_name"
-                break
-            else
-                echo "  (Skipping - this is the turntable)"
+    # Retry loop for output device detection
+    while [ -z "$output_card" ]; do
+        read -p "Press Enter when your USB audio interface is connected..."
+        
+        # Look for the output device (second device connected)
+        echo "Scanning for output interface..."
+        sleep 2
+        
+        while IFS= read -r line; do
+            if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\] ]]; then
+                local card_num="${BASH_REMATCH[1]}"
+                local card_name="${BASH_REMATCH[2]}"
+                
+                # Skip the turntable card
+                if [ "$card_num" != "$vinyl_card" ]; then
+                    output_card="$card_num"
+                    output_name="$card_name"
+                    echo "✓ Found output interface: hw:$output_card ($output_name)"
+                    show_device_info "$card_num" "$card_name"
+                    break
+                fi
             fi
+        done < /proc/asound/cards
+        
+        if [ -z "$output_card" ]; then
+            echo "No second device found. Please connect your USB audio interface and try again."
+            echo "The turntable only has input capability - you need a separate output device."
         fi
-    done < /proc/asound/cards
-    
-    if [ -z "$output_card" ]; then
-        echo "No second device found. Please connect your USB audio interface and try again."
-        exit 1
-    fi
+    done
     
     if [ -z "$vinyl_card" ]; then
         echo "ERROR: Turntable not configured"
@@ -163,7 +156,7 @@ echo "  Output: hw:$OUTPUT_CARD ($OUTPUT_NAME)"
 
 # Start JACK - simple input/output configuration like ESI  
 # Large buffer for stability (1024 frames = ~23ms latency, 3 periods)
-jackd -P75 -d alsa -C hw:$VINYL_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S &
+jackd -P75 -d alsa -C hw:$VINYL_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
 
 # Wait for JACK to start
 sleep 3

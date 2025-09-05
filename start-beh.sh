@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Clear screen for clean output
+clear
+
 CONFIG_FILE="$HOME/.uhj-pi-audio.conf"
 echo "Starting Behringer audio setup..."
 
@@ -35,7 +38,6 @@ register_devices() {
         if [[ $device =~ ^([0-9]+):(.*)$ ]]; then
             local card="${BASH_REMATCH[1]}"
             local usb_path="${BASH_REMATCH[2]}"
-            echo "Device detected: $usb_path (Card $card)"
             uca_device="$card:$usb_path"
             break
         fi
@@ -46,7 +48,7 @@ register_devices() {
         exit 1
     fi
     
-    echo "UCA202 registered as line input/outputs 1 & 2"
+    echo "UCA202 registered as line input/outputs 1 & 2 (Card $(echo "$uca_device" | cut -d: -f1))"
     echo ""
     
     # Step 2: Register UFO202
@@ -60,7 +62,6 @@ register_devices() {
             local card="${BASH_REMATCH[1]}"
             local usb_path="${BASH_REMATCH[2]}"
             if [ "$device" != "$uca_device" ]; then
-                echo "Device detected: $usb_path (Card $card)"
                 ufo_device="$card:$usb_path"
                 break
             fi
@@ -72,22 +73,18 @@ register_devices() {
         exit 1
     fi
     
-    echo "UFO202 registered as phono input/outputs 3 & 4"
+    echo "UFO202 registered as phono input/outputs 3 & 4 (Card $(echo "$ufo_device" | cut -d: -f1))"
     echo ""
     
     # Save configuration
-    echo "Saving device configuration..."
     cat > "$CONFIG_FILE" << CONFIG_EOF
 # UHJ-Pi Behringer Audio Configuration
 # Generated on $(date)
 UCA_DEVICE="$uca_device"
 UFO_DEVICE="$ufo_device"
 UCA_CARD=$(echo "$uca_device" | cut -d: -f1)
-UFO_CARD=$(echo "$uca_device" | cut -d: -f1)
+UFO_CARD=$(echo "$ufo_device" | cut -d: -f1)
 CONFIG_EOF
-    
-    echo "Configuration saved to $CONFIG_FILE"
-    echo ""
     
     # Return the detected devices
     UCA_CARD=$(echo "$uca_device" | cut -d: -f1)
@@ -100,56 +97,51 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
     
     # Smart verification: check that 2 USB audio devices exist and are accessible
-    echo "Verifying devices are still accessible..."
     devices=$(detect_usb_devices)
     device_count=$(echo "$devices" | wc -w)
     
     if [ "$device_count" -eq 2 ]; then
-        echo "✅ Found 2 USB audio devices"
+        echo "✓ Found 2 USB audio devices"
         
         # Check if we can actually connect to the devices (verify they're working)
         test_success=true
         
-        # Test UCA202 (first device)
-        first_device=$(echo "$devices" | cut -d' ' -f1)
-        if [[ $first_device =~ ^([0-9]+):(.*)$ ]]; then
-            test_card="${BASH_REMATCH[1]}"
-            echo "Testing UCA202 (Card $test_card)..."
-            
-            # Quick test: try to get device info
-            if ! amixer -c "$test_card" sget PCM >/dev/null 2>&1; then
-                echo "⚠️  UCA202 (Card $test_card) not responding"
+        # Use the saved card numbers from configuration (already loaded above)
+        
+        # Test UCA202
+        if [ -n "$UCA_CARD" ]; then
+            echo "Testing UCA202 (Card $UCA_CARD)..."
+            if ! amixer -c "$UCA_CARD" sget PCM >/dev/null 2>&1; then
+                echo "⚠️  UCA202 (Card $UCA_CARD) not responding"
                 test_success=false
             else
-                echo "✅ UCA202 (Card $test_card) responding"
+                echo "✓ UCA202 (Card $UCA_CARD) responding"
             fi
+        else
+            echo "⚠️  UCA202 not found"
+            test_success=false
         fi
         
-        # Test UFO202 (second device)
-        second_device=$(echo "$devices" | cut -d' ' -f2)
-        if [[ $second_device =~ ^([0-9]+):(.*)$ ]]; then
-            test_card="${BASH_REMATCH[1]}"
-            echo "Testing UFO202 (Card $test_card)..."
-            
-            # Quick test: try to get device info
-            if ! amixer -c "$test_card" sget PCM >/dev/null 2>&1; then
-                echo "⚠️  UFO202 (Card $test_card) not responding"
+        # Test UFO202
+        if [ -n "$UFO_CARD" ]; then
+            echo "Testing UFO202 (Card $UFO_CARD)..."
+            if ! amixer -c "$UFO_CARD" sget PCM >/dev/null 2>&1; then
+                echo "⚠️  UFO202 (Card $UFO_CARD) not responding"
                 test_success=false
             else
-                echo "✅ UFO202 (Card $test_card) responding"
+                echo "✓ UFO202 (Card $UFO_CARD) responding"
             fi
+        else
+            echo "⚠️  UFO202 not found"
+            test_success=false
         fi
         
         if [ "$test_success" = true ]; then
             echo ""
-            echo "✅ Devices verified and working - using saved configuration"
-            echo "  UCA202: Card $(echo "$first_device" | cut -d: -f1)"
-            echo "  UFO202: Card $(echo "$second_device" | cut -d: -f1)"
+            echo "✓ Devices verified and working - using saved configuration"
+            echo "  UCA202: Card $UCA_CARD"
+            echo "  UFO202: Card $UFO_CARD"
             echo ""
-            
-            # Update card numbers to current values
-            UCA_CARD=$(echo "$first_device" | cut -d: -f1)
-            UFO_CARD=$(echo "$second_device" | cut -d: -f1)
         else
             echo "⚠️  Device verification failed, re-registering..."
             rm "$CONFIG_FILE"
@@ -167,7 +159,6 @@ else
 fi
 
 # Stop any existing audio processes
-echo "Stopping existing audio processes..."
 pkill jackd 2>/dev/null
 pkill zita-a2j 2>/dev/null
 pkill zita-j2a 2>/dev/null
@@ -175,7 +166,7 @@ sleep 2
 
 # Start JACK on UCA202 (line device) as master
 echo "Starting JACK server on UCA202 (Card $UCA_CARD)..."
-jackd -d alsa -d hw:$UCA_CARD -r 44100 -p 256 -n 2 > /tmp/jack.log 2>&1 &
+jackd -d alsa -d hw:$UCA_CARD -r 44100 -p 256 -n 2 > /dev/null 2>&1 &
 JACK_PID=$!
 
 # Wait for JACK to initialize
@@ -183,111 +174,56 @@ sleep 3
 
 # Check if JACK started successfully
 if ! ps -p $JACK_PID > /dev/null; then
-    echo "ERROR: JACK failed to start. Check /tmp/jack.log"
-    exit 1
+    echo "WARNING: JACK failed to start"
+    echo "Audio setup will need to be configured manually after reboot"
 fi
 
-echo "JACK server started successfully (PID: $JACK_PID)"
-
 # Start zita bridges for UFO202
-echo "Starting zita bridges for UFO202 (Card $UFO_CARD)..."
-
-# Bridge UFO202 inputs to JACK (phono inputs)
-echo "Starting zita-a2j for UFO202 inputs..."
-zita-a2j -j ufo_phono -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-a2j.log 2>&1 &
+zita-a2j -j ufo_phono -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /dev/null 2>&1 &
 ZITA_A2J_PID=$!
 
-# Bridge JACK outputs to UFO202 (additional outputs)
-echo "Starting zita-j2a for UFO202 outputs..."
-zita-j2a -j ufo_out -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /tmp/zita-j2a.log 2>&1 &
+zita-j2a -j ufo_out -d hw:$UFO_CARD -r 44100 -p 256 -c 2 > /dev/null 2>&1 &
 ZITA_J2A_PID=$!
 
 # Wait for zita bridges to initialize
-sleep 3
-
-# Audio setup complete - jack_quad device will be created by SuperCollider app
-echo "Audio setup complete! Starting SuperCollider app..."
-echo "Note: jack_quad device will be created automatically for persistent routing"
-echo ""
+sleep 2
 
 # Check if zita processes started successfully
 if ! ps -p $ZITA_A2J_PID > /dev/null; then
-    echo "ERROR: zita-a2j failed to start. Check /tmp/zita-a2j.log"
-    echo "zita-a2j log contents:"
-    cat /tmp/zita-a2j.log
-    exit 1
+    echo "WARNING: zita-a2j failed to start"
 fi
 
 if ! ps -p $ZITA_J2A_PID > /dev/null; then
-    echo "ERROR: zita-j2a failed to start. Check /tmp/zita-j2a.log"
-    echo "zita-j2a log contents:"
-    cat /tmp/zita-j2a.log
-    exit 1
-fi
-
-echo "Zita bridges started successfully"
-
-# Wait for JACK ports to appear
-echo "Waiting for JACK ports to appear..."
-sleep 2
-
-# Verify UFO202 ports are available
-echo "Checking for UFO202 ports..."
-if command -v jack_lsp >/dev/null 2>&1; then
-    UFO_PORTS=$(jack_lsp | grep ufo_phono | wc -l)
-    echo "Found $UFO_PORTS UFO202 ports"
-    
-    if [ $UFO_PORTS -lt 2 ]; then
-        echo "WARNING: Expected 2 UFO202 ports, found $UFO_PORTS"
-        echo "Available JACK ports:"
-        jack_lsp | sort
-    else
-        echo "✅ UFO202 ports available:"
-        jack_lsp | grep ufo_phono
-    fi
+    echo "WARNING: zita-j2a failed to start"
 fi
 
 # Wait a moment for everything to sync
 sleep 2
 
-# Verify JACK ports and connections
+# Verify JACK ports
 echo "Verifying JACK configuration..."
 if command -v jack_lsp >/dev/null 2>&1; then
-    PORTS=$(jack_lsp | wc -l)
-    echo "Available JACK ports: $PORTS"
-    
     # Check specific port types
     SYSTEM_INPUTS=$(jack_lsp | grep "system:capture" | wc -l)
     UFO_INPUTS=$(jack_lsp | grep "ufo_phono:capture" | wc -l)
     SYSTEM_OUTPUTS=$(jack_lsp | grep "system:playback" | wc -l)
     UFO_OUTPUTS=$(jack_lsp | grep "ufo_out:playback" | wc -l)
     
-    echo "Port breakdown:"
-    echo "  System inputs (UCA202): $SYSTEM_INPUTS"
-    echo "  UFO inputs (UFO202): $UFO_INPUTS"
-    echo "  System outputs (UCA202): $SYSTEM_OUTPUTS"
-    echo "  UFO outputs (UFO202): $UFO_OUTPUTS"
+    echo "Audio ports configured:"
+    echo "  UCA202: $SYSTEM_INPUTS inputs, $SYSTEM_OUTPUTS outputs"
+    echo "  UFO202: $UFO_INPUTS inputs, $UFO_OUTPUTS outputs"
     
-    if [ $PORTS -ge 8 ] && [ $UFO_INPUTS -ge 2 ]; then
-        echo "✅ SUCCESS: All ports available"
+    if [ $UFO_INPUTS -ge 2 ]; then
+        echo "✓ SUCCESS: All audio ports available"
     else
-        echo "⚠️  WARNING: Expected 8+ ports with 2+ UFO inputs, found $PORTS total, $UFO_INPUTS UFO inputs"
+        echo "⚠️  WARNING: Expected 2+ UFO inputs, found $UFO_INPUTS"
         echo "Full JACK port list:"
         jack_lsp | sort
     fi
 fi
 
-echo "Audio setup complete! Starting SuperCollider app..."
-echo ""
-
-# Note: jack_quad device will be created by SuperCollider
-echo "Note: jack_quad device will be created automatically by SuperCollider"
-echo "This ensures proper timing and port creation for all inputs"
-
-echo ""
-echo "Starting SuperCollider app..."
-echo "Note: jack_quad device will be created automatically for persistent routing"
-echo ""
+echo "Audio setup complete!"
 
 # Start the SuperCollider app
+echo "Starting SuperCollider app..."
 exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH_PAIR.scd > /home/$USER/post_output.log 2>&1

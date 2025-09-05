@@ -331,11 +331,6 @@ export INPUT_SOURCE
 export INPUT_CONTROL
 export INPUT_PAIR
 
-# Debug: print what we're exporting
-echo "DEBUG - Exporting variables:"
-echo "HAS_INPUT_GAIN=$HAS_INPUT_GAIN"
-echo "INPUT_CARD=$INPUT_CARD"
-echo "INPUT_CONTROL=$INPUT_CONTROL"
 
 # Launch SuperCollider application
 echo "Starting application..."

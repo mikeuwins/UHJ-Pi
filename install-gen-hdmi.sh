@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# UHJ-Pi Raspberry Pi Setup Script - USB Turntable HDMI Version
-# Based on install-vin-touch.sh with HDMI display setup integrated
+# UHJ-Pi Raspberry Pi Setup Script - Generic + HDMI Version
+# Combines HDMI display setup with generic audio configuration
 
 # Progress bar function
 show_progress() {
@@ -686,7 +686,7 @@ blackbox &
 sleep 0.5
 xsetroot -solid black
 sleep 0.2
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_VIN_PAIR.scd > ~/post_output.log 2>&1
+exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_GEN_PAIR.scd > ~/post_output.log 2>&1
 EOF
 
 # Set ownership of the new files
@@ -842,14 +842,14 @@ fi
 # STEP 23: Install launcher script
 step_header "STEP 17/17: Installing Launcher Script"
 echo "Installing launcher script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/start-vin.sh /usr/local/bin/start
+cp /home/$ACTUAL_USER/UHJ-Pi/start-gen.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
 
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎵 UHJ-Pi USB Turntable + HDMI Installation Complete! 🎵"
+echo "🎵 UHJ-Pi Generic Audio + HDMI Installation Complete! 🎵"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "✅ Audio System:"

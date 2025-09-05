@@ -529,7 +529,7 @@ blackbox &
 sleep 0.1
 xsetroot -solid black
 sleep 0.1
-exec sclang ~/UHJ-Pi/supercollider/app/UHJ_v23_ESI_PAIR.scd > ~/post_output.log 2>&1
+exec /usr/local/bin/start
 EOF
 
 # Set ownership of the new files
@@ -603,6 +603,13 @@ cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
+
+# STEP 24: Install launcher script
+echo "Step 24: Installing launcher script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
+chmod +x /usr/local/bin/start
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
+echo "Launcher script installed to /usr/local/bin/start"
 
 echo "Installation completed successfully!"
 echo ""
