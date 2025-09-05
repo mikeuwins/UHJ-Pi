@@ -125,12 +125,12 @@ sleep 2
 detect_esi_devices
 
 echo "Starting JACK with:"
-echo "  Input: hw:Phonorama (ESI Phonorama)"
-echo "  Output: hw:HD (ESI HD)"
+echo "  Input: hw:$phonorama_card (ESI Phonorama)"
+echo "  Output: hw:$hd_card (ESI HD)"
 
 # Start JACK - ESI configuration
 # Large buffer for stability (1024 frames = ~23ms latency, 3 periods)
-jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
+jackd -P75 -d alsa -C hw:$phonorama_card -P hw:$hd_card -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
 
 # Wait for JACK to start
 sleep 3

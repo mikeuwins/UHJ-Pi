@@ -80,19 +80,29 @@ fi
 clear
 echo "🎵 UHJ-Pi Raspberry Pi Setup Script - ESI Touch Version 🎵"
 echo "Installing for user: $ACTUAL_USER"
-echo "This version includes ESI audio setup with JACK and zita bridges"
+echo "This version includes ESI audio setup with phono-control CLI"
 echo
 
 # Configure non-interactive package installation
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export APT_LISTCHANGES_FRONTEND=none
-echo "initramfs-tools inthat itramfs-tools/update_initramfs boolean false" | debconf-set-selections
+echo "initramfs-tools initramfs-tools/update_initramfs boolean false" | debconf-set-selections
 echo "jackd jackd/tweak_rt_limits boolean true" | debconf-set-selections
+
+# Set up logging
+INSTALL_LOG="/tmp/uhj-pi-install.log"
+echo "Installation started at $(date)" > $INSTALL_LOG
+echo "Log file: $INSTALL_LOG"
 
 step_header "STEP 1/22: System Update"
 echo "Updating package lists..."
-apt-get update
+if apt-get update >> $INSTALL_LOG 2>&1; then
+    echo "✓ Package lists updated"
+else
+    echo "✗ Package update failed - check $INSTALL_LOG"
+    exit 1
+fi
 # Skip upgrade - go straight to installing what we need
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
@@ -108,11 +118,21 @@ fi
 
 step_header "STEP 3/22: Install X11 and Blackbox"
 echo "Installing X11 and Blackbox..."
-apt install -y xserver-xorg x11-xserver-utils xinit blackbox
+if apt install -y xserver-xorg x11-xserver-utils xinit blackbox >> $INSTALL_LOG 2>&1; then
+    echo "✓ X11 and Blackbox installed"
+else
+    echo "✗ X11 and Blackbox installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 
 step_header "STEP 4/22: Install SuperCollider Dependencies"
 echo "Installing SuperCollider Dependencies..."
-apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev
+if apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev >> $INSTALL_LOG 2>&1; then
+    echo "✓ SuperCollider Dependencies installed"
+else
+    echo "✗ SuperCollider Dependencies installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 
 step_header "STEP 5/22: Clone SuperCollider"
 echo "Cloning SuperCollider..."
@@ -469,7 +489,12 @@ cp "led_dot_matrix/LED Dot-Matrix.ttf" /usr/local/share/fonts/truetype/uhj-pi/
 
 # Install Arial font for power button
 echo "Installing Arial font..."
-apt-get install -y cabextract
+if apt-get install -y cabextract >> $INSTALL_LOG 2>&1; then
+    echo "✓ cabextract installed"
+else
+    echo "✗ cabextract installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 mkdir -p /usr/share/fonts/truetype/msttcorefonts
 cd /usr/share/fonts/truetype/msttcorefonts
 wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
