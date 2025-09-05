@@ -23,6 +23,8 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
+// --- Headtracker MAC address (detected at startup) ---
+~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.strip;
 // --- Maplin button overlay --- grep hid, i get uhid 4
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
@@ -1459,9 +1461,14 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     2.wait;
     
     // Check initial pairing status on first run
-    checkResult = "bluetoothctl info E4:E1:DE:BE:DB:2F".unixCmdGetStdOut;
-    isConnected = checkResult.contains("Connected: yes");
-    isPaired = checkResult.contains("Paired: yes");
+    if (~headtrackerMac.notEmpty) {
+        checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+        isConnected = checkResult.contains("Connected: yes");
+        isPaired = checkResult.contains("Paired: yes");
+    } {
+        isConnected = false;
+        isPaired = false;
+    };
     
     if (isPaired && isConnected) {
         // Device is already paired and connected - show paired state
