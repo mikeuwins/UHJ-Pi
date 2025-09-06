@@ -96,7 +96,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/22: System Update"
+step_header "STEP 1/20: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -108,7 +108,7 @@ fi
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
-step_header "STEP 2/22: Disable Onboard and HDMI Audio"
+step_header "STEP 2/20: Disable Onboard and HDMI Audio"
 echo "Disabling onboard and HDMI audio..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -117,65 +117,112 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
     echo "dtoverlay=vc4-kms-v3d,noaudio" >> /boot/firmware/config.txt
 fi
 
-step_header "STEP 3/22: Install SuperCollider Dependencies"
-echo "Installing SuperCollider Dependencies..."
-if apt-get install -y build-essential cmake libjack-jackd2-dev libsndfile1-dev \
-    libfftw3-dev libxt-dev libavahi-client-dev libudev-dev libasound2-dev \
-    libreadline-dev libxkbcommon-dev git jackd2 libhidapi-dev qt6-base-dev \
-    qt6-svg-dev qt6-tools-dev qt6-wayland qt6-websockets-dev qt6-webengine-dev >> $INSTALL_LOG 2>&1; then
-    echo "✓ SuperCollider Dependencies installed"
-else
-    echo "✗ SuperCollider Dependencies installation failed - check $INSTALL_LOG"
-    exit 1
+step_header "STEP 3/20: Install Dependencies"
+echo "Installing build tools and audio dependencies..."
+
+# Audio performance optimizations
+echo "Configuring audio performance optimizations..."
+
+# Set CPU governor to performance mode for better real-time performance
+for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    if [ -f "$cpu" ]; then
+        echo "performance" > "$cpu" 2>/dev/null || true
+    fi
+done
+echo "✓ CPU governor set to performance mode"
+
+# Configure audio thread priority limits
+if [ -f /etc/security/limits.conf ]; then
+    # Check if audio limits already exist
+    if ! grep -q "@audio.*rtprio" /etc/security/limits.conf; then
+        echo "Adding audio performance limits to /etc/security/limits.conf..."
+        echo "@audio   -  rtprio     95" >> /etc/security/limits.conf
+        echo "@audio   -  memlock    unlimited" >> /etc/security/limits.conf
+        echo "✓ Audio performance limits configured"
+    else
+        echo "✓ Audio performance limits already configured"
+    fi
 fi
 
-step_header "STEP 4/22: Clone SuperCollider"
-echo "Cloning SuperCollider..."
+# List of packages to install
+packages=(
+    "build-essential" "cmake" "libjack-jackd2-dev" "libsndfile1-dev"
+    "libfftw3-dev" "libxt-dev" "libavahi-client-dev" "libudev-dev" 
+    "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
+    "jackd2" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
+    "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
+)
+
+total_packages=${#packages[@]}
+current_package=0
+
+for package in "${packages[@]}"; do
+    current_package=$((current_package + 1))
+    show_progress $current_package $total_packages
+    apt-get install -y "$package" >> $INSTALL_LOG 2>&1
+done
+echo
+echo "✓ All dependencies installed"
+
+step_header "STEP 4/20: Clone SuperCollider"
+echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
-    git clone --branch main --recurse-submodules https://github.com/supercollider/supercollider.git
+    git clone --branch main --recurse-submodules https://github.com/supercollider/supercollider.git > /dev/null 2>&1
 fi
+echo "✓ SuperCollider source downloaded"
+
+echo "Preparing build directory..."
 cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 5/22: Configure SuperCollider Build"
-echo "Configuring SuperCollider build (SC_QT=ON for Qt support without X11)..."
+step_header "STEP 5/20: Build SuperCollider"
+echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
-    -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON ..; then
-    echo "SuperCollider configuration successful"
+    -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
+    echo "✓ Configuration successful"
 else
-    echo "ERROR: SuperCollider configuration failed!"
+    echo "✗ Configuration failed"
     exit 1
 fi
 
-step_header "STEP 6/22: Build SuperCollider"
-echo "Building SuperCollider..."
-if make -j2; then
-    echo "SuperCollider build successful"
+make -j2 >> $INSTALL_LOG 2>&1 &
+BUILD_PID=$!
+show_build_progress "Building SuperCollider" $INSTALL_LOG $BUILD_PID
+wait $BUILD_PID
+if [ $? -eq 0 ]; then
+    echo "✓ Build successful"
 else
-    echo "ERROR: SuperCollider build failed!"
+    echo "✗ Build failed - check $INSTALL_LOG"
     exit 1
 fi
 
-step_header "STEP 7/22: Install SuperCollider"
-echo "Installing SuperCollider..."
-if make install; then
-    echo "SuperCollider installation successful"
-    ldconfig
+echo -n "Installing SuperCollider... "
+make install >> $INSTALL_LOG 2>&1 &
+INSTALL_PID=$!
+while kill -0 $INSTALL_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
+echo " done"
+wait $INSTALL_PID
+if [ $? -eq 0 ]; then
+    echo "✓ SuperCollider installed"
+    ldconfig >> $INSTALL_LOG 2>&1
 else
-    echo "ERROR: SuperCollider installation failed!"
+    echo "✗ Installation failed - check $INSTALL_LOG"
     exit 1
 fi
 
-step_header "STEP 8/22: Set up udev rules for HID and audio permissions"
+step_header "STEP 6/20: Setting up Audio and Device Permissions"
 echo "Setting up udev rules..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
-step_header "STEP 9/22: Configure JACK Audio for Behringer devices"
+step_header "STEP 7/20: Setting up SuperCollider Environment"
 echo "Configuring JACK Audio for Behringer devices..."
 # Create JACK configuration for Behringer setup
 cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
@@ -184,39 +231,46 @@ cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
 EOF
 usermod -aG audio,plugdev $ACTUAL_USER
 
-step_header "STEP 10/22: Install SC3 Plugins"
-echo "Installing SC3 Plugins..."
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
-    if git clone --recursive https://github.com/supercollider/sc3-plugins.git; then
-        echo "SC3 Plugins cloned successfully"
-    else
-        echo "ERROR: SC3 Plugins clone failed!"
-        exit 1
-    fi
+    git clone --recursive https://github.com/supercollider/sc3-plugins.git > /dev/null 2>&1
 fi
 cd sc3-plugins
-mkdir build && cd build
-if cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF ..; then
-    echo "SC3 Plugins configuration successful"
+mkdir -p build && cd build
+if cmake -DSC_PATH=/home/$ACTUAL_USER/supercollider -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF .. > /dev/null 2>&1; then
+    echo "✓ SC3 Plugins configured"
 else
-    echo "ERROR: SC3 Plugins configuration failed!"
+    echo "✗ SC3 Plugins configuration failed"
     exit 1
 fi
-if cmake --build . --config Release; then
-    echo "SC3 Plugins build successful"
+cmake --build . --config Release >> $INSTALL_LOG 2>&1 &
+BUILD_PID=$!
+show_build_progress "Building SC3 Plugins" $INSTALL_LOG $BUILD_PID
+wait $BUILD_PID
+if [ $? -eq 0 ]; then
+    echo "✓ SC3 Plugins built"
 else
-    echo "ERROR: SC3 Plugins build failed!"
-    exit 1
-fi
-if sudo cmake --build . --config Release --target install; then
-    echo "SC3 Plugins installation successful"
-else
-    echo "ERROR: SC3 Plugins installation failed!"
+    echo "✗ SC3 Plugins build failed - check $INSTALL_LOG"
     exit 1
 fi
 
-step_header "STEP 11/22: Clone UHJ-Pi repository"
+echo -n "Installing SC3 Plugins... "
+cmake --build . --config Release --target install >> $INSTALL_LOG 2>&1 &
+INSTALL_PID=$!
+while kill -0 $INSTALL_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
+echo " done"
+wait $INSTALL_PID
+if [ $? -eq 0 ]; then
+    echo "✓ SC3 Plugins installed"
+else
+    echo "✗ SC3 Plugins installation failed - check $INSTALL_LOG"
+    exit 1
+fi
+
+step_header "STEP 8/20: Installing Custom User Classes"
 echo "Cloning UHJ-Pi repository..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
@@ -228,7 +282,7 @@ if [ ! -d "UHJ-Pi" ]; then
     fi
 fi
 
-step_header "STEP 12/22: Install ATK and handle GUI component cleanup"
+step_header "STEP 9/20: Installing ATK Kernels and Matrices"
 echo "Installing ATK and handling GUI component cleanup..."
 cd /home/$ACTUAL_USER
 
@@ -389,7 +443,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-step_header "STEP 13/22: Install Custom UHJ Test Sounds"
+step_header "STEP 10/20: Installing Custom UHJ Test Sounds"
 echo "Installing Custom UHJ Test Sounds..."
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
@@ -414,7 +468,7 @@ fi
 
 # AmbiVerbSC now installed via Quark system above
 
-step_header "STEP 14/22: Install custom user classes"
+step_header "STEP 11/20: Installing UHJ-Pi Application Files"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -451,7 +505,7 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-step_header "STEP 15/22: Install zita-ajbridge for Behringer audio setup"
+step_header "STEP 12/20: Configuring JACK Audio"
 echo "Installing zita-ajbridge..."
 if apt-get install -y zita-ajbridge >> $INSTALL_LOG 2>&1; then
     echo "✓ zita-ajbridge installed"
@@ -460,7 +514,7 @@ else
     exit 1
 fi
 
-step_header "STEP 16/22: Create Behringer udev rules for persistent device naming"
+step_header "STEP 13/20: Configuring ALSA"
 echo "Creating Behringer udev rules..."
 cat > /etc/udev/rules.d/60-behringer-audio.rules << 'EOF'
 # Behringer UFO202 and UCA202 persistent naming
@@ -479,7 +533,14 @@ EOF
 udevadm control --reload-rules
 udevadm trigger
 
-step_header "STEP 17/22: Configure Qt platform for headless operation"
+step_header "STEP 14/20: Configuring Bluetooth"
+echo "Configuring Bluetooth..."
+# Enable Bluetooth service
+systemctl enable bluetooth
+systemctl start bluetooth
+echo "✓ Bluetooth service enabled"
+
+step_header "STEP 15/20: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -487,8 +548,8 @@ echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
 # Clear X11 display variable to force EGLFS
 echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
 echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
+echo "✓ Qt platform configured for headless operation"
 
-step_header "STEP 18/22: Install custom fonts"
 echo "Installing custom fonts..."
 cd /home/$ACTUAL_USER/UHJ-Pi/assets/fonts
 
@@ -514,16 +575,7 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-step_header "STEP 19/22: Configure Qt platform for headless operation"
-echo "Configuring Qt platform for headless operation..."
-# Set Qt platform to eglfs for the user's shell
-echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
-echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.profile
-# Clear X11 display variable to force EGLFS
-echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.bashrc
-echo 'unset DISPLAY' >> /home/$ACTUAL_USER/.profile
-
-step_header "STEP 20/22: Install Bluetooth pairing script"
+step_header "STEP 16/20: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -551,7 +603,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 21/22: Install launcher script"
+step_header "STEP 17/20: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
