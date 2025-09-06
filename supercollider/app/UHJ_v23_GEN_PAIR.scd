@@ -1390,8 +1390,8 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 // Run pairing script in background with timeout
                 scriptPath = "/usr/local/bin/ble-ht.sh";
                 
-                // Safety timeout - reset button after 45 seconds if script hangs
-                AppClock.sched(45, { 
+                // Safety timeout - reset button after 15 seconds if script hangs
+                AppClock.sched(15, { 
                     if (~pairingInProgress) {
                         ~pairingInProgress = false;  // Reset flag
                         ~headtrackPairBtn.value_(3); // Show failed if still in progress
@@ -1402,7 +1402,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 
                 // First attempt
                 try {
-                    result = ("timeout 45 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                    result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                     success = result.contains("PAIRED_AND_CONNECTED");
                 } { |error|
                     ("Pairing script error: " ++ error).postln;
@@ -1415,7 +1415,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                     1.wait; // Brief pause between attempts
                     
                     try {
-                        result = ("timeout 45 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                        result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                         success = result.contains("PAIRED_AND_CONNECTED");
                         if (success) {
                             ("Second attempt succeeded!").postln;
