@@ -39,10 +39,7 @@ show_build_progress() {
         local completed=$((last_percent * width / 100))
         printf "\r$message ["
         printf "%*s" $completed | tr ' ' '='
-        if [ $completed -lt $width ]; then
-            printf ">"
-            printf "%*s" $((width - completed - 1))
-        fi
+        printf "%*s" $((width - completed))
         if [ $last_percent -gt 0 ]; then
             printf "] %d%%" $last_percent
         else
@@ -190,19 +187,6 @@ else
     exit 1
 fi
 
-step_header "STEP 6/17: Setting up Audio and Device Permissions"
-echo "Setting up udev rules..."
-cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="audio", MODE="0666"
-EOF
-
-step_header "STEP 7/17: Setting up SuperCollider Environment"
-echo "Configuring JACK Audio..."
-echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
-usermod -aG audio,plugdev $ACTUAL_USER
-
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
     git clone --recursive https://github.com/supercollider/sc3-plugins.git > /dev/null 2>&1
@@ -242,7 +226,19 @@ else
     exit 1
 fi
 
-step_header "STEP 8/17: Installing Custom User Classes"
+step_header "STEP 6/17: Setting up Audio and Device Permissions"
+echo "Setting up udev rules..."
+cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="audio", MODE="0666"
+EOF
+
+echo "Configuring JACK Audio..."
+echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
+usermod -aG audio,plugdev $ACTUAL_USER
+
+step_header "STEP 7/17: Setting up SuperCollider Environment"
 echo "Cloning UHJ-Pi repository and building phono-control CLI..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
@@ -588,14 +584,20 @@ fi
 fc-cache -f -v
 echo "✓ Custom fonts installed"
 
-step_header "STEP 16/17: Installing Bluetooth Pairing Script"
+step_header "STEP 16/17: Configuring Bluetooth"
+echo "Configuring Bluetooth..."
+systemctl enable bluetooth >> $INSTALL_LOG 2>&1
+systemctl start bluetooth >> $INSTALL_LOG 2>&1
+echo "✓ Bluetooth configured"
+
+step_header "STEP 17/17: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "✓ Bluetooth pairing script installed to /usr/local/bin/"
 
-step_header "STEP 17/17: Installing Launcher Script"
+step_header "STEP 18/18: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start

@@ -40,10 +40,7 @@ show_build_progress() {
         local completed=$((last_percent * width / 100))
         printf "\r$message ["
         printf "%*s" $completed | tr ' ' '='
-        if [ $completed -lt $width ]; then
-            printf ">"
-            printf "%*s" $((width - completed - 1))
-        fi
+        printf "%*s" $((width - completed))
         if [ $last_percent -gt 0 ]; then
             printf "] %d%%" $last_percent
         else
@@ -222,7 +219,6 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
 SUBSYSTEM=="audio", MODE="0666"
 EOF
 
-step_header "STEP 7/20: Setting up SuperCollider Environment"
 echo "Configuring JACK Audio for Behringer devices..."
 # Create JACK configuration for Behringer setup
 cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
@@ -230,6 +226,9 @@ cat > /home/$ACTUAL_USER/.jackdrc << 'EOF'
 /usr/bin/jackd -P75 -d alsa -r 44100 -p 256 -n 2 -S &
 EOF
 usermod -aG audio,plugdev $ACTUAL_USER
+echo "✓ Audio configuration complete"
+
+step_header "STEP 7/20: Setting up SuperCollider Environment"
 
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
@@ -403,6 +402,15 @@ else
     echo "ATK sounds download failed - continuing without sounds"
 fi
 
+# Install ATK Assets using the proper installation script
+echo "Installing ATK Assets..."
+mkdir -p /tmp/atk_temp
+cd /tmp/atk_temp
+git clone https://github.com/ATK-Dev/ATK.git >> $INSTALL_LOG 2>&1
+cd ATK
+bash install_ATK_Assets.sh >> $INSTALL_LOG 2>&1
+echo "✓ ATK Assets installed"
+
 # CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
 echo "Moving ATK classes from downloaded-quarks to Extensions..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider
@@ -575,7 +583,13 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-step_header "STEP 16/20: Installing Bluetooth Pairing Script"
+step_header "STEP 16/20: Configuring Bluetooth"
+echo "Configuring Bluetooth..."
+systemctl enable bluetooth >> $INSTALL_LOG 2>&1
+systemctl start bluetooth >> $INSTALL_LOG 2>&1
+echo "✓ Bluetooth configured"
+
+step_header "STEP 17/20: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -603,7 +617,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 17/20: Installing Launcher Script"
+step_header "STEP 18/21: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
