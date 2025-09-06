@@ -600,7 +600,7 @@ echo "✓ Bluetooth pairing script installed to /usr/local/bin/"
 step_header "STEP 18/18: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
-chmod +x /usr/local/bin/start
+chmod +x /usr/local/bin/start 
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "✓ Launcher script installed to /usr/local/bin/start"
 

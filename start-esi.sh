@@ -115,41 +115,11 @@ detect_esi_devices() {
     echo ""
 }
 
-# Kill any existing audio processes
-echo "Stopping existing audio processes..."
-killall jackd 2>/dev/null
-killall sclang 2>/dev/null
-sleep 2
-
 # Detect devices
 detect_esi_devices
 
-echo "Starting JACK with:"
-echo "  Input: hw:Phonorama (ESI Phonorama)"
-echo "  Output: hw:HD (ESI HD)"
-
-# Start JACK - ESI configuration
-# Large buffer for stability (1024 frames = ~23ms latency, 3 periods)
-jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
-
-# Wait for JACK to start
-sleep 3
-
-# Check if JACK started successfully
-if ! pgrep jackd > /dev/null; then
-    echo "ERROR: JACK failed to start. Check /tmp/jack.log for details."
-    exit 1
-fi
-
-echo "✓ JACK started successfully"
-
-# Show available JACK ports
-echo ""
-echo "Available JACK ports:"
-jack_lsp 2>/dev/null || echo "jack_lsp not available"
-
-echo ""
-echo "🎵 Audio setup complete! Starting SuperCollider application..."
+echo "✓ ESI devices detected and ready"
+echo "🎵 Starting SuperCollider application..."
 
 # Launch SuperCollider with ESI application
 exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v23_ESI_PAIR.scd"
