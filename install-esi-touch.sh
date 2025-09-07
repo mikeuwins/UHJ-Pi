@@ -527,13 +527,6 @@ echo "Reboot required. Run: sudo reboot"
 echo "After reboot and login, run:"
 echo "  start"
 
-step_header "STEP 14/17: Configuring Bluetooth"
-echo "Configuring Bluetooth..."
-# Enable Bluetooth service
-systemctl enable bluetooth
-systemctl start bluetooth
-echo "✓ Bluetooth service enabled"
-
 # Configure passwordless sudo for reboot
 echo "Configuring passwordless sudo for reboot..."
 echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-reboot
@@ -555,7 +548,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 15/17: Configuring Qt Platform for Headless Operation"
+step_header "STEP 14/17: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -584,20 +577,20 @@ fi
 fc-cache -f -v
 echo "✓ Custom fonts installed"
 
-step_header "STEP 16/17: Configuring Bluetooth"
+step_header "STEP 15/17: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
-step_header "STEP 17/17: Installing Bluetooth Pairing Script"
+step_header "STEP 16/17: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "✓ Bluetooth pairing script installed to /usr/local/bin/"
 
-step_header "STEP 18/18: Installing Launcher Script"
+step_header "STEP 17/17: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start 

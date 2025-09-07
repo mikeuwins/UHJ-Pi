@@ -93,7 +93,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/20: System Update"
+step_header "STEP 1/19: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -105,7 +105,7 @@ fi
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
-step_header "STEP 2/20: Disable Onboard and HDMI Audio"
+step_header "STEP 2/19: Disable Onboard and HDMI Audio"
 echo "Disabling onboard and HDMI audio..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -114,7 +114,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
     echo "dtoverlay=vc4-kms-v3d,noaudio" >> /boot/firmware/config.txt
 fi
 
-step_header "STEP 3/20: Install Dependencies"
+step_header "STEP 3/19: Install Dependencies"
 echo "Installing build tools and audio dependencies..."
 
 # Audio performance optimizations
@@ -161,7 +161,7 @@ done
 echo
 echo "✓ All dependencies installed"
 
-step_header "STEP 4/20: Clone SuperCollider"
+step_header "STEP 4/19: Clone SuperCollider"
 echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
@@ -174,7 +174,7 @@ cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 5/20: Build SuperCollider"
+step_header "STEP 5/19: Build SuperCollider"
 echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
     -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
@@ -212,7 +212,7 @@ else
     exit 1
 fi
 
-step_header "STEP 6/20: Setting up Audio and Device Permissions"
+step_header "STEP 6/19: Setting up Audio and Device Permissions"
 echo "Setting up udev rules..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -228,7 +228,7 @@ EOF
 usermod -aG audio,plugdev $ACTUAL_USER
 echo "✓ Audio configuration complete"
 
-step_header "STEP 7/20: Setting up SuperCollider Environment"
+step_header "STEP 7/19: Setting up SuperCollider Environment"
 
 cd /home/$ACTUAL_USER
 if [ ! -d "sc3-plugins" ]; then
@@ -269,7 +269,7 @@ else
     exit 1
 fi
 
-step_header "STEP 8/20: Installing Custom User Classes"
+step_header "STEP 8/19: Installing Custom User Classes"
 echo "Cloning UHJ-Pi repository..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
@@ -281,7 +281,7 @@ if [ ! -d "UHJ-Pi" ]; then
     fi
 fi
 
-step_header "STEP 9/20: Installing ATK Kernels and Matrices"
+step_header "STEP 9/19: Installing ATK Kernels and Matrices"
 echo "Installing ATK and handling GUI component cleanup..."
 cd /home/$ACTUAL_USER
 
@@ -451,7 +451,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-step_header "STEP 10/20: Installing Custom UHJ Test Sounds"
+step_header "STEP 10/19: Installing Custom UHJ Test Sounds"
 echo "Installing Custom UHJ Test Sounds..."
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
@@ -476,7 +476,7 @@ fi
 
 # AmbiVerbSC now installed via Quark system above
 
-step_header "STEP 11/20: Installing UHJ-Pi Application Files"
+step_header "STEP 11/19: Installing UHJ-Pi Application Files"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -513,7 +513,7 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-step_header "STEP 12/20: Configuring JACK Audio"
+step_header "STEP 12/19: Configuring JACK Audio"
 echo "Installing zita-ajbridge..."
 if apt-get install -y zita-ajbridge >> $INSTALL_LOG 2>&1; then
     echo "✓ zita-ajbridge installed"
@@ -522,7 +522,7 @@ else
     exit 1
 fi
 
-step_header "STEP 13/20: Configuring ALSA"
+step_header "STEP 13/19: Configuring ALSA"
 echo "Creating Behringer udev rules..."
 cat > /etc/udev/rules.d/60-behringer-audio.rules << 'EOF'
 # Behringer UFO202 and UCA202 persistent naming
@@ -541,14 +541,7 @@ EOF
 udevadm control --reload-rules
 udevadm trigger
 
-step_header "STEP 14/20: Configuring Bluetooth"
-echo "Configuring Bluetooth..."
-# Enable Bluetooth service
-systemctl enable bluetooth
-systemctl start bluetooth
-echo "✓ Bluetooth service enabled"
-
-step_header "STEP 15/20: Configuring Qt Platform for Headless Operation"
+step_header "STEP 14/19: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -583,13 +576,13 @@ wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 # Update font cache
 fc-cache -f -v
 
-step_header "STEP 16/20: Configuring Bluetooth"
+step_header "STEP 15/19: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
-step_header "STEP 17/20: Installing Bluetooth Pairing Script"
+step_header "STEP 16/19: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -617,7 +610,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 18/21: Installing Launcher Script"
+step_header "STEP 17/18: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start

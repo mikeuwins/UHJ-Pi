@@ -25,7 +25,7 @@ var win, mainView,
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
 // --- Headtracker MAC address (detected at startup) ---
-~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
+~headtrackerMac = ("echo 'devices' | bluetoothctl | grep 'HT' | awk '{print $2}'").unixCmdGetStdOut.stripWhiteSpace;
 // --- Maplin button overlay ---up 
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
@@ -1341,12 +1341,12 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 try {
                     // Disconnect first, then remove
                     ("Disconnecting headtracker...").postln;
-                    result = ("bluetoothctl disconnect " ++ ~headtrackerMac).unixCmdGetStdOut;
+                    result = ("timeout 3 bash -c \"echo 'disconnect " ++ ~headtrackerMac ++ "' | bluetoothctl\"").unixCmdGetStdOut;
                     ("Disconnect result: " ++ result).postln;
                     1.wait; // Wait for disconnect to complete
                     
                     ("Removing headtracker...").postln;
-                    result = ("bluetoothctl remove " ++ ~headtrackerMac).unixCmdGetStdOut;
+                    result = ("timeout 3 bash -c \"echo 'remove " ++ ~headtrackerMac ++ "' | bluetoothctl\"").unixCmdGetStdOut;
                     ("Remove result: " ++ result).postln;
                     1.wait; // Wait for removal to complete
                     
