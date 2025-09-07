@@ -154,33 +154,6 @@ formatDbValue = { |dbValue|
         ~updateVisualMute.value();
     };
 
-    // Control headtracker button visibility based on mode
-    // In stereo mode (LINE/PHONO), disable headtracker controls
-    if(mode == \line || mode == \phono) {
-        // Stereo mode - disable headtracker controls
-        if(~headtrackBtn.notNil) { ~headtrackBtn.enabled_(false); };
-        if(~headtrackResetBtn.notNil) { ~headtrackResetBtn.enabled_(false); };
-        if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(false); };
-        if(~rotateKnob.notNil) { ~rotateKnob.enabled_(false); };
-        if(~tiltKnob.notNil) { ~tiltKnob.enabled_(false); };
-        if(~tumbleKnob.notNil) { ~tumbleKnob.enabled_(false); };
-        // Dim PAIR button with overlay matching GEN style
-        if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
-        ~htPairOverlay = View(mainView, Rect(742, 142, 40, 20))
-            .background_(Color.black.alpha_(0.7))
-            .alpha_(1.0)
-            .front;
-    } {
-        // UHJ mode - enable headtracker controls
-        if(~headtrackBtn.notNil) { ~headtrackBtn.enabled_(true); };
-        if(~headtrackResetBtn.notNil) { ~headtrackResetBtn.enabled_(true); };
-        if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(true); };
-        if(~rotateKnob.notNil) { ~rotateKnob.enabled_(true); };
-        if(~tiltKnob.notNil) { ~tiltKnob.enabled_(true); };
-        if(~tumbleKnob.notNil) { ~tumbleKnob.enabled_(true); };
-        // Remove overlay if it exists
-        if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
-    };
 
     ("Current input mode: " ++ mode ++ ", UFO card: " ++ ~behringerUFOCard ++ ", UCA card: " ++ ~behringerUCACard).postln;
 };
@@ -600,6 +573,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
         if(isBinaural) {
             ~headtrackBtn.enabled_(true);
+            if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(true); };
+            if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
             if(htIsOff) {
                 // Headtracking OFF: disable controls and hide reset button
                 ~headtrackResetBtn.enabled_(false);
@@ -624,6 +599,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         } {
             // Non-binaural mode (quad, 5.1, octagon)
             ~headtrackBtn.enabled_(false);
+            if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(false); };
             ~rotateKnob.enabled_(false);
             ~tiltKnob.enabled_(false);
             ~tumbleKnob.enabled_(false);
@@ -634,6 +610,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 .alpha_(1.0)
                 .front;
             ~htBtnOverlay = View(mainView, Rect(734, 60, 48, 42)) // Cover only ON/OFF button (y=60-102)
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
+            
+            // Dim PAIR button with overlay matching GEN style
+            if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
+            ~htPairOverlay = View(mainView, Rect(742, 142, 40, 20))
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
