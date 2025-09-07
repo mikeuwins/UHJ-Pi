@@ -17,14 +17,6 @@ echo ""
 echo "Username: $USER"
 echo ""
 
-# Confirm before proceeding
-echo "WARNING: This will delete EVERYTHING! Are you absolutely sure? (y/N):"
-read REPLY
-if [ -z "$REPLY" ] || [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
-    echo "Reset cancelled."
-    exit 1
-fi
-
 echo "Starting complete system reset..."
 
 # Stop all services
