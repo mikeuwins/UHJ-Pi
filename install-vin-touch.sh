@@ -93,7 +93,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/20: System Update"
+step_header "STEP 1/17: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -193,7 +193,7 @@ else
     exit 1
 fi
 
-echo -n "Installing SuperCollider "
+echo "Installing SuperCollider"
 make install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 while kill -0 $INSTALL_PID 2>/dev/null; do
@@ -233,7 +233,7 @@ else
     exit 1
 fi
 
-echo -n "Installing SC3 Plugins "
+echo "Installing SC3 Plugins"
 cmake --build . --config Release --target install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 while kill -0 $INSTALL_PID 2>/dev/null; do
@@ -311,13 +311,16 @@ echo "Installing ATK and AmbiVerbSC using Quark system..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
 # Install ATK using Quark system (includes all dependencies)
-echo "Installing ATK quark (Ambisonic Toolkit)..."
+echo -n "Installing ATK quark "
 sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/ambisonictoolkit/atk-sc3.git");
 0.exit;
 EOF' >> $INSTALL_LOG 2>&1 &
 QUARK_PID=$!
-show_build_progress "Installing ATK quark" $INSTALL_LOG $QUARK_PID
+while kill -0 $QUARK_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
 wait $QUARK_PID
 if [ $? -eq 0 ]; then
     echo "✓ ATK quark installed"
@@ -327,13 +330,16 @@ else
 fi
 
 # Install AmbiVerbSC using Quark system
-echo "Installing AmbiVerbSC quark..."
+echo -n "Installing AmbiVerbSC quark "
 sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("https://github.com/JamesWenlock/AmbiVerbSC");
 0.exit;
 EOF' >> $INSTALL_LOG 2>&1 &
 QUARK_PID=$!
-show_build_progress "Installing AmbiVerbSC quark" $INSTALL_LOG $QUARK_PID
+while kill -0 $QUARK_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
 wait $QUARK_PID
 if [ $? -eq 0 ]; then
     echo "✓ AmbiVerbSC quark installed"
