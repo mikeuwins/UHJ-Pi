@@ -18,8 +18,8 @@ echo "Username: $USER"
 echo ""
 
 # Confirm before proceeding
-read -p "⚠️  WARNING: This will delete EVERYTHING! Are you absolutely sure? (y/N): " -n 1 -r
-echo
+echo -n "⚠️  WARNING: This will delete EVERYTHING! Are you absolutely sure? (y/N): "
+read -r REPLY
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Reset cancelled."
     exit 1
