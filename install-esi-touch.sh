@@ -170,7 +170,7 @@ else
     exit 1
 fi
 
-echo -n "Installing SuperCollider... "
+echo -n "Installing SuperCollider "
 make install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 while kill -0 $INSTALL_PID 2>/dev/null; do
@@ -210,7 +210,7 @@ else
     exit 1
 fi
 
-echo -n "Installing SC3 Plugins... "
+echo -n "Installing SC3 Plugins "
 cmake --build . --config Release --target install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 while kill -0 $INSTALL_PID 2>/dev/null; do
@@ -364,7 +364,7 @@ echo "Downloading ATK sounds repository..."
 cd /tmp
 if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
     echo "ATK sounds downloaded successfully - extracting..."
-    sudo -u $ACTUAL_USER unzip -o atk-sounds.zip
+    sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
             sudo -u $ACTUAL_USER rm -rf atk-sounds-master
         rm -f atk-sounds.zip
@@ -519,7 +519,7 @@ cd /usr/share/fonts/truetype/msttcorefonts
 wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf
 
 # Update font cache
-fc-cache -f -v
+fc-cache -f >> $INSTALL_LOG 2>&1
 
 echo "Installation completed successfully!"
 echo ""
@@ -574,7 +574,7 @@ if [ ! -f /usr/local/share/fonts/truetype/uhj-pi/Arial.ttf ]; then
 fi
 
 # Update font cache
-fc-cache -f -v
+fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 step_header "STEP 15/17: Configuring Bluetooth"

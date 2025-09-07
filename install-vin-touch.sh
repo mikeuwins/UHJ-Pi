@@ -193,7 +193,7 @@ else
     exit 1
 fi
 
-echo -n "Installing SuperCollider... "
+echo -n "Installing SuperCollider "
 make install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 while kill -0 $INSTALL_PID 2>/dev/null; do
@@ -233,7 +233,7 @@ else
     exit 1
 fi
 
-echo -n "Installing SC3 Plugins... "
+echo -n "Installing SC3 Plugins "
 cmake --build . --config Release --target install >> $INSTALL_LOG 2>&1 &
 INSTALL_PID=$!
 while kill -0 $INSTALL_PID 2>/dev/null; do
