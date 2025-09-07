@@ -164,6 +164,12 @@ formatDbValue = { |dbValue|
         if(~rotateKnob.notNil) { ~rotateKnob.enabled_(false); };
         if(~tiltKnob.notNil) { ~tiltKnob.enabled_(false); };
         if(~tumbleKnob.notNil) { ~tumbleKnob.enabled_(false); };
+        // Dim PAIR button with overlay matching GEN style
+        if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
+        ~htPairOverlay = View(mainView, Rect(742, 142, 40, 20))
+            .background_(Color.black.alpha_(0.7))
+            .alpha_(1.0)
+            .front;
     } {
         // UHJ mode - enable headtracker controls
         if(~headtrackBtn.notNil) { ~headtrackBtn.enabled_(true); };
@@ -172,6 +178,8 @@ formatDbValue = { |dbValue|
         if(~rotateKnob.notNil) { ~rotateKnob.enabled_(true); };
         if(~tiltKnob.notNil) { ~tiltKnob.enabled_(true); };
         if(~tumbleKnob.notNil) { ~tumbleKnob.enabled_(true); };
+        // Remove overlay if it exists
+        if(~htPairOverlay.notNil) { ~htPairOverlay.remove; ~htPairOverlay = nil; };
     };
 
     ("Current input mode: " ++ mode ++ ", UFO card: " ++ ~behringerUFOCard ++ ", UCA card: " ++ ~behringerUCACard).postln;
