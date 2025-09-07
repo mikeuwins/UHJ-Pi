@@ -611,6 +611,13 @@ chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "✓ Launcher script installed to /usr/local/bin/start"
 
+# Install reset script
+echo "Installing reset script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
+chmod +x /usr/local/bin/reset-pi
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
+echo "✓ Reset script installed to /usr/local/bin/reset-pi"
+
 echo "Configuring automatic login..."
 if ! grep -q "autologin-user=$ACTUAL_USER" /etc/systemd/system/getty@tty1.service.d/autologin.conf 2>/dev/null; then
     mkdir -p /etc/systemd/system/getty@tty1.service.d/

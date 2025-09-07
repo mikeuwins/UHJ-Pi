@@ -686,6 +686,13 @@ chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
 
+# Install reset script
+echo "Installing reset script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
+chmod +x /usr/local/bin/reset-pi
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
+echo "Reset script installed to /usr/local/bin/reset-pi"
+
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🎵 UHJ-Pi USB Turntable Installation Complete! 🎵"
