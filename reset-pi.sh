@@ -18,9 +18,9 @@ echo "Username: $USER"
 echo ""
 
 # Confirm before proceeding
-echo -n "⚠️  WARNING: This will delete EVERYTHING! Are you absolutely sure? (y/N): "
-read -r REPLY
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+echo "WARNING: This will delete EVERYTHING! Are you absolutely sure? (y/N):"
+read REPLY
+if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
     echo "Reset cancelled."
     exit 1
 fi
