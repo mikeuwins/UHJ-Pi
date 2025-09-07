@@ -1336,10 +1336,13 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 
 // Simple connection monitor - checks initial status and monitors ongoing
 ~connectionMonitor = Routine({
-    var checkResult, isConnected, isPaired;
+    var checkResult, isConnected, isPaired, htMac;
     
     // Wait a bit before starting monitoring to avoid startup delays
     3.wait;
+    
+    // Additional short delay for headtracker detection to stabilize
+    2.wait;
     
     // Check initial pairing status on first run
     if (~headtrackerMac.notEmpty) {

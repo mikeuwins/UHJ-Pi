@@ -1321,19 +1321,39 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 // Ensure button is above overlays
 ~headtrackPairBtn.front;
 
-// Simple connection monitor - only checks when button shows paired
+// Simple connection monitor - checks initial status and monitors ongoing
 ~connectionMonitor = Routine({
-    var checkResult, isConnected, isPaired;
+    var checkResult, isConnected, isPaired, htMac;
     
     // Wait a bit before starting monitoring to avoid startup delays
     3.wait;
+    
+    // Additional short delay for headtracker detection to stabilize
+    2.wait;
+    
+    // Check initial pairing status on first run
+    if (~headtrackerMac.notEmpty) {
+        checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+        isConnected = checkResult.contains("Connected: yes");
+        isPaired = checkResult.contains("Paired: yes");
+    } {
+        isConnected = false;
+        isPaired = false;
+    };
+    
+    if (isPaired && isConnected) {
+        // Device is already paired and connected - show paired state
+        {
+            ~headtrackPairBtn.value_(2); // Show paired state
+        }.defer;
+    };
     
     // Simple monitoring loop
     loop {
         5.wait; // Check every 5 seconds
         
         // Only check if button exists, shows paired status and not currently pairing
-        // Use defer to safely access GUI properties
+        // Use defer to access GUI elements from background thread
         {
             if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
                 if (~headtrackerMac.notEmpty) {
