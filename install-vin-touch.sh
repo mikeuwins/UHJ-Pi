@@ -600,7 +600,6 @@ echo "✓ JACK configuration complete"
 # STEP 15: Configure ALSA
 step_header "STEP 13/17: Configuring ALSA"
 echo "Configuring ALSA..."
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
 cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
 pcm.!default {
     type hw
