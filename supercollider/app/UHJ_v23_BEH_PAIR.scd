@@ -154,6 +154,26 @@ formatDbValue = { |dbValue|
         ~updateVisualMute.value();
     };
 
+    // Control headtracker button visibility based on mode
+    // In stereo mode (LINE/PHONO), disable headtracker controls
+    if(mode == \line || mode == \phono) {
+        // Stereo mode - disable headtracker controls
+        if(~headtrackBtn.notNil) { ~headtrackBtn.enabled_(false); };
+        if(~headtrackResetBtn.notNil) { ~headtrackResetBtn.enabled_(false); };
+        if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(false); };
+        if(~rotateKnob.notNil) { ~rotateKnob.enabled_(false); };
+        if(~tiltKnob.notNil) { ~tiltKnob.enabled_(false); };
+        if(~tumbleKnob.notNil) { ~tumbleKnob.enabled_(false); };
+    } {
+        // UHJ mode - enable headtracker controls
+        if(~headtrackBtn.notNil) { ~headtrackBtn.enabled_(true); };
+        if(~headtrackResetBtn.notNil) { ~headtrackResetBtn.enabled_(true); };
+        if(~headtrackPairBtn.notNil) { ~headtrackPairBtn.enabled_(true); };
+        if(~rotateKnob.notNil) { ~rotateKnob.enabled_(true); };
+        if(~tiltKnob.notNil) { ~tiltKnob.enabled_(true); };
+        if(~tumbleKnob.notNil) { ~tumbleKnob.enabled_(true); };
+    };
+
     ("Current input mode: " ++ mode ++ ", UFO card: " ++ ~behringerUFOCard ++ ", UCA card: " ++ ~behringerUCACard).postln;
 };
 
