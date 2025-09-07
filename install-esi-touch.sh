@@ -345,7 +345,8 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
-if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+    echo "Extracting kernels..."
     if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
         sudo -u $ACTUAL_USER rm kernels.zip
         echo "ATK kernels downloaded and extracted successfully"
@@ -360,7 +361,8 @@ fi
 
 # Download matrices  
 echo "Downloading ATK matrices v1.0.3..."
-if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+    echo "Extracting matrices..."
     if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
         sudo -u $ACTUAL_USER rm matrices.zip
         echo "ATK matrices downloaded and extracted successfully"
@@ -376,8 +378,8 @@ fi
 # Download ATK sounds (complete repository)
 echo "Downloading ATK sounds repository..."
 cd /tmp
-if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
-    echo "ATK sounds downloaded successfully - extracting..."
+if curl -s -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "Extracting sounds..."
     sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
             sudo -u $ACTUAL_USER rm -rf atk-sounds-master
@@ -651,8 +653,8 @@ echo "4. Pair headtracker with: ble-ht.sh"
 echo ""
 echo "The system will automatically detect and configure your ESI audio devices!"
 echo ""
-echo "Press any key to reboot the system..."
-read -n 1 -s
+echo -n "Press any key to reboot... "
+read -n 1
 echo ""
 echo "Rebooting..."
 reboot 
