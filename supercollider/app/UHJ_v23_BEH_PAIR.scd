@@ -2989,7 +2989,8 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        win.close;
+        "Rebooting system...".postln;
+        "sudo reboot".unixCmd;
     });
 
 // Add touchscreen support only if touchscreen devices are detected
@@ -2998,7 +2999,8 @@ if(Platform.case(\linux, { true }, { false })) {
     var touchDevices = "ls /dev/input/by-path/ | grep touch".unixCmdGetStdOut;
     if(touchDevices.notEmpty) {
         ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
-            win.close;
+            "Rebooting system...".postln;
+            "sudo reboot".unixCmd;
         });
     };
 };
