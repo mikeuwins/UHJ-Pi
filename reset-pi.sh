@@ -19,7 +19,7 @@ echo ""
 
 # Confirm before proceeding
 echo "WARNING: This will delete EVERYTHING! Are you absolutely sure? (y/N):"
-read REPLY
+read -p "" REPLY
 if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
     echo "Reset cancelled."
     exit 1
