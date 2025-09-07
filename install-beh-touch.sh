@@ -357,49 +357,51 @@ if [ -d "wslib" ]; then
 fi
 
 # Download ATK assets manually (kernels and matrices only)
-echo "Downloading ATK kernels and matrices manually..."
+echo "Downloading ATK kernels and matrices..."
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
-if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
-    if sudo -u $ACTUAL_USER unzip -o kernels.zip; then
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+    echo "Extracting kernels..."
+    if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
         sudo -u $ACTUAL_USER rm kernels.zip
-        echo "ATK kernels downloaded and extracted successfully"
+        echo "✓ ATK kernels installed"
     else
-        echo "ERROR: ATK kernels extraction failed!"
+        echo "✗ ATK kernels extraction failed!"
         exit 1
     fi
 else
-    echo "ERROR: ATK kernels download failed!"
+    echo "✗ ATK kernels download failed!"
     exit 1
 fi
 
 # Download matrices  
 echo "Downloading ATK matrices v1.0.3..."
-if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
-    if sudo -u $ACTUAL_USER unzip -o matrices.zip; then
+if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+    echo "Extracting matrices..."
+    if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
         sudo -u $ACTUAL_USER rm matrices.zip
-        echo "ATK matrices downloaded and extracted successfully"
+        echo "✓ ATK matrices installed"
     else
-        echo "ERROR: ATK matrices extraction failed!"
+        echo "✗ ATK matrices extraction failed!"
         exit 1
     fi
 else
-    echo "ERROR: ATK matrices download failed!"
+    echo "✗ ATK matrices download failed!"
     exit 1
 fi
 
 # Download ATK sounds (complete repository)
 echo "Downloading ATK sounds repository..."
 cd /tmp
-if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
-    echo "ATK sounds downloaded successfully - extracting..."
+if curl -s -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "Extracting sounds..."
     sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
             sudo -u $ACTUAL_USER rm -rf atk-sounds-master
         rm -f atk-sounds.zip
-    echo "ATK sounds installed successfully"
+    echo "✓ ATK sounds installed"
     
     # Organize sounds into proper subdirectory structure (like working SD card)
     echo "Organizing sounds into proper directory structure..."
@@ -416,14 +418,6 @@ else
     echo "ATK sounds download failed - continuing without sounds"
 fi
 
-# Install ATK Assets using the proper installation script
-echo "Installing ATK Assets..."
-mkdir -p /tmp/atk_temp
-cd /tmp/atk_temp
-git clone https://github.com/ATK-Dev/ATK.git >> $INSTALL_LOG 2>&1
-cd ATK
-bash install_ATK_Assets.sh >> $INSTALL_LOG 2>&1
-echo "✓ ATK Assets installed"
 
 # CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
 echo "Moving ATK classes from downloaded-quarks to Extensions..."
@@ -630,13 +624,6 @@ cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
-
-# Install reset script
-echo "Installing reset script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
-chmod +x /usr/local/bin/reset-pi
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
-echo "Reset script installed to /usr/local/bin/reset-pi"
 
 echo "Installation completed successfully!"
 echo ""
