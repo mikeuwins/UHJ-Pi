@@ -494,9 +494,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                         var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
-                        // Audio source - live input from hardware
-                        src = SoundIn.ar([0,1]);
-                        // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
+                        // Audio source - file playback via SFPlayer
+                        var defaultFile = Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav";
+                        src = SFPlayer.ar(defaultFile, loop: 1);
                         // Amplitude scaling
                         src = src * \amp.kr(0.dbamp); // 0dB default
                         // --- 7-band graphic EQ before ambisonic encode ---
@@ -672,9 +672,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
-                            // Audio source - live input from hardware
-                            src = SoundIn.ar([0,1]);
-                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
+                            // Audio source - file playback via SFPlayer
+                            var defaultFile = Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav";
+                            src = SFPlayer.ar(defaultFile, loop: 1);
                             // Amplitude scaling
                             src = src * \amp.kr(0.dbamp); // 0dB default
                             // --- 7-band graphic EQ before ambisonic encode ---
