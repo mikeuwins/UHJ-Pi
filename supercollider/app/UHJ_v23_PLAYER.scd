@@ -9,8 +9,7 @@ var win, mainView,
     decoderChanged,
     lastInL, lastInR, minIn, maxIn,
     voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
-    dbValue, cliToDb, cliToDbMaster, formatDbValue,
-    hasInputGain, hasInputMute, inputCard, inputControl;
+    dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~maplinOverlay = nil;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
@@ -61,65 +60,7 @@ lastInR = 127; // Start at max (0dB)
 minIn = 0;   // ALSA: 0 = -60dB
 maxIn = 127; // ALSA: 127 = 0dB
 
-// Read environment variables from start-gen.sh
-hasInputGain = (Platform.case(\linux, { "HAS_INPUT_GAIN".getenv ? "0" }, { "0" }) == "1");
-hasInputMute = (Platform.case(\linux, { "HAS_INPUT_MUTE".getenv ? "0" }, { "0" }) == "1");
-inputCard = Platform.case(\linux, { "INPUT_CARD".getenv ? "0" }, { "0" });
-inputControl = Platform.case(\linux, { "INPUT_CONTROL".getenv ? "" }, { "" });
-
-// Initialize ALSA mixer to 100% on boot if input gain control is available
-if(hasInputGain and: {inputControl.notEmpty}) {
-    ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' 100%").unixCmdGetStdOut;
-    lastInL = 100; // Set initial value (100%)
-    lastInR = 100; // Set initial value (100%)
-};
-
-
-// ALSA control functions for generic input devices
-~setInputLevel = { |level|
-    if(hasInputGain and: {inputControl.notEmpty}) {
-        // Use percentage - works with any range
-        var percentage = (level * 100).round.asInteger; // 0-100% range
-        var cmd = "amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ percentage ++ "%";
-        "DEBUG: Running ALSA command: ".post; cmd.postln;
-        cmd.unixCmdGetStdOut;
-        lastInL = percentage; // Use existing variable
-    } {
-        "DEBUG: Not calling ALSA - hasInputGain: ".post; hasInputGain.postln; " inputControl: ".post; inputControl.postln;
-    };
-};
-
-// Individual channel control for unlinked faders
-~setInputLevelLeftOnly = { |level|
-    if(hasInputGain and: {inputControl.notEmpty}) {
-        var percentage = (level * 100).round.asInteger;
-        var cmd = "amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ percentage ++ "%," ++ lastInR ++ "%";
-        cmd.unixCmdGetStdOut;
-        lastInL = percentage;
-    };
-};
-
-~setInputLevelRightOnly = { |level|
-    if(hasInputGain and: {inputControl.notEmpty}) {
-        var percentage = (level * 100).round.asInteger;
-        var cmd = "amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ lastInL ++ "%," ++ percentage ++ "%";
-        cmd.unixCmdGetStdOut;
-        lastInR = percentage;
-    };
-};
-
-~setInputMute = { |muted|
-    if(hasInputMute and: {inputControl.notEmpty}) {
-        var cmd = if(muted) { "nocap" } { "cap" };
-        ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ cmd).unixCmdGetStdOut;
-    } {
-        // Fallback: use level control for mute
-        if(hasInputGain and: {inputControl.notEmpty}) {
-            var cmd = if(muted) { "0" } { lastInL.asString };
-            ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' " ++ cmd).unixCmdGetStdOut;
-        };
-    };
-};
+// (ALSA input control removed for PLAYER)
 
 
 // Audio engine initial values
