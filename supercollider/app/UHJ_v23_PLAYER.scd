@@ -7,7 +7,7 @@
 
 var win, mainView,
     decoderChanged,
-    isUpdating, lastInputCmd, linkFaders, lastInL, lastInR, minIn, maxIn, lastFaderGroup,
+    lastInL, lastInR, minIn, maxIn,
     voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
     dbValue, cliToDb, cliToDbMaster, formatDbValue,
     hasInputGain, hasInputMute, inputCard, inputControl;
@@ -56,13 +56,10 @@ var win, mainView,
 
 
 // --- Initial values for input section ---
-isUpdating = false;
-linkFaders = true;
 lastInL = 127; // Start at max (0dB)
 lastInR = 127; // Start at max (0dB)
 minIn = 0;   // ALSA: 0 = -60dB
 maxIn = 127; // ALSA: 127 = 0dB
-lastFaderGroup = \none;
 
 // Read environment variables from start-gen.sh
 hasInputGain = (Platform.case(\linux, { "HAS_INPUT_GAIN".getenv ? "0" }, { "0" }) == "1");
