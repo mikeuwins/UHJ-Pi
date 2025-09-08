@@ -454,15 +454,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     ("echo 'Audio volume controlled by output interface'").postln;
                     // Create player bus and start SFPlayer
                     ~playerBus = Bus.audio(s, 2);
-                    ~sfp = SFPlayer.new(nil, outbus: ~playerBus.index, server: s,
-                    autoShowOpenDialog: false, autoBootServer: false,
-                    autoSetSampleRate: false, autoSetOutputChannels: false);
-                    ~sfp.load(Atk.userSoundsDir ++ "/uhj/Palestrina-O_Bone.wav");
-                    ~sfp.outbus (~playerBus.index);
+                    ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
                     ~sfp.loop = true;
                     ~sfp.play;
-                    ~sfp.gui;
-                    "SFPlayer loaded: ".post; ~sfp.path.postln;
                     
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
@@ -490,7 +484,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
                     // Load test audio file (same as MainApp2)
-                    // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Palestrina-O_Bone.wav");
+                    // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
                     
                     // Load spatial impulse responses for pseudo-surround convolution
                     // These would be B-format impulse responses for realistic spatialization
@@ -506,7 +500,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                         var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source from SFPlayer bus
-                        src = In.ar(~playerBus.index, 2);
+                        src = In.ar(~playerBus, 2);
                         // Amplitude scaling
                         src = src * \amp.kr(0.dbamp); // 0dB default
                         // --- 7-band graphic EQ before ambisonic encode ---
@@ -675,7 +669,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
                         // Load test audio file (same as MainApp2)
-                        // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Palestrina-O_Bone.wav");
+                        // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
 
                         s.sync(cond);
 
@@ -683,7 +677,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             // Audio source from SFPlayer bus
-                            src = In.ar(~playerBus.index, 2);
+                            src = In.ar(~playerBus, 2);
                             // Amplitude scaling
                             src = src * \amp.kr(0.dbamp); // 0dB default
                             // --- 7-band graphic EQ before ambisonic encode ---
