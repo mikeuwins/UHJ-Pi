@@ -55,10 +55,10 @@ var win, mainView,
 
 
 // --- Initial values for input section ---
-lastInL = 127; // Start at max (0dB)
-lastInR = 127; // Start at max (0dB)
-minIn = 0;   // ALSA: 0 = -60dB
-maxIn = 127; // ALSA: 127 = 0dB
+// lastInL = 127; // Start at max (0dB)
+// lastInR = 127; // Start at max (0dB)
+// minIn = 0;   // ALSA: 0 = -60dB
+// maxIn = 127; // ALSA: 127 = 0dB
 
 // (ALSA input control removed for PLAYER)
 
@@ -73,13 +73,13 @@ inputs = 2;             // Default input channels
 outputs = 2;            // Default output channels
 
 // Honest dB conversion - work with the hardware resolution we actually have
-cliToDb = { |cliValue|
-    var dbValue;
+// cliToDb = { |cliValue|
+//    var dbValue;
     // ALSA mapping: 0->-60dB, 127->0dB
-    dbValue = cliValue.linlin(0, 127, -60, 0);
+//    dbValue = cliValue.linlin(0, 127, -60, 0);
     // Don't pretend we have 0.5dB resolution - round to 1dB which we can actually achieve
-    dbValue.round(1);
-};
+//    dbValue.round(1);
+//};
 
 // Master dB conversion function - just use the simple one
 cliToDbMaster = { |cliValue|
@@ -452,6 +452,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.waitForBoot({
                     // Set audio card volume after server boot (vinyl deck setup)
                     ("echo 'Audio volume controlled by output interface'").postln;
+                    // Create player bus and start SFPlayer
+                    ~playerBus = Bus.audio(s, 2);
+                    ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
+                    ~sfp.loop = true;
+                    ~sfp.play;
                     
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
@@ -494,9 +499,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                         var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
-                        // Audio source - file playback via SFPlayer
-                        var defaultFile = Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav";
-                        src = SFPlayer.ar(defaultFile, loop: 1);
+                        // Audio source from SFPlayer bus
+                        src = In.ar(~playerBus, 2);
                         // Amplitude scaling
                         src = src * \amp.kr(0.dbamp); // 0dB default
                         // --- 7-band graphic EQ before ambisonic encode ---
@@ -672,9 +676,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
-                            // Audio source - file playback via SFPlayer
-                            var defaultFile = Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav";
-                            src = SFPlayer.ar(defaultFile, loop: 1);
+                            // Audio source from SFPlayer bus
+                            src = In.ar(~playerBus, 2);
                             // Amplitude scaling
                             src = src * \amp.kr(0.dbamp); // 0dB default
                             // --- 7-band graphic EQ before ambisonic encode ---
