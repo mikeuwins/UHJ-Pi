@@ -132,7 +132,7 @@ mainView = CompositeView(win, Rect(0, 0, 800, 480)).background_(Color.black);
 
 // --- INPUT FADERS SECTION ---
 StaticText(mainView, Rect(38, 10, 120, 28))
-    .string_("TRACK")
+    .string_("FILE")
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
@@ -172,37 +172,21 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 // Set initial values (moved to after menu creation)
 ~buildFileList = {
     // Build file list based on current artist and album selection
-    var artistName, albumName, albumPath, pn, files, paths, audioExtensions, ext, artistKey, albumKey;
+    var artistName, albumName, albumPath, pn, files, paths, audioExtensions, ext;
     
-    // Get current selections (use original text to avoid scrolling corruption)
-    artistKey = if(~artistMenu.notNil) { ~artistMenu.hash.asString } { "" };
-    albumKey = if(~albumMenu.notNil) { ~albumMenu.hash.asString } { "" };
-    
-    artistName = if(~originalMenuText[artistKey].notNil) { 
-        ~originalMenuText[artistKey] 
-    } { 
-        if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" }
-    };
-    
-    albumName = if(~originalMenuText[albumKey].notNil) { 
-        ~originalMenuText[albumKey] 
-    } { 
-        if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" }
-    };
+    // Get current selections directly from menus
+    artistName = if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" };
+    albumName = if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" };
     
     "Building file list for: ".post; artistName.post; " / ".post; albumName.postln;
     
-    // Build path based on selections
-    case 
-    { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
-    }
-    { artistName == "VARIOUS" } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Various/";
-    }
-    {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/";
-    };
+    // Use the buildAlbumPath function to get the correct path for both ATK and USB
+    albumPath = ~buildAlbumPath.value;
+    
+    // Safety check - if buildAlbumPath returns nil, use fallback
+    if(albumPath.isNil, {
+        albumPath = "/tmp/";
+    });
     
     pn = PathName(albumPath);
     if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
@@ -368,26 +352,115 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 });
 // ~fileList.front; // ensure on top of border
 
+// Function to detect USB drives and get available folders
+~detectUSBDir = {
+    var usbPaths = ["/media/" ++ Platform.userHomeDir.basename ++ "/", "/media/pi/", "/mnt/", "/media/"];
+    var foundPath;
+    
+    usbPaths.do { |path|
+        if(File.exists(path), {
+            // Look for mounted drives, excluding system SD card
+            var dirs = PathName(path).entries.select { |entry| 
+                entry.isFolder and: { 
+                    // Exclude common system mount points
+                    entry.folderName != "root" and: 
+                    entry.folderName != Platform.userHomeDir.basename and:
+                    entry.folderName != "pi" and:
+                    // Only include directories that have content (not empty system mounts)
+                    PathName(entry.fullPath).entries.size > 0
+                }
+            };
+            if(dirs.size > 0, {
+                // Return the USB drive directory itself, not the parent
+                foundPath = dirs[0].fullPath;
+            });
+        });
+    };
+    
+    foundPath ? "/tmp/"; // fallback to temp directory
+};
+
+// Function to get USB folder options
+~getUSBFolderOptions = {
+    var usbBase = ~detectUSBDir.value;
+    var folders;
+    
+    if(usbBase == "/tmp/", {
+        // No USB drive detected
+        folders = ["<NO DRIVE>"];
+    }, {
+        // USB drive found - look inside it for artist folders (ignore drive name)
+        folders = ["<PARENT>"];
+        if(File.exists(usbBase), {
+            // Look inside the USB drive for actual content folders
+            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            if(usbEntries.size > 0, {
+                // Use the first folder inside the USB drive as the content directory
+                var contentDir = usbEntries[0].fullPath;
+                var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
+                entries.do { |entry|
+                    folders = folders.add(entry.folderName.asString.toUpper);
+                };
+            });
+        });
+    });
+    
+    folders;
+};
+
 // Function to build current album path
 ~buildAlbumPath = {
-    var artistName, albumName, albumPath;
+    var artistName, albumName, albumPath, isUSB;
+    
+    // Check if we're in USB mode
+    isUSB = if(~sourceToggleBtn.notNil) { ~sourceToggleBtn.value == 1 } { false };
     
     artistName = if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" };
     albumName = if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" };
     
-    // Build path based on selections
-    case 
-    { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
-    }
-    { artistName == "VARIOUS" } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Various/";
-    }
-    {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/";
-    };
+    // Safety check - if menus aren't ready yet, use defaults
+    if(artistName.isNil, { artistName = "RHOMBUS"; });
+    if(albumName.isNil, { albumName = "THE LONGEST DAY"; });
     
-    albumPath;
+    // Build path based on source and selections
+    if(isUSB, {
+        // USB mode - use detected USB directory with artist and album
+        var usbBase = ~detectUSBDir.value;
+        if(artistName == "<NO DRIVE>", {
+            albumPath = "/tmp/"; // fallback path
+        }, {
+            if(artistName == "<PARENT>", {
+                albumPath = usbBase;
+            }, {
+                // Use artist and album selections (account for USB drive name being ignored)
+                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+                var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
+                
+                if(albumName == "...", {
+                    // No album selected, use artist folder
+                    albumPath = contentDir +/+ artistName +/+ "/";
+                }, {
+                    // Use both artist and album
+                    albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
+                });
+            });
+        });
+    }, {
+        // ATK mode - use original ATK paths
+        case 
+        { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
+            albumPath = Atk.userSoundsDir ++ "/uhj/Rhombus/The Longest Day/";
+        }
+        { artistName == "VARIOUS" } {
+            albumPath = Atk.userSoundsDir ++ "/uhj/Various/";
+        }
+        {
+            albumPath = Atk.userSoundsDir ++ "/uhj/";
+        };
+    });
+    
+    // Final safety check - ensure we always return a valid path
+    albumPath ? "/tmp/";
 };
 
 // Initialize current album path and ensure file list populates after GUI is up
@@ -1600,11 +1673,19 @@ StaticText(mainView, Rect(629, 299, 110, 22))
 win.front;
 
 // Store original menu text to preserve data integrity
+~originalMenuText = Dictionary.new;
+~scrollTasks = Dictionary.new; // Store scrolling tasks
 
 // Automatic scrolling text for long menu items
 ~scrollMenuText = { |menu, text, maxWidth = 12|
     var menuKey = menu.hash.asString;
     ~originalMenuText[menuKey] = text; // Store original text
+    
+    // Stop any existing scrolling task for this menu
+    if(~scrollTasks[menuKey].notNil, {
+        ~scrollTasks[menuKey].stop;
+        ~scrollTasks[menuKey] = nil;
+    });
     
     if(text.size > maxWidth, {
         var scrollText = text ++ "    " ++ text; // Duplicate with spaces
@@ -1628,12 +1709,66 @@ win.front;
                 2.0.wait; // Pause duration
             });
         });
+        ~scrollTasks[menuKey] = scrollTask; // Store the task
         scrollTask.start;
     });
 };
 
+// USB/ATK toggle button - aligned with encoder menu
+~sourceToggleBtn = Button(mainView, Rect(28, 45, 140, 35))
+    .states_([
+        ["FOLDER : ATK", Color.cyan, Color.black],
+        ["FOLDER : USB", Color.black, Color.cyan]
+    ])
+    .font_(Font("LCD 5x7 Segment Monospace", 11))
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({ |view|
+        var isUSB = view.value == 1;
+        var menuKey;
+        "Source switched to: ".post; (isUSB ? "USB" : "ATK").postln;
+        
+        // Update artist menu based on source
+        if(isUSB, {
+            // USB mode - show actual folders found on USB drive
+            ~artistMenu.items_(~getUSBFolderOptions.value);
+        }, {
+            // ATK mode - show original ATK options
+            ~artistMenu.items_(["RHOMBUS", "VARIOUS"]);
+        });
+        
+        // Reset artist menu selection and update album menu based on mode
+        ~artistMenu.value_(0);
+        
+        // Stop any existing scrolling first
+        menuKey = ~albumMenu.hash.asString;
+        if(~scrollTasks[menuKey].notNil, {
+            ~scrollTasks[menuKey].stop;
+            ~scrollTasks[menuKey] = nil;
+        });
+        
+        if(isUSB, {
+            // USB mode - clear album menu
+            ~albumMenu.items_(["..."]);
+            ~albumMenu.value_(0);
+        }, {
+            // ATK mode - set up album menu
+            ~albumMenu.items_(["THE LONGEST DAY"]);
+            ~albumMenu.value_(0);
+        });
+        
+        // Start scrolling for long text in both modes
+        if(~albumMenu.items[0].size > 12, {
+            ~scrollMenuText.value(~albumMenu, ~albumMenu.items[0]);
+        });
+        
+        // Update file list and current path
+        if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
+        ~currentAlbumPath = ~buildAlbumPath.value;
+    });
+
 // Create Artist and Album menus after window is visible
-~artistMenu = PopUpMenu(mainView, Rect(28, 45, 140, 35))
+~artistMenu = PopUpMenu(mainView, Rect(28, 86, 140, 35))
     .items_( ["RHOMBUS", "VARIOUS"] )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
@@ -1644,23 +1779,56 @@ win.front;
         view.focus(true);
     })
     .action_({ |view|
-        var artistName, albumList;
+        var artistName, albumList, isUSB;
         "Artist menu clicked, value: ".post; view.value.postln;
         artistName = view.items[view.value];
         "Selected artist: ".post; artistName.postln;
+        
+        // Check if we're in USB mode
+        isUSB = if(~sourceToggleBtn.notNil) { ~sourceToggleBtn.value == 1 } { false };
+        
         if(~albumMenu.notNil) {
-            case 
-            { artistName == "RHOMBUS" } { albumList = ["THE LONGEST DAY"]; }
-            { artistName == "VARIOUS" } { albumList = ["..."]; }
-            { albumList = ["..."]; };
+            if(isUSB, {
+                // USB mode - show actual albums/folders in selected artist directory
+                case 
+                { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
+                { artistName == "<PARENT>" } { albumList = ["..."]; }
+                {
+                    // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
+                    var usbBase = ~detectUSBDir.value;
+                    var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+                    var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
+                    var artistPath = contentDir +/+ artistName;
+                    
+                    if(File.exists(artistPath), {
+                        var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
+                        albumList = if(entries.size > 0) {
+                            entries.collect { |entry| entry.folderName.asString.toUpper };
+                        } {
+                            ["..."];
+                        };
+                    }, {
+                        albumList = ["..."];
+                    });
+                };
+            }, {
+                // ATK mode - show original ATK options
+                case 
+                { artistName == "RHOMBUS" } { albumList = ["THE LONGEST DAY"]; }
+                { artistName == "VARIOUS" } { albumList = ["..."]; }
+                { albumList = ["..."]; };
+            });
             ~albumMenu.items_(albumList);
             ~albumMenu.value_(0);
-            if(albumList[0].size > 12, { ~scrollMenuText.value(~albumMenu, albumList[0]); });
+            // Start scrolling for long text
+            if(albumList[0].size > 12, {
+                ~scrollMenuText.value(~albumMenu, albumList[0]);
+            });
         };
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
     });
 
-~albumMenu = PopUpMenu(mainView, Rect(28, 107, 140, 35))
+~albumMenu = PopUpMenu(mainView, Rect(28, 127, 140, 35))
     .items_( ["THE LONGEST DAY"] )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
@@ -1701,6 +1869,8 @@ win.front;
 ~eqBtn = Button(mainView, Rect(180, 410, 100, 35))
     .states_([ ["EQ", Color.cyan, Color.black], ["EQ", Color.black, Color.cyan] ])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
+    .canFocus_(false)
     .action_({ |btn|
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
         if(btn.value == 1) {
@@ -2317,6 +2487,8 @@ win.front;
 ~ambienceBtn = Button(mainView, Rect(399, 410, 100, 35))
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
+    .canFocus_(false)
     .action_({ |btn|
         var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
@@ -2492,6 +2664,8 @@ win.front;
 ~playerBtn = Button(mainView, Rect(70, 410, 100, 35))
     .states_([["PLAYER", Color.cyan, Color.black], ["PLAYER", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
+    .canFocus_(false)
     .action_({ |btn|
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
@@ -2530,7 +2704,7 @@ win.front;
             // Title aligned with left edge of artwork
             StaticText(~playerOverlay, Rect(20, 5, 180, 30))
                 .background_(Color.clear)
-                .align_(\center)
+                .align_(\left)
                 .string_("PLAYER")
                 .font_(Font("Helvetica", 13).boldVariant)
                 .stringColor_(Color.cyan);

@@ -195,13 +195,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     // Build path based on selections
     case 
     { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
+        albumPath = Platform.userHomeDir +/+ ".local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
     }
     { artistName == "VARIOUS" } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Various/";
+        albumPath = Platform.userHomeDir +/+ ".local/share/ATK/sounds/uhj/Various/";
     }
     {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/";
+        albumPath = Platform.userHomeDir +/+ ".local/share/ATK/sounds/uhj/";
     };
     
     pn = PathName(albumPath);
@@ -378,13 +378,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     // Build path based on selections
     case 
     { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
+        albumPath = Platform.userHomeDir +/+ ".local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
     }
     { artistName == "VARIOUS" } {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Various/";
+        albumPath = Platform.userHomeDir +/+ ".local/share/ATK/sounds/uhj/Various/";
     }
     {
-        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/";
+        albumPath = Platform.userHomeDir +/+ ".local/share/ATK/sounds/uhj/";
     };
     
     albumPath;
