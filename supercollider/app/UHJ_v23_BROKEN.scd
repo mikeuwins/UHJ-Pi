@@ -131,13 +131,228 @@ if(Platform.name == \osx, {
 mainView = CompositeView(win, Rect(0, 0, 800, 480)).background_(Color.black);
 
 // --- INPUT FADERS SECTION ---
-StaticText(mainView, Rect(28, 10, 120, 28))
-    .string_("FILE")
+StaticText(mainView, Rect(38, 10, 120, 28))
+    .string_("TRACK")
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
-// Input faders removed in PLAYER v24
+// --- MINI PLAYER CONTROLS (derived from SFPlayer logic) ---
+// Placed in the cleared FILE area
+// Artist/Album menus feeding the file list
+
+// Determine media root - default to UHJ directory for now
+~getMediaRoot = {
+    var root = Atk.userSoundsDir;
+    var base, sub, result;
+    ("Atk.userSoundsDir: " ++ root).postln;
+    base = PathName(root);
+    sub = "uhj"; // default to UHJ
+    result = (base +/+ sub).fullPath;
+    ("Media root result: " ++ result).postln;
+    result;
+};
+
+// Build list of artist directories inside 'uhj'
+~buildArtistList = {
+    ["Rhombus", "Various", "Test Artist"]; // hardcoded for now to test
+};
+
+// Build album list for currently selected artist
+~buildAlbumList = {
+    ["The Longest Day"]; // hardcoded for now to test
+};
+
+// Artist and Album menus (will be created after window is visible)
+
+
+// Initialize original menu text storage
+~originalMenuText = Dictionary.new;
+
+// Set initial values (moved to after menu creation)
+~buildFileList = {
+    // Build file list based on current artist and album selection
+    var artistName, albumName, albumPath, pn, files, paths, audioExtensions, ext, artistKey, albumKey;
+    
+    // Get current selections (use original text to avoid scrolling corruption)
+    artistKey = if(~artistMenu.notNil) { ~artistMenu.hash.asString } { "" };
+    albumKey = if(~albumMenu.notNil) { ~albumMenu.hash.asString } { "" };
+    
+    artistName = if(~originalMenuText[artistKey].notNil) { 
+        ~originalMenuText[artistKey] 
+    } { 
+        if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" }
+    };
+    
+    albumName = if(~originalMenuText[albumKey].notNil) { 
+        ~originalMenuText[albumKey] 
+    } { 
+        if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" }
+    };
+    
+    "Building file list for: ".post; artistName.post; " / ".post; albumName.postln;
+    
+    // Build path based on selections
+    case 
+    { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
+        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Rhombus/The Longest Day/";
+    }
+    { artistName == "VARIOUS" } {
+        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/Various/";
+    }
+    {
+        albumPath = "/home/michael-uwins/.local/share/ATK/sounds/uhj/";
+    };
+    
+    pn = PathName(albumPath);
+    if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
+    
+    // Filter for audio files only, then hide extensions in display
+    files = pn.entries.select({ |f| 
+        f.isFile and: { 
+            ext = f.extension.asString.toLower;
+            (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+        };
+    });
+    
+    paths = files.collect(_.fullPath);
+    ~filePaths = paths; // store as strings
+    files.collect({ |f| 
+        var name = f.fileName.asString;
+        var ext = f.extension;
+        if(ext.notNil, {
+            var endIdx = name.size - ext.asString.size - 2;
+            if(endIdx >= 0, { name.copyRange(0, endIdx) }, { name });
+        }, { name });
+    }).sort;
+};
+
+// Thin cyan border first, then file list above it (to keep list clickable)
+
+// Up/Down buttons flanking the file list vertically
+// Up button: full width of file picker, positioned at the original top of the picker
+~trackUpBtn = Button(mainView, Rect(28, 108, 140, 20))
+    .states_([["▲", Color.cyan, Color.black], ["▲", Color.black, Color.cyan]])
+    .font_(Font("Helvetica", 12).boldVariant)
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({
+        if(~fileList.notNil) {
+            var currentIdx = ~fileList.value ? 0;
+            var newIdx = (currentIdx - 1).max(0);
+            ~fileList.value_(newIdx);
+        };
+        // Reset button to normal state after brief delay
+        { ~trackUpBtn.value_(0); }.defer(0.1);
+    });
+
+// Scrollable file list (moved down by up-button height; reduced to ~55% of previous height)
+~fileList = ListView(mainView, Rect(28, 128, 140, 150))
+    .items_(~buildFileList.value)
+    .font_(Font("Arial", 11))
+    .focusColor_(Color.cyan)
+    .background_(Color.black)
+    .stringColor_(Color.cyan)
+    .selectedStringColor_(Color.black)
+    .hiliteColor_(Color.cyan)
+    .canFocus_(true) // Enable focus for scrolling
+    .selectionAction_({ |view|
+        var idx = view.value ? -1;
+        if(idx >= 0 and: { ~filePaths.notNil and: { idx < ~filePaths.size } }, {
+            var path = ~filePaths[idx]; // already a string
+            if(~sfp.notNil, {
+                ~sfp.stop; // stop previous track
+                ~sfp.load(path);
+                if(~playBtn.notNil, { ~playBtn.value_(0); }); // reflect stopped state
+            });
+        });
+    });
+
+// Down button: full width of file picker, positioned beneath the shortened picker
+~trackDownBtn = Button(mainView, Rect(28, 278, 140, 20))
+    .states_([["▼", Color.cyan, Color.black], ["▼", Color.black, Color.cyan]])
+    .font_(Font("Helvetica", 12).boldVariant)
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({
+        if(~fileList.notNil) {
+            var currentIdx = ~fileList.value ? 0;
+            var maxIdx = ~fileList.items.size - 1;
+            var newIdx = (currentIdx + 1).min(maxIdx);
+            ~fileList.value_(newIdx);
+        };
+        // Reset button to normal state after brief delay
+        { ~trackDownBtn.value_(0); }.defer(0.1);
+    });
+~fileList.front; // ensure on top of border
+
+// Ensure file list populates after GUI is up
+{ if(~fileList.notNil, { ~fileList.items_(~buildFileList.value); }); }.defer(0.6);
+
+// PLAY/PAUSE toggle (play appears lit by default); moved left, positioned under file list
+~playBtn = Button(mainView, Rect(76, 410, 44, 35))
+    .states_([["⏵/⏸", Color.cyan, Color.black], ["⏵/⏸", Color.black, Color.cyan]])
+    .font_(Font("Helvetica", 16).boldVariant)
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({ |btn|
+        {
+            if(~sfp.notNil, {
+                if(btn.value == 1, { ~sfp.play; }, { ~sfp.pause; });
+                // keep GUI state synced to actual state if class auto-inverts
+                if(~sfp.respondsTo(\isPlaying), { ~playBtn.value_(~sfp.isPlaying.if(1, 0)); });
+            });
+        }.defer(0.05);
+    })
+    .value_(0);
+
+// STOP button (moved left, small gap after play), positioned under file list
+~stopBtn = Button(mainView, Rect(124, 410, 44, 35))
+    .states_([["⏹", Color.cyan, Color.black]])
+    .font_(Font("Helvetica", 16).boldVariant)
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({
+        {
+            if(~sfp.notNil, {
+                ~sfp.stop;
+                ~playBtn.value_(0);
+            });
+        }.defer(0.05);
+    });
+
+// SKIP TO START (at row start), positioned under file list
+~rewindBtn = Button(mainView, Rect(28, 410, 44, 35))
+    .states_([["⏮", Color.cyan, Color.black]])
+    .font_(Font("Helvetica", 16).boldVariant)
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({
+        {
+            if(~sfp.notNil, {
+                if(~sfp.respondsTo(\seekAbsSeconds), { ~sfp.seekAbsSeconds(0); }, {
+                    if(~sfp.respondsTo(\seek), { ~sfp.seek(0); });
+                });
+                ~sfp.play;
+                if(~playBtn.notNil) { ~playBtn.value_(1); };
+            });
+        }.defer(0.05);
+    });
+
+// (Removed old small up/down buttons)
+
+// (Forward button removed)
+
+// Set file menu to current track if present in list (without reloading)
+{
+    if(~sfp.notNil and: { ~sfp.path.notNil and: { ~fileList.notNil and: { ~filePaths.notNil } } }, {
+        var cur = PathName(~sfp.path).fileName.asString;
+        var idx = ~filePaths.detectIndex({ |p| p.fileName.asString == cur });
+        if(idx.notNil and: { idx >= 0 }, { ~fileList.value_(idx); });
+    });
+}.defer(1.0);
+
+// Input faders removed in PLAYER
 
 // Mouse up action for CLI commands (MainApp2 functionality)
 
@@ -454,9 +669,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     ("echo 'Audio volume controlled by output interface'").postln;
                     // Create player bus and start SFPlayer
                     ~playerBus = Bus.audio(s, 2);
-                    ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/AJH_eight-positions-uhj.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
+                    ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Various/AJH_eight-positions-uhj.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
                     ~sfp.loop = true;
-                    ~sfp.play;
+                    // Don't start playback yet - wait for main synth to be ready 
+                    
+                    { if(~playBtn.notNil, { ~playBtn.value_(0); }); }.defer(0.1);
                     
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
@@ -482,6 +699,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     decoder = decoderDict.at(configKeyD ? \stereo);
 
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
+                    // Start SFPlayer only after main processing synth is created
 
                     // Load test audio file (same as MainApp2)
                     // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
@@ -500,7 +718,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                         var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source from SFPlayer bus
-                        src = In.ar(~playerBus, 2);
+                        src = In.ar(~playerBus.index, 2);
                         // Amplitude scaling
                         src = src * \amp.kr(0.dbamp); // 0dB default
                         // --- 7-band graphic EQ before ambisonic encode ---
@@ -606,9 +824,17 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                         \maplinSurround, ~maplinState[\surround], 
                         \maplinEffect, ~maplinState[\effect],
-                        \maplinDelay, ~maplinState[\delay], 
+                        \maplinDelay, ~maplinState[\delay],
                         \maplinActive, ~maplinState[\active],
                         \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                    // Load first track from file list (if available) but don't start playing
+                    { 
+                        if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
+                            ~sfp.stop;
+                            ~sfp.load(~filePaths[0]); // already a string
+                            if(~fileList.notNil) { ~fileList.value_(0); }; // select first track in list
+                        });
+                    }.defer(0.2);
                     
                     // Restore saved parameters to new synth
                     ~restoreSynthParams.value();
@@ -677,7 +903,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             // Audio source from SFPlayer bus
-                            src = In.ar(~playerBus, 2);
+                            src = In.ar(~playerBus.index, 2);
                             // Amplitude scaling
                             src = src * \amp.kr(0.dbamp); // 0dB default
                             // --- 7-band graphic EQ before ambisonic encode ---
@@ -828,7 +1054,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     .background_(Color.clear)
     .drawFunc_({ |v|
         Pen.width = 0.5;
-        Pen.color = Color.cyan;
+        Pen.color = Color.white;
         Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
         Pen.stroke;
     });
@@ -884,20 +1110,20 @@ StaticText(~meterContainer, Rect(34, 5, 80, 16)) // x=32+2, width=80, y=5
 // --- Permanent vertical dB scale numbers (0 and -∞) ---
 StaticText(~meterContainer, Rect(8, 25, 24, 12)) // x=6+2, y=18+7 (top)
     .background_(Color.clear)
-    .font_(Font("Helvetica", 10).boldVariant)
+    .font_(Font("Helvetica", 9).boldVariant)
     .align_(\center)
     .stringColor_(Color.cyan)
     .string_("0");
 StaticText(~meterContainer, Rect(8, 195, 24, 12)) // x=6+2, y=188+7 (bottom)
     .background_(Color.clear)
-    .font_(Font("Helvetica", 10).boldVariant)
+    .font_(Font("Helvetica", 9).boldVariant)
     .align_(\center)
     .stringColor_(Color.cyan)
     .string_("-60");
 // --- dB label halfway up the meter ---
 StaticText(~meterContainer, Rect(8, 110, 24, 14)) // halfway up (approx)
     .background_(Color.clear)
-    .font_(Font("Helvetica", 10).boldVariant)
+    .font_(Font("Helvetica", 9).boldVariant)
     .align_(\center)
     .stringColor_(Color.cyan)
     .string_("dB");
@@ -1301,6 +1527,120 @@ StaticText(mainView, Rect(629, 299, 110, 22))
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .background_(Color.clear);
 win.front;
+
+// Store original menu text to preserve data integrity
+
+// Automatic scrolling text for long menu items
+~scrollMenuText = { |menu, text, maxWidth = 12|
+    var menuKey = menu.hash.asString;
+    ~originalMenuText[menuKey] = text; // Store original text
+    
+    if(text.size > maxWidth, {
+        var scrollText = text ++ "    " ++ text; // Duplicate with spaces
+        var scrollTask = Task({
+            inf.do({
+                // Wait before starting to scroll
+                2.0.wait;
+                // Scroll through the text
+                (text.size + 5).do({ |i|
+                    var displayText = scrollText.copyRange(i, i + maxWidth - 1);
+                    var currentItems = menu.items.copy;
+                    currentItems[0] = displayText;
+                    // Schedule GUI update on AppClock
+                    AppClock.sched(0, {
+                        menu.items_(currentItems);
+                        nil; // Don't reschedule
+                    });
+                    0.2.wait; // Scroll speed
+                });
+                // Pause at the end before restarting
+                2.0.wait; // Pause duration
+            });
+        });
+        scrollTask.start;
+    });
+};
+
+// Create Artist and Album menus after window is visible
+~artistMenu = PopUpMenu(mainView, Rect(28, 45, 140, 22))
+    .items_(["RHOMBUS", "VARIOUS"]) // hardcoded for now, ALL CAPS
+    .font_(Font("LCD 5x7 Segment Monospace", 11))
+    .background_(Color.black)
+    .stringColor_(Color.cyan)
+    .visible_(true)
+    .canFocus_(true) // Enable focus for scrolling
+    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        // Enable horizontal scrolling when menu is clicked
+        view.focus(true);
+    })
+    .action_({ |view|
+        var artistName, albumList;
+        "Artist menu clicked, value: ".post; view.value.postln;
+        artistName = view.items[view.value];
+        "Selected artist: ".post; artistName.postln;
+        
+        // Update album list based on selected artist
+        if(~albumMenu.notNil) {
+            case 
+            { artistName == "RHOMBUS" } {
+                albumList = ["THE LONGEST DAY"];
+            }
+            { artistName == "VARIOUS" } {
+                albumList = ["..."]; // dots for no albums
+            }
+            {
+                albumList = ["..."];
+            };
+            
+            ~albumMenu.items_(albumList);
+            ~albumMenu.value_(0);
+            // Start scrolling if album name is long
+            if(albumList[0].size > 12, {
+                ~scrollMenuText.value(~albumMenu, albumList[0]);
+            });
+        };
+        
+        // Update file list based on selected artist/album
+        if(~fileList.notNil) { 
+            ~fileList.items_(~buildFileList.value); 
+        };
+    });
+
+~albumMenu = PopUpMenu(mainView, Rect(28, 75, 140, 22))
+    .items_(["THE LONGEST DAY"]) // hardcoded for now, ALL CAPS
+    .font_(Font("LCD 5x7 Segment Monospace", 11))
+    .background_(Color.black)
+    .stringColor_(Color.cyan)
+    .visible_(true)
+    .canFocus_(true) // Enable focus for scrolling
+    .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
+        // Enable horizontal scrolling when menu is clicked
+        view.focus(true);
+    })
+    .action_({ |view|
+        "Album menu clicked, value: ".post; view.value.postln;
+        if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
+    });
+
+"Artist menu created: ".post; ~artistMenu.postln;
+"Album menu created: ".post; ~albumMenu.postln;
+
+// Debug menu properties
+"Artist menu items: ".post; ~artistMenu.items.postln;
+"Artist menu value: ".post; ~artistMenu.value.postln;
+"Artist menu enabled: ".post; ~artistMenu.enabled.postln;
+"Artist menu visible: ".post; ~artistMenu.visible.postln;
+"Album menu items: ".post; ~albumMenu.items.postln;
+"Album menu value: ".post; ~albumMenu.value.postln;
+"Album menu enabled: ".post; ~albumMenu.enabled.postln;
+"Album menu visible: ".post; ~albumMenu.visible.postln;
+
+// Set initial values
+~artistMenu.value_(0);
+~albumMenu.value_(0);
+
+// Start automatic scrolling for long text
+~scrollMenuText.value(~albumMenu, "THE LONGEST DAY");
 
 
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---

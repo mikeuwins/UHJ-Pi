@@ -92,7 +92,7 @@ INSTALL_LOG="/tmp/uhj-pi-install.log"
 echo "Installation started at $(date)" > $INSTALL_LOG
 echo "Log file: $INSTALL_LOG"
 
-step_header "STEP 1/17: System Update"
+step_header "STEP 1/16: System Update"
 echo "Updating package lists..."
 if apt-get update >> $INSTALL_LOG 2>&1; then
     echo "✓ Package lists updated"
@@ -104,7 +104,7 @@ fi
 # apt-get upgrade -y  # Commented out - causes hooks hang
 # apt-get dist-upgrade -y  # Commented out - can cause hangs, test without first
 
-step_header "STEP 2/17: Disable Onboard and HDMI Audio"
+step_header "STEP 2/16: Disable Onboard and HDMI Audio"
 echo "Disabling onboard and HDMI audio..."
 if ! grep -q "dtparam=audio=off" /boot/firmware/config.txt; then
     echo "dtparam=audio=off" >> /boot/firmware/config.txt
@@ -113,7 +113,7 @@ if ! grep -q "dtoverlay=vc4-kms-v3d,noaudio" /boot/firmware/config.txt; then
     echo "dtoverlay=vc4-kms-v3d,noaudio" >> /boot/firmware/config.txt
 fi
 
-step_header "STEP 3/17: Install Dependencies"
+step_header "STEP 3/16: Install Dependencies"
 echo "Installing SuperCollider Dependencies..."
 
 # List of packages to install
@@ -136,7 +136,7 @@ done
 echo
 echo "✓ All dependencies installed"
 
-step_header "STEP 4/17: Clone SuperCollider"
+step_header "STEP 4/16: Clone SuperCollider"
 echo "Downloading SuperCollider source code..."
 cd /home/$ACTUAL_USER
 if [ ! -d "supercollider" ]; then
@@ -149,7 +149,7 @@ cd supercollider
 mkdir -p build
 cd build
 
-step_header "STEP 5/17: Build SuperCollider"
+step_header "STEP 5/16: Build SuperCollider"
 echo "Configuring build (this may take a few minutes)..."
 if cmake -DCMAKE_BUILD_TYPE=Release -DSUPERNOVA=OFF -DSC_EL=OFF -DSC_VIM=ON \
     -DNATIVE=ON -DSC_IDE=OFF -DNO_X11=ON -DSC_QT=ON .. > /dev/null 2>&1; then
@@ -226,7 +226,7 @@ else
     exit 1
 fi
 
-step_header "STEP 6/17: Setting up Audio and Device Permissions"
+step_header "STEP 6/16: Setting up Audio and Device Permissions"
 echo "Setting up udev rules..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2573", ATTRS{idProduct}=="0001", GROUP="plugdev", MODE="0660"
@@ -238,8 +238,8 @@ echo "Configuring JACK Audio..."
 echo "/usr/bin/jackd -P75 -d alsa -C hw:Phonorama -P hw:HD -r 44100 -p 256 -n 2 -S &" > /home/$ACTUAL_USER/.jackdrc
 usermod -aG audio,plugdev $ACTUAL_USER
 
-step_header "STEP 7/17: Setting up SuperCollider Environment"
-echo "Cloning UHJ-Pi repository..."
+step_header "STEP 7/16: Setting up SuperCollider Environment"
+echo "Cloning UHJ-Pi repository and building phono-control CLI..."
 cd /home/$ACTUAL_USER
 if [ ! -d "UHJ-Pi" ]; then
     if git clone https://github.com/mikeuwins/UHJ-Pi.git; then
@@ -249,9 +249,6 @@ if [ ! -d "UHJ-Pi" ]; then
         exit 1
     fi
 fi
-
-step_header "STEP 8/17: Building Phono-Control CLI"
-echo "Building phono-control CLI..."
 cd UHJ-Pi/cli/phonorama-cli-linux
 if [ -f "build.sh" ]; then
     chmod +x build.sh
@@ -266,7 +263,7 @@ else
     exit 1
 fi
 
-step_header "STEP 9/17: Installing ATK Kernels and Matrices"
+step_header "STEP 8/16: Installing ATK Kernels and Matrices"
 echo "Installing ATK and handling GUI component cleanup (manual approach)..."
 cd /home/$ACTUAL_USER
 
@@ -348,8 +345,7 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
-if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
-    echo "Extracting kernels..."
+if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
     if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
         sudo -u $ACTUAL_USER rm kernels.zip
         echo "ATK kernels downloaded and extracted successfully"
@@ -364,8 +360,7 @@ fi
 
 # Download matrices  
 echo "Downloading ATK matrices v1.0.3..."
-if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
-    echo "Extracting matrices..."
+if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
     if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
         sudo -u $ACTUAL_USER rm matrices.zip
         echo "ATK matrices downloaded and extracted successfully"
@@ -381,8 +376,8 @@ fi
 # Download ATK sounds (complete repository)
 echo "Downloading ATK sounds repository..."
 cd /tmp
-if curl -s -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
-    echo "Extracting sounds..."
+if curl -L "https://github.com/ambisonictoolkit/atk-sounds/archive/refs/heads/master.zip" -o atk-sounds.zip; then
+    echo "ATK sounds downloaded successfully - extracting..."
     sudo -u $ACTUAL_USER unzip -q -o atk-sounds.zip
     sudo -u $ACTUAL_USER cp -r atk-sounds-master/* /home/$ACTUAL_USER/.local/share/ATK/
             sudo -u $ACTUAL_USER rm -rf atk-sounds-master
@@ -444,7 +439,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 # Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
-step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
+step_header "STEP 9/16: Installing Custom UHJ Test Sounds"
 echo "Installing Custom UHJ Test Sounds..."
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
@@ -469,7 +464,7 @@ fi
 
 # AmbiVerbSC now installed via Quark system above
 
-step_header "STEP 11/17: Installing UHJ-Pi Application Files"
+step_header "STEP 10/16: Installing UHJ-Pi Application Files"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -507,12 +502,12 @@ fi
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
-step_header "STEP 12/17: Configuring JACK Audio"
+step_header "STEP 11/16: Configuring JACK Audio"
 echo "Configuring JACK Audio for ESI devices..."
 # JACK configuration is handled by start-esi.sh script
 echo "✓ JACK Audio configuration will be handled by startup script"
 
-step_header "STEP 13/17: Configuring ALSA"
+step_header "STEP 12/16: Configuring ALSA"
 echo "Configuring ALSA for ESI devices..."
 # ALSA configuration is handled by start-esi.sh script
 echo "✓ ALSA configuration will be handled by startup script"
@@ -567,7 +562,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 14/17: Configuring Qt Platform for Headless Operation"
+step_header "STEP 13/16: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -596,32 +591,25 @@ fi
 fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
-step_header "STEP 15/17: Configuring Bluetooth"
+step_header "STEP 14/16: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
-step_header "STEP 16/17: Installing Bluetooth Pairing Script"
+step_header "STEP 15/16: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "✓ Bluetooth pairing script installed to /usr/local/bin/"
 
-step_header "STEP 17/17: Installing Launcher Script"
+step_header "STEP 16/16: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start 
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "✓ Launcher script installed to /usr/local/bin/start"
-
-# Install reset script
-echo "Installing reset script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
-chmod +x /usr/local/bin/reset-pi
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
-echo "✓ Reset script installed to /usr/local/bin/reset-pi"
 
 echo "Configuring automatic login..."
 if ! grep -q "autologin-user=$ACTUAL_USER" /etc/systemd/system/getty@tty1.service.d/autologin.conf 2>/dev/null; then
@@ -656,10 +644,8 @@ echo "4. Pair headtracker with: ble-ht.sh"
 echo ""
 echo "The system will automatically detect and configure your ESI audio devices!"
 echo ""
-echo -n "Press any key to reboot... "
-read -n 1
-
+echo "Press any key to reboot the system..."
+read -n 1 -s
 echo ""
-echo "Rebooting now..."
-sync
-echo b > /proc/sysrq-trigger 
+echo "Rebooting..."
+reboot 

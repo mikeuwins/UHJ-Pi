@@ -732,7 +732,7 @@ echo "  3. The start command will:"
 echo "     - Detect and verify Behringer devices"
 echo "     - Set up JACK + zita bridges"
 echo "     - Launch X11 session with UHJ app"
-echo "  4. Behringer audio setup will be handled automatically by the app"
+echo "  4. Behringer audio setup will be handled automatically by the app" 
 echo ""
 echo "Press any key to reboot the system..."
 read -n 1 -s

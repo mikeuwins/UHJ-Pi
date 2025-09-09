@@ -1,0 +1,60 @@
+TITLE:: SFPlayerMeter
+summary:: Graphical feedback window showing SFPlayer input levels and server output levels
+categories:: GUI>Interfaces
+related:: Classes/Stethoscope, Classes/FreqScope, Classes/ServerMeterView, Classes/SFPlayerMeterView
+
+DESCRIPTION::
+A SFPlayerMeter is a simple graphical display showing the volume levels of SFPlayer inputs and server outputs. It is based on link::Classes/ServerMeter2:: but monitors a specific player bus instead of server input buses.
+
+Also see:
+link::Classes/Server#-meter::
+
+CLASSMETHODS::
+
+METHOD:: new
+Create a new SFPlayerMeter.
+
+ARGUMENT:: server
+The link::Classes/Server:: whose outputs you wish to visualize.
+
+ARGUMENT:: numIns
+The number of inputs you want to display (typically 2 for stereo player audio)
+
+ARGUMENT:: numOuts
+The number of outputs you want to display (starts counting at bus 0)
+
+ARGUMENT:: playerBus
+The link::Classes/Bus:: where SFPlayer outputs its audio
+
+returns:: A reference to the newly created SFPlayerMeter
+
+INSTANCEMETHODS::
+
+METHOD:: window
+Get a reference to the link::Classes/Window:: of this SFPlayerMeter
+
+returns:: a link::Classes/Window:: reference
+
+METHOD:: meterView
+Get a reference to the link::Classes/SFPlayerMeterView:: of this SFPlayerMeter
+
+returns:: a link::Classes/SFPlayerMeterView:: reference
+
+note::
+A SFPlayerMeter encapsulates both a link::Classes/Window:: and a link::Classes/SFPlayerMeterView:: within that Window. For more information about Windows and views see link::Guides/GUI-Introduction#Basic elements: Windows, views and containers::
+::
+
+EXAMPLES::
+
+code::
+
+s = Server.internal; // use the internal server
+s.boot;
+
+// Create a player bus and SFPlayer
+~playerBus = Bus.audio(s, 2);
+~sfp = SFPlayer.new("path/to/audio.wav", outbus: ~playerBus.index);
+
+// Display 2 player input channels & main stereo output
+m = SFPlayerMeter.new(s, 2, 2, ~playerBus);
+::

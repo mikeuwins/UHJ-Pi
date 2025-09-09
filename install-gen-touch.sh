@@ -601,6 +601,7 @@ echo "✓ JACK configuration complete"
 # STEP 15: Configure ALSA
 step_header "STEP 13/17: Configuring ALSA"
 echo "Configuring ALSA..."
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
 cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
 pcm.!default {
     type hw
@@ -686,13 +687,6 @@ cp /home/$ACTUAL_USER/UHJ-Pi/start-gen.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
-
-# Install reset script
-echo "Installing reset script..."
-cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
-chmod +x /usr/local/bin/reset-pi
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
-echo "Reset script installed to /usr/local/bin/reset-pi"
 
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

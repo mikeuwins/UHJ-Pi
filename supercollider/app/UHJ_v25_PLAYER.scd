@@ -231,7 +231,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 
 // Up/Down buttons flanking the file list vertically
 // Up button: full width of file picker, positioned higher due to single menu
-~trackUpBtn = Button(mainView, Rect(28, 136, 140, 35))
+~trackUpBtn = Button(mainView, Rect(28, 169, 140, 29))
     .states_([["▲", Color.cyan, Color.black], ["▲", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 18).boldVariant)
     .focusColor_(Color.clear)
@@ -246,9 +246,11 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     });
 
 // Scrollable file list with hidden scrollbars - moved up due to single menu
-~fileListScrollView = ScrollView(mainView, Rect(28, 171, 140, 155))
+~fileListScrollView = ScrollView(mainView, Rect(28, 198, 140, 155))
     .background_(Color.black)
     .autohidesScrollers_(false)
+    .focusColor_(Color.clear)
+    .canFocus_(false)
     .canvas_(
         ListView()
             .fixedHeight_(155)
@@ -267,10 +269,22 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                         if(~sfp.notNil) {
                             ~sfp.stop;
                             ~sfp.load(path);
+                            // Reset all timer state
                             ~playStartTime = 0;
                             ~pausedTime = 0;
-                            { ~updateTimeDisplay.value; }.defer(0.1);
-                            { ~updatePlayerControls.value; }.defer(0.1);
+                            ~isPlaying = false;
+                            // Reset button states immediately
+                            if(~playerPlayBtn.notNil, { 
+                                ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
+                            });
+                            if(~playerLoopBtn.notNil, { 
+                                ~playerLoopBtn.value_(0); // Loop off
+                            });
+                            // Force immediate timer reset and refresh
+                            { 
+                                ~updateTimeDisplay.value; 
+                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
+                            }.defer(0.1);
                         };
                     });
                 })
@@ -281,7 +295,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~fileList = ~fileListScrollView.canvas;
 
 // Down button: full width of file picker, positioned beneath the expanded picker
-~trackDownBtn = Button(mainView, Rect(28, 326, 140, 35))
+~trackDownBtn = Button(mainView, Rect(28, 353, 140, 29))
     .states_([["▼", Color.cyan, Color.black], ["▼", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 18).boldVariant)
     .focusColor_(Color.clear)
@@ -296,11 +310,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         { ~trackDownBtn.value_(0); }.defer(0.1);
     });
 
-// Time display removed from main screen - now only in PLAYER panel
+// Time display removed from main screen - now in PLAYER panel
 
 // Function to format time in MM:SS
 ~formatTime = { |seconds|
     var mins, secs;
+    // Safety check for nil values
+    if(seconds.isNil, { seconds = 0 });
     // Ensure we have a clean integer value
     seconds = seconds.asFloat;
     mins = (seconds / 60).floor.asInteger;
@@ -318,7 +334,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~isPlaying = false;
 
 ~updateTimeDisplay = {
-    if(~sfp.notNil and: { ~timeDisplay.notNil }, {
+    if(~sfp.notNil and: { ~playerTimeDisplay.notNil }, {
         var elapsed, total, elapsedStr, totalStr;
         if(~isPlaying, {
             if(~playStartTime == 0, { ~playStartTime = SystemClock.seconds; });
@@ -330,14 +346,15 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             });
             elapsed = ~pausedTime;
         });
-        total = if(~sfp.sf.notNil) { ~sfp.sf.duration } { 0 };
+        total = if(~sfp.sf.notNil and: { ~sfp.sf.duration.notNil }) { ~sfp.sf.duration } { 0 };
         elapsedStr = ~formatTime.value(elapsed);
         totalStr = ~formatTime.value(total);
         
-        // Update player panel controls only (main screen controls removed)
+        // Update player time display
         if(~playerTimeDisplay.notNil, {
             ~playerTimeDisplay.string_(elapsedStr ++ " / " ++ totalStr);
         });
+        
         if(~playerPositionSlider.notNil and: { total > 0 }, {
             ~playerPositionSlider.value_(elapsed / total);
         });
@@ -876,29 +893,87 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
                             ~sfp.stop;
                             ~sfp.load(~filePaths[0]); // already a string
+                            ~playStartTime = 0;
+                            ~pausedTime = 0;
+                            ~isPlaying = false;
+                            // Reset button states
+                            if(~playerPlayBtn.notNil, { 
+                                ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
+                            });
+                            if(~playerLoopBtn.notNil, { 
+                                ~playerLoopBtn.value_(0); // Loop off
+                            });
                             if(~fileList.notNil) { ~fileList.value_(0); }; // select first track in list
+                            { 
+                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
+                            }.defer(0.1); // Refresh button display
                         });
                     }.defer(0.2);
                     
                     // Restore saved parameters to new synth
                     ~restoreSynthParams.value();
 
-                    // Create level meter after synth is started
+                    // Create output meters only (no input meters)
                     {
                         ~meter.remove; // Remove any existing meter
-                        ~meter = ServerMeter2View.new(s, ~meterContainer, 0@0, inputs, outputs);
-                        // --- Permanent row of 8 numbers below the meters, aligned with meter bars ---
-                        ~meterNumbers = Array.fill(8, { |i|
-                            var labelWidth = 24;
-                            var x = 96 + ((i + 0.5) * (180 / 8)) - (labelWidth / 2); // x=95+1, move 1px right
-                            StaticText(~meterContainer, Rect(x, 206, labelWidth, 16)) // y=206 (move up 4px)
-                                .background_(Color.black)
-                                .font_(Font("Helvetica", 9).boldVariant)
-                                .align_(\center)
-                                .stringColor_(Color.cyan)
-                                .string_((i+1).asString);
+                        ("Creating output meters only with outputs=" ++ outputs).postln;
+                        ~meter = ServerMeter2View.new(s, ~meterContainer, 68@0, 0, outputs); // 0 inputs, outputs outputs, moved left by 2px
+                        
+                        // Create custom input meters in ServerMeter2View style, fed from playerBus
+                        ~playerInputMeters = Array.fill(2, { |i|
+                            var meterWidth = 20; // Match ServerMeter2View width
+                            var meterHeight = 180;
+                            var x = 34 + (i * 22.5); // Position where old input meters were, adjusted right and down
+                            var y = 25;
+                            
+                            LevelIndicator(~meterContainer, Rect(x, y, meterWidth, meterHeight))
+                                .warning_(0.6)
+                                .critical_(0.9)
+                                .style_(\led)
+                                .stepWidth_(4)
+                                .meterColor_(Color.cyan)
+                                .backColor_(Color.black)
+                                .drawsPeak_(true)
+                                .numTicks_(10)
+                                .numMajorTicks_(0)
+                                .warningColor_(Color.new(0.86,0.54,0.04,1))
+                                .criticalColor_(Color.red);
                         });
-                    }.defer(0.1);
+                        
+                        // Create synth to monitor playerBus levels
+                        ~playerBusSynth = SynthDef(\playerBusMonitor, {
+                            var sig = In.ar(~playerBus.index, 2);
+                            var levels = SendPeakRMS.kr(sig, 20, 3, "/" ++ s.name ++ "PlayerLevels");
+                            Out.ar(0, 0); // Silent output
+                        }).play(s);
+                        
+                        // Create OSC responder for playerBus levels
+                        ~playerLevelResponder = OSCFunc({|msg|
+                            {
+                                try {
+                                    var channelCount = min(msg.size - 3 / 2, 2);
+                                    channelCount.do {|channel|
+                                        var baseIndex = 3 + (2*channel);
+                                        var peakLevel = msg.at(baseIndex);
+                                        var rmsValue = msg.at(baseIndex + 1);
+                                        var meter = ~playerInputMeters.at(channel);
+                                        if (meter.notNil) {
+                                            if (meter.isClosed.not) {
+                                                meter.peakLevel = peakLevel.ampdb.linlin(-80, 0, 0, 1, \min);
+                                                meter.value = rmsValue.ampdb.linlin(-80, 0, 0, 1);
+                                                // Debug: post levels for first channel
+                                                if(channel == 0) {
+                                                    ("PlayerBus Level: " ++ peakLevel.ampdb.round(0.1) ++ " dB, RMS: " ++ rmsValue.ampdb.round(0.1) ++ " dB").postln;
+                                                }
+                                            }
+                                        }
+                                    }
+                                } { |error|
+                                    if(error.isKindOf(PrimitiveFailedError).not) { error.throw }
+                                };
+                            }.defer;
+                        }, ("/" ++ s.name ++ "PlayerLevels").asSymbol, s.addr).fix;
+                    }.defer;
 
                     ("Audio synthesis started with level meter").postln;
                 });
@@ -912,6 +987,17 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.waitForBoot({
                         // Set audio card volume after server reboot (vinyl deck setup)
                         ("echo 'Audio volume controlled by output interface'").postln;
+                        
+                        // Recreate player bus after server reboot
+                        ~playerBus = Bus.audio(s, 2);
+                        
+                        // Recreate SFPlayer after server reboot
+                        if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
+                            // Stop existing SFPlayer if it exists
+                            if(~sfp.notNil, { ~sfp.stop; });
+                            ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
+                            ~sfp.loop = true;
+                        });
                         
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
@@ -1059,22 +1145,67 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
 
-                        // Create level meter after synth is started
-                        {
-                            ~meter.remove; // Remove any existing meter
-                            ~meter = ServerMeter2View.new(s, ~meterContainer, 0@0, inputs, outputs);
-                            // --- Permanent row of 8 numbers below the meters, aligned with meter bars ---
-                            ~meterNumbers = Array.fill(8, { |i|
-                                var labelWidth = 24;
-                                var x = 96 + ((i + 0.5) * (180 / 8)) - (labelWidth / 2); // x=95+1, move 1px right
-                                StaticText(~meterContainer, Rect(x, 206, labelWidth, 16)) // y=206 (move up 4px)
-                                    .background_(Color.black)
-                                    .font_(Font("Helvetica", 9).boldVariant)
-                                    .align_(\center)
-                                    .stringColor_(Color.cyan)
-                                    .string_((i+1).asString);
-                            });
-                        }.defer(0.1);
+                    // Create output meters only (no input meters)
+                    {
+                        ~meter.remove; // Remove any existing meter
+                        ("Creating output meters only with outputs=" ++ outputs).postln;
+                        ~meter = ServerMeter2View.new(s, ~meterContainer, 68@0, 0, outputs); // 0 inputs, outputs outputs, moved left by 2px
+                        
+                        // Create custom input meters in ServerMeter2View style, fed from playerBus
+                        ~playerInputMeters = Array.fill(2, { |i|
+                            var meterWidth = 20; // Match ServerMeter2View width
+                            var meterHeight = 180;
+                            var x = 34 + (i * 22.5); // Position where old input meters were, adjusted right and down
+                            var y = 25;
+                            
+                            LevelIndicator(~meterContainer, Rect(x, y, meterWidth, meterHeight))
+                                .warning_(0.6)
+                                .critical_(0.9)
+                                .style_(\led)
+                                .stepWidth_(4)
+                                .meterColor_(Color.cyan)
+                                .backColor_(Color.black)
+                                .drawsPeak_(true)
+                                .numTicks_(10)
+                                .numMajorTicks_(0)
+                                .warningColor_(Color.new(0.86,0.54,0.04,1))
+                                .criticalColor_(Color.red);
+                        });
+                        
+                        // Create synth to monitor playerBus levels
+                        ~playerBusSynth = SynthDef(\playerBusMonitor, {
+                            var sig = In.ar(~playerBus.index, 2);
+                            var levels = SendPeakRMS.kr(sig, 20, 3, "/" ++ s.name ++ "PlayerLevels");
+                            Out.ar(0, 0); // Silent output
+                        }).play(s);
+                        
+                        // Create OSC responder for playerBus levels
+                        ~playerLevelResponder = OSCFunc({|msg|
+                            {
+                                try {
+                                    var channelCount = min(msg.size - 3 / 2, 2);
+                                    channelCount.do {|channel|
+                                        var baseIndex = 3 + (2*channel);
+                                        var peakLevel = msg.at(baseIndex);
+                                        var rmsValue = msg.at(baseIndex + 1);
+                                        var meter = ~playerInputMeters.at(channel);
+                                        if (meter.notNil) {
+                                            if (meter.isClosed.not) {
+                                                meter.peakLevel = peakLevel.ampdb.linlin(-80, 0, 0, 1, \min);
+                                                meter.value = rmsValue.ampdb.linlin(-80, 0, 0, 1);
+                                                // Debug: post levels for first channel
+                                                if(channel == 0) {
+                                                    ("PlayerBus Level: " ++ peakLevel.ampdb.round(0.1) ++ " dB, RMS: " ++ rmsValue.ampdb.round(0.1) ++ " dB").postln;
+                                                }
+                                            }
+                                        }
+                                    }
+                                } { |error|
+                                    if(error.isKindOf(PrimitiveFailedError).not) { error.throw }
+                                };
+                            }.defer;
+                        }, ("/" ++ s.name ++ "PlayerLevels").asSymbol, s.addr).fix;
+                    }.defer;
 
                         ("Audio synthesis started with level meter").postln;
                     });
@@ -1088,6 +1219,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     ~prevOutputs = outputs;
     ~prevConfigKeyD = configKeyD;
     ~prevConfigKeyE = configKeyE;
+};
+
+// --- Custom Meter Function ---
+~createCustomMeter = {
+    // Create SFPlayerMeter for both inputs (player audio) and outputs (processed audio)
+    ~meter = SFPlayerMeterView.new(s, ~meterContainer, 0@0, 2, outputs, ~playerBus);
 };
 
 // --- Level Meter Section ---
@@ -1132,8 +1269,8 @@ StaticText(~meterContainer, Rect(97, 5, 180, 16)) // x=99-2, width=180, y=5
         .string_((i+1).asString);
 });
 
-// --- Permanent INPUT label above the input numbers, always left-aligned ---
-StaticText(~meterContainer, Rect(34, 5, 80, 16)) // x=32+2, width=80, y=5
+// --- Permanent INPUT label above the player audio, always left-aligned ---
+StaticText(~meterContainer, Rect(36, 5, 80, 16)) // x=32+2+2, width=80, y=5
     .background_(Color.clear)
     .font_(Font("Helvetica", 10).boldVariant)
     .align_(\left)
@@ -1633,7 +1770,7 @@ win.front;
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
     });
 
-~albumMenu = PopUpMenu(mainView, Rect(28, 91, 140, 35))
+~albumMenu = PopUpMenu(mainView, Rect(28, 107, 140, 35))
     .items_( ["THE LONGEST DAY"] )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
@@ -2500,13 +2637,21 @@ win.front;
                     Pen.stroke;
                 });
             
-            // Title
-            StaticText(~playerOverlay, Rect(0, 5, 320, 30))
+            // Title aligned with left edge of artwork
+            StaticText(~playerOverlay, Rect(20, 5, 180, 30))
                 .background_(Color.clear)
                 .align_(\center)
                 .string_("PLAYER")
-                .font_(Font("Helvetica", 16).boldVariant)
+                .font_(Font("Helvetica", 13).boldVariant)
                 .stringColor_(Color.cyan);
+            
+            // Time display at top right, aligned with right edge of buttons
+            ~playerTimeDisplay = StaticText(~playerOverlay, Rect(172, 5, 128, 30))
+                .string_("00:00 / 00:00")
+                .font_(Font("LCD 5x7 Segment Monospace", 11))
+                .stringColor_(Color.cyan)
+                .background_(Color.black)
+                .align_(\center);
             
             // Large artwork positioned left in the panel
             ~playerArtwork = UserView(~playerOverlay, Rect(20, 40, 180, 180))
@@ -2540,7 +2685,7 @@ win.front;
                 });
             
             // Transport controls - stacked vertically to the right of artwork
-            ~playerSkipToStartBtn = Button(~playerOverlay, Rect(225, 40, 60, 35))
+            ~playerSkipToStartBtn = Button(~playerOverlay, Rect(220, 40, 80, 35))
                 .states_([["", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 16).boldVariant)
                 .canFocus_(false)
@@ -2559,7 +2704,7 @@ win.front;
                 });
 
 
-            ~playerPlayBtn = Button(~playerOverlay, Rect(225, 90, 60, 35))
+            ~playerPlayBtn = Button(~playerOverlay, Rect(220, 88, 80, 35))
                 .states_([["", Color.black, Color.cyan], ["", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 16).boldVariant)
                 .canFocus_(false)
@@ -2579,13 +2724,13 @@ win.front;
                             ~pausedTime = SystemClock.seconds - ~playStartTime;
                         });
                         // Refresh the play icon to update color
-                        ~playerOverlay.refresh;
+                        if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                     });
                 })
-                .value_(1);
+                .value_(1); // Start in pause state (cyan icon on black background)
 
 
-            ~playerStopBtn = Button(~playerOverlay, Rect(225, 140, 60, 35))
+            ~playerStopBtn = Button(~playerOverlay, Rect(220, 136, 80, 35))
                 .states_([["", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 16).boldVariant)
                 .canFocus_(false)
@@ -2594,17 +2739,17 @@ win.front;
                     if(~sfp.notNil, {
                         // SFPlayer.stop already resets the playhead to zero
                         ~sfp.stop;
-                        ~playerPlayBtn.value_(1);
+                        ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
                         ~isPlaying = false;
                         // Reset internal timer state to match SFPlayer's cursor at zero
                         ~playStartTime = 0;
                         ~pausedTime = 0;
                         // Refresh the play icon to update color
-                        ~playerOverlay.refresh;
+                        if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                     });
                 });
 
-            ~playerLoopBtn = Button(~playerOverlay, Rect(225, 190, 60, 35))
+            ~playerLoopBtn = Button(~playerOverlay, Rect(220, 184, 80, 35))
                 .states_([["⟲", Color.cyan, Color.black], ["⟲", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 20).boldVariant)
                 .canFocus_(false)
@@ -2625,30 +2770,26 @@ win.front;
 
 
             // Position slider - positioned below buttons
-            ~playerPositionSlider = Slider(~playerOverlay, Rect(20, 240, 280, 14))
+            ~playerPositionSlider = Slider(~playerOverlay, Rect(20, 235, 280, 20))
                 .background_(Color.black)
                 .knobColor_(Color.cyan)
                 .value_(0)
                 .action_({ |slider|
-                    if(~sfp.notNil and: { ~sfp.duration.notNil and: { ~sfp.duration > 0 } }, {
-                        var seekTime = slider.value * ~sfp.duration;
-                        ~sfp.seek(seekTime);
+                    if(~sfp.notNil and: { ~sfp.sf.notNil and: { ~sfp.sf.duration > 0 } }, {
+                        var seekTime = slider.value * ~sfp.sf.duration;
+                        var wasPlaying = ~sfp.isPlaying;
+                        // Set the start time to seek to position (like SFPlayer waveform click)
+                        ~sfp.startTime = seekTime;
+                        // Update our timer to match the seek position
                         ~playStartTime = SystemClock.seconds - seekTime;
                         ~pausedTime = 0;
                     });
                 });
             
-            // Time display - positioned under the slider
-            ~playerTimeDisplay = StaticText(~playerOverlay, Rect(20, 265, 280, 20))
-                .background_(Color.black)
-                .string_("00:00 / 00:00")
-                .font_(Font("Arial", 12))
-                .stringColor_(Color.cyan)
-                .align_(\center);
 
             // Custom drawn icons - created after all buttons
             // Skip to start icon (bar + triangle)
-            UserView(~playerOverlay, Rect(225, 40, 60, 35))
+            UserView(~playerOverlay, Rect(220, 40, 80, 35))
                 .background_(Color.clear)
                 .canFocus_(false)
                 .mouseDownAction_({ 
@@ -2678,7 +2819,7 @@ win.front;
                 });
 
             // Play icon
-            UserView(~playerOverlay, Rect(225, 90, 60, 35))
+            UserView(~playerOverlay, Rect(220, 88, 80, 35))
                 .background_(Color.clear)
                 .canFocus_(false)
                 .mouseDownAction_({ 
@@ -2710,7 +2851,7 @@ win.front;
                 });
 
             // Stop icon
-            UserView(~playerOverlay, Rect(225, 140, 60, 35))
+            UserView(~playerOverlay, Rect(220, 136, 80, 35))
                 .background_(Color.clear)
                 .canFocus_(false)
                 .mouseDownAction_({ 
@@ -2732,9 +2873,7 @@ win.front;
             // Update player controls when track changes
             ~updatePlayerControls = {
                 if(~playerArtwork.notNil, { ~playerArtwork.refresh; });
-                if(~playerPlayBtn.notNil and: { ~sfp.notNil }, {
-                    ~playerPlayBtn.value_(~sfp.isPlaying.if(1, 0));
-                });
+                // Button states are managed manually, not synced with SFPlayer
             };
             
         } {

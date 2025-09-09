@@ -13,7 +13,7 @@ echo "Looking for headtracker '$DEVICE_NAME'..."
     echo "scan off"
     echo "exit"
 } | bluetoothctl > /dev/null
-
+ 
 # Find the HT device MAC address
 DEVICE_MAC=$(bluetoothctl devices | grep "$DEVICE_NAME" | awk '{print $2}')
 
