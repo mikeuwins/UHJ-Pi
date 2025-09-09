@@ -4,7 +4,7 @@ categories:: GUI>Views
 related:: Classes/ScopeView, Classes/FreqScopeView, Classes/ServerMeter, Classes/ServerMeter2View
 
 DESCRIPTION::
-A link::Classes/SFPlayerMeterView:: is a modular widget for showing the volume levels of SFPlayer inputs and server outputs. It is based on link::Classes/ServerMeter2View:: but monitors a specific player bus instead of server input buses. This allows you to monitor the actual audio from SFPlayer rather than line inputs.
+A link::Classes/SFPlayerMeterView:: is a unified widget that combines link::Classes/ServerMeter2View:: for output monitoring with custom input meters for SFPlayer audio. It uses a hybrid approach: ServerMeter2View handles server outputs while custom LevelIndicator widgets monitor a specific player bus. This allows you to monitor the actual audio from SFPlayer rather than line inputs.
 
 note::
 If you are looking for a quick input/output levels display without having to build your own GUI from scratch, see link::Classes/SFPlayerMeter:: and link::Classes/Server#-meter::
@@ -56,25 +56,17 @@ returns:: A new link::Classes/SFPlayerMeterView::
 
 INSTANCEMETHODS::
 
-METHOD:: view
-get the link::Classes/CompositeView:: used to construct the various elements of the link::Classes/SFPlayerMeterView:: widget
+METHOD:: playerBus
+get the link::Classes/Bus:: that is being monitored for input levels
 
-returns:: a link::Classes/CompositeView::
+returns:: a link::Classes/Bus::
 
 METHOD:: remove
-Removes this link::Classes/SFPlayerMeterView:: from its parent view (if any) and then destroys it. Once this method is called you can no longer use this link::Classes/SFPlayerMeterView::.
-
-METHOD:: start
-Enable the monitoring of player inputs and server outputs
+Removes the meter from its parent view and cleans up all associated resources including the output meter, custom input meters, monitoring synth, and OSC responder.
 
 returns:: this link::Classes/SFPlayerMeterView::
 
-METHOD:: stop
-Disable the monitoring of player inputs and server outputs
-
-returns:: this link::Classes/SFPlayerMeterView::
-
-PRIVATE:: setSynthFunc, startResponders, init
+PRIVATE:: init
 
 EXAMPLES::
 
@@ -85,10 +77,11 @@ code::
 ~playerBus = Bus.audio(s, 2);
 ~sfp = SFPlayer.new("path/to/audio.wav", outbus: ~playerBus.index);
 
-// Make a window and embed a SFPlayerMeterView inside of it
-w = Window.new("SFPlayer Levels");
-SFPlayerMeterView.new(s, w, 0@0, 2, 2, ~playerBus);
-w.front; // show the window
+// Create a parent view for the meter
+~meterContainer = View.new(Rect(0, 0, 300, 200));
+
+// Create unified meter (handles both input and output monitoring)
+~meter = SFPlayerMeterView.new(s, ~meterContainer, 0@0, 2, 2, ~playerBus);
 ::
 
 subsection::Integration with SFPlayer
@@ -98,8 +91,11 @@ code::
 ~playerBus = Bus.audio(s, 2);
 ~sfp = SFPlayer.new("path/to/audio.wav", outbus: ~playerBus.index, loop: true);
 
-// Create meter to monitor player audio and server outputs
-~meter = SFPlayerMeterView.new(s, ~parentView, 0@0, 2, 4, ~playerBus);
+// Create meter container in your main GUI
+~meterContainer = View.new(Rect(180, 107, 320, 275)).background_(Color.black);
+
+// Create unified meter to monitor player audio and server outputs
+~meter = SFPlayerMeterView.new(s, ~meterContainer, 68@0, 2, 4, ~playerBus);
 
 // Start playback
 ~sfp.play;

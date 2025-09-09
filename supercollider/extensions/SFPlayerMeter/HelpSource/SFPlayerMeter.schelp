@@ -4,7 +4,7 @@ categories:: GUI>Interfaces
 related:: Classes/Stethoscope, Classes/FreqScope, Classes/ServerMeterView, Classes/SFPlayerMeterView
 
 DESCRIPTION::
-A SFPlayerMeter is a simple graphical display showing the volume levels of SFPlayer inputs and server outputs. It is based on link::Classes/ServerMeter2:: but monitors a specific player bus instead of server input buses.
+A SFPlayerMeter is a unified meter widget that combines link::Classes/ServerMeter2View:: for output monitoring with custom input meters for SFPlayer audio. It uses a hybrid approach: ServerMeter2View handles server outputs while custom LevelIndicator widgets monitor a specific player bus. This allows you to monitor the actual audio from SFPlayer rather than line inputs.
 
 Also see:
 link::Classes/Server#-meter::
@@ -16,6 +16,12 @@ Create a new SFPlayerMeter.
 
 ARGUMENT:: server
 The link::Classes/Server:: whose outputs you wish to visualize.
+
+ARGUMENT:: parent
+The parent link::Classes/View:: or link::Classes/Window:: where the new SFPlayerMeter will be embedded.
+
+ARGUMENT:: leftUp
+Where to position the new SFPlayerMeter inside the parent. strong::leftUp:: must be a link::Classes/Point::, describing where to place the upper left corner.
 
 ARGUMENT:: numIns
 The number of inputs you want to display (typically 2 for stereo player audio)
@@ -30,18 +36,18 @@ returns:: A reference to the newly created SFPlayerMeter
 
 INSTANCEMETHODS::
 
-METHOD:: window
-Get a reference to the link::Classes/Window:: of this SFPlayerMeter
-
-returns:: a link::Classes/Window:: reference
-
 METHOD:: meterView
 Get a reference to the link::Classes/SFPlayerMeterView:: of this SFPlayerMeter
 
 returns:: a link::Classes/SFPlayerMeterView:: reference
 
+METHOD:: remove
+Removes the meter from its parent view and cleans up all associated resources.
+
+returns:: this SFPlayerMeter
+
 note::
-A SFPlayerMeter encapsulates both a link::Classes/Window:: and a link::Classes/SFPlayerMeterView:: within that Window. For more information about Windows and views see link::Guides/GUI-Introduction#Basic elements: Windows, views and containers::
+A SFPlayerMeter encapsulates a link::Classes/SFPlayerMeterView:: within a parent view. For more information about views see link::Guides/GUI-Introduction#Basic elements: Windows, views and containers::
 ::
 
 EXAMPLES::
@@ -55,6 +61,9 @@ s.boot;
 ~playerBus = Bus.audio(s, 2);
 ~sfp = SFPlayer.new("path/to/audio.wav", outbus: ~playerBus.index);
 
+// Create a parent view for the meter
+~meterContainer = View.new(Rect(0, 0, 300, 200));
+
 // Display 2 player input channels & main stereo output
-m = SFPlayerMeter.new(s, 2, 2, ~playerBus);
+m = SFPlayerMeter.new(s, ~meterContainer, 0@0, 2, 2, ~playerBus);
 ::
