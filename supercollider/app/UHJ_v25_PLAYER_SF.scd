@@ -189,6 +189,10 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~originalMenuText = Dictionary.new;
 
 // Set initial values (moved to after menu creation)
+~lastArtistName = nil; // cache of last artist used to build list
+~lastAlbumName = nil;  // cache of last album used to build list
+~cachedFileItems = nil; // cache of last displayed items (names)
+
 ~buildFileList = {
     // Build file list based on current artist and album selection
     var artistName, albumName, albumPath, pn, files, paths, audioExtensions, ext;
@@ -196,6 +200,11 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     // Get current selections directly from menus
     artistName = if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" };
     albumName = if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" };
+    
+    // If selection unchanged and we have a cache, return it immediately
+    if((~lastArtistName == artistName) and: (~lastAlbumName == albumName) and: (~cachedFileItems.notNil), {
+        ^~cachedFileItems;
+    });
     
     // Use the buildAlbumPath function to get the correct path for both ATK and USB
     albumPath = ~buildAlbumPath.value;
@@ -206,7 +215,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     });
     
     pn = PathName(albumPath);
-    if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
+    if(pn.isFolder.not) { ~filePaths = []; ~cachedFileItems = ["(no files)"]; ^~cachedFileItems; };
     
     // Filter for audio files only, then hide extensions in display
     files = pn.entries.select({ |f| 
@@ -224,7 +233,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     ~filePaths = paths;
     
     // Display names without extensions
-    ^files.collect({ |f| f.fileName.asString.copyFromStart(f.fileName.asString.size - ("." ++ f.extension.asString).size) });
+    ~cachedFileItems = files.collect({ |f| f.fileName.asString.copyFromStart(f.fileName.asString.size - ("." ++ f.extension.asString).size) });
+    
+    // Update cache keys
+    ~lastArtistName = artistName;
+    ~lastAlbumName = albumName;
+    
+    ^~cachedFileItems;
 };
 
 // Thin cyan border first, then file list above it (to keep list clickable)
