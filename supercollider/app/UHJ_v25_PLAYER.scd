@@ -42,7 +42,7 @@ var win, mainView,
 };
 
 ~findArtwork = { |albumPath|
-    var artworkPath, flacFiles, extractedArtwork;
+    var artworkPath, flacFiles, extractedArtwork, imageFiles;
 
     // 1) Prefer embedded FLAC artwork
     flacFiles = PathName(albumPath).entries.select { |f|
@@ -54,7 +54,7 @@ var win, mainView,
     });
 
     // 2) Then any image file in album folder (jpg/jpeg/png/gif)
-    var imageFiles = PathName(albumPath).entries.select { |f|
+    imageFiles = PathName(albumPath).entries.select { |f|
         f.isFile and: {
             var ext = f.extension.asString.toLower;
             ["jpg", "jpeg", "png", "gif"].includes(ext)
