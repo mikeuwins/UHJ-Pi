@@ -28,6 +28,25 @@ var win, mainView,
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
 ~powerBtnPressed = false;
+
+// --- FLAC artwork extraction ---
+~extractFlacArtwork = { |albumPath|
+    var flacFiles, firstFlac, artworkPath;
+    if(albumPath.isNil) { ^nil };
+    
+    // Find first FLAC file in album folder
+    flacFiles = PathName(albumPath).files.select { |f| f.extension.asString.toLower == "flac" };
+    if(flacFiles.size == 0) { ^nil };
+    
+    firstFlac = flacFiles[0].fullPath;
+    artworkPath = albumPath +/+ "artwork.png";
+    
+    // Export FLAC artwork to album folder as artwork.png
+    ("metaflac --export-picture-to=" ++ artworkPath.quote ++ " " ++ firstFlac.quote).unixCmd({
+        // Success: refresh artwork display
+        if(~playerArtwork.notNil) { ~playerArtwork.refresh; };
+    });
+};
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -469,6 +488,9 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     "Initial current album path: ".post; ~currentAlbumPath.postln;
     if(~fileList.notNil, { ~fileList.items_(~buildFileList.value); });
     if(~albumArtwork.notNil, { ~albumArtwork.refresh; });
+    
+    // Extract FLAC artwork if available
+    ~extractFlacArtwork.value(~currentAlbumPath);
 }.defer(0.6);
 
 // Transport buttons removed from main screen - now only in PLAYER panel
@@ -1824,8 +1846,17 @@ win.front;
             if(albumList[0].size > 12, {
                 ~scrollMenuText.value(~albumMenu, albumList[0]);
             });
+            
+            // Start scrolling for long artist text too
+            if(artistName.size > 12, {
+                ~scrollMenuText.value(~artistMenu, artistName);
+            });
         };
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
+        
+        // Extract FLAC artwork if available (after album menu is updated)
+        ~currentAlbumPath = ~buildAlbumPath.value;
+        ~extractFlacArtwork.value(~currentAlbumPath);
     });
 
 ~albumMenu = PopUpMenu(mainView, Rect(28, 127, 140, 35))
@@ -1842,6 +1873,9 @@ win.front;
         "Album menu clicked, value: ".post; view.value.postln;
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
         ~currentAlbumPath = ~buildAlbumPath.value;
+        
+        // Extract FLAC artwork if available
+        ~extractFlacArtwork.value(~currentAlbumPath);
     });
 
 "Artist menu created: ".post; ~artistMenu.postln;
@@ -2661,8 +2695,8 @@ win.front;
     });
 
 // PLAYER button - positioned to the left of EQ button
-~playerBtn = Button(mainView, Rect(70, 410, 100, 35))
-    .states_([["PLAYER", Color.cyan, Color.black], ["PLAYER", Color.black, Color.cyan]])
+~playerBtn = Button(mainView, Rect(28, 410, 140, 35))
+    .states_([["PLAYER CONTROLS", Color.cyan, Color.black], ["PLAYER CONTROLS", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
     .canFocus_(false)
@@ -2972,6 +3006,7 @@ win.front;
 ~layoutBtn = Button(mainView, Rect(508, 410, 100, 35))
     .states_([["LAYOUT", Color.cyan, Color.black], ["LAYOUT", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .canFocus_(false)
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
