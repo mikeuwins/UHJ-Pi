@@ -43,34 +43,26 @@ var win, mainView,
 
 ~findArtwork = { |albumPath|
     var artworkPath, flacFiles, extractedArtwork;
-    
-    // First try: look for artwork.png in album directory
-    artworkPath = albumPath +/+ "artwork.png";
-    if(File.exists(artworkPath), {
-        ^artworkPath;
-    });
-    
-    // Second try: look for other common artwork filenames
-    ["cover.jpg", "cover.png", "album.jpg", "album.png", "artwork.jpg"].do { |filename|
-        artworkPath = albumPath +/+ filename;
-        if(File.exists(artworkPath), {
-            ^artworkPath;
-        });
-    };
-    
-    // Third try: extract from FLAC metadata
+
+    // 1) Prefer embedded FLAC artwork
     flacFiles = PathName(albumPath).entries.select { |f|
         f.isFile and: { f.extension.asString.toLower == "flac" };
     };
-    
     if(flacFiles.size > 0, {
         extractedArtwork = ~extractFlacArtwork.value(flacFiles[0].fullPath);
-        if(extractedArtwork.notNil, {
-            ^extractedArtwork;
-        });
+        if(extractedArtwork.notNil, { ^extractedArtwork; });
     });
-    
-    // Fallback: return path to default UHJ logo
+
+    // 2) Then any image file in album folder (jpg/jpeg/png/gif)
+    var imageFiles = PathName(albumPath).entries.select { |f|
+        f.isFile and: {
+            var ext = f.extension.asString.toLower;
+            ["jpg", "jpeg", "png", "gif"].includes(ext)
+        }
+    };
+    if(imageFiles.size > 0, { ^imageFiles[0].fullPath; });
+
+    // 3) Fallback: default UHJ logo
     ^Platform.userHomeDir +/+ "UHJ-Pi/assets/uhj-logo.svg";
 };
 
