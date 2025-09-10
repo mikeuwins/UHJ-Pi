@@ -28,6 +28,83 @@ var win, mainView,
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
 ~powerBtnPressed = false;
+
+// --- Default album configuration ---
+// Change this to your preferred default album name (case-insensitive)
+~preferredDefaultAlbum = "THE LONGEST DAY";
+
+// Function to find smart default artist and album
+~findSmartDefaults = {
+    var isUSB = if(~sourceToggleBtn.notNil) { ~sourceToggleBtn.value == 1 } { false };
+    var basePath, artists, foundArtist, foundAlbum;
+    
+    // Get base path based on source
+    if(isUSB, {
+        basePath = ~detectUSBDir.value;
+        if(basePath.isEmpty or: { basePath == "/tmp/" }, {
+            // No USB drive, try ATK
+            basePath = Atk.userSoundsDir ++ "/uhj";
+        }, {
+            // USB drive found, get content directory
+            var usbEntries = PathName(basePath).entries.select { |entry| entry.isFolder };
+            basePath = if(usbEntries.size > 0) { usbEntries[0].fullPath } { basePath };
+        });
+    }, {
+        basePath = Atk.userSoundsDir ++ "/uhj";
+    });
+    
+    // Get available artists
+    artists = PathName(basePath).entries.select { |entry| entry.isFolder };
+    
+    if(artists.isEmpty, {
+        // No artists found
+        foundArtist = "<PARENT>";
+        foundAlbum = "...";
+    }, {
+        // Look for preferred album first
+        foundArtist = nil;
+        foundAlbum = nil;
+        
+        artists.do { |artist|
+            if(foundArtist.isNil, {
+                var artistPath = artist.fullPath;
+                var albums = PathName(artistPath).entries.select { |entry| entry.isFolder };
+                var looseFiles = PathName(artistPath).entries.select { |entry| 
+                    entry.isFile and: { 
+                        var ext = entry.extension.asString.toLower;
+                        (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                    };
+                };
+                
+                // Check if preferred album exists
+                var preferredAlbum = albums.detect { |album| 
+                    album.folderName.asString.toUpper == ~preferredDefaultAlbum.toUpper 
+                };
+                
+                if(preferredAlbum.notNil, {
+                    foundArtist = artist.folderName.asString.toUpper;
+                    foundAlbum = preferredAlbum.folderName.asString.toUpper;
+                }, {
+                    // No preferred album, use first available
+                    if(foundArtist.isNil, {
+                        foundArtist = artist.folderName.asString.toUpper;
+                        if(albums.size > 0, {
+                            foundAlbum = albums[0].folderName.asString.toUpper;
+                        }, {
+                            if(looseFiles.size > 0, {
+                                foundAlbum = "<NO ALBUMS>";
+                            }, {
+                                foundAlbum = "...";
+                            });
+                        });
+                    });
+                });
+            });
+        };
+    });
+    
+    [foundArtist, foundAlbum];
+};
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -459,7 +536,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
                 var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
                 
-                if(albumName == "<NO FOLDER>", {
+                if(albumName == "<NO ALBUMS>", {
                     // No album folders, just files in artist folder
                     albumPath = contentDir +/+ artistName +/+ "/";
                 }, {
@@ -483,7 +560,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 };
                 var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
                 
-                if(albumName == "<NO FOLDER>", {
+                if(albumName == "<NO ALBUMS>", {
                     // No album folders, just files in artist folder
                     albumPath = actualArtistPath +/+ "/";
                 }, {
@@ -1852,9 +1929,9 @@ win.front;
                         if(entries.size > 0) {
                             albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
                         };
-                        // Add <NO FOLDER> if there are files outside album folders
+                        // Add <NO ALBUMS> if there are files outside album folders
                         if(audioFiles.size > 0) {
-                            albumList = albumList ++ ["<NO FOLDER>"];
+                            albumList = albumList ++ ["<NO ALBUMS>"];
                         };
                         // Fallback if nothing found
                         if(albumList.isEmpty) {
@@ -1891,9 +1968,9 @@ win.front;
                         if(entries.size > 0) {
                             albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
                         };
-                        // Add <NO FOLDER> if there are files outside album folders
+                        // Add <NO ALBUMS> if there are files outside album folders
                         if(audioFiles.size > 0) {
-                            albumList = albumList ++ ["<NO FOLDER>"];
+                            albumList = albumList ++ ["<NO ALBUMS>"];
                         };
                         // Fallback if nothing found
                         if(albumList.isEmpty) {
@@ -1924,6 +2001,12 @@ win.front;
                 ~scrollMenuText.value(~albumMenu, albumList[0]);
             });
         };
+        
+        // Start scrolling for long artist name
+        if(artistName.size > 12, {
+            ~scrollMenuText.value(~artistMenu, artistName);
+        });
+        
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
     });
 
@@ -1956,12 +2039,52 @@ win.front;
 "Album menu enabled: ".post; ~albumMenu.enabled.postln;
 "Album menu visible: ".post; ~albumMenu.visible.postln;
 
-// Set initial values
-~artistMenu.value_(0);
-~albumMenu.value_(0);
-
-// Trigger artist menu action to populate album menu
-~artistMenu.doAction;
+// Set smart default values with delay to ensure menus are ready
+AppClock.sched(0.1, {
+    var smartDefaults, defaultArtist, defaultAlbum, artistIndex, albumIndex, defaultArtistStr;
+    smartDefaults = ~findSmartDefaults.value;
+    defaultArtist = smartDefaults[0];
+    defaultAlbum = smartDefaults[1];
+    
+    // Smart defaults found and will be applied
+    
+    // Find the index of the default artist in the menu using detectIndex (more reliable than indexOf)
+    defaultArtistStr = defaultArtist.asString;
+    artistIndex = ~artistMenu.items.detectIndex { |item| 
+        item.asString == defaultArtistStr 
+    };
+    if(artistIndex.isNil, { artistIndex = 0; });
+    
+    ~artistMenu.value_(artistIndex);
+    
+    // Trigger artist menu action to populate album menu
+    ~artistMenu.doAction;
+    
+    // Small delay to ensure album menu is populated
+    AppClock.sched(0.05, {
+        // Find the index of the default album in the populated menu
+        albumIndex = ~albumMenu.items.detectIndex { |item| 
+            item.asString == defaultAlbum.asString 
+        };
+        if(albumIndex.isNil, { albumIndex = 0; });
+        
+        ~albumMenu.value_(albumIndex);
+        
+        // Start scrolling for long artist name
+        if(~artistMenu.items[~artistMenu.value].size > 12, {
+            ~scrollMenuText.value(~artistMenu, ~artistMenu.items[~artistMenu.value]);
+        });
+        
+        // Start scrolling for long album name
+        if(~albumMenu.items[~albumMenu.value].size > 12, {
+            ~scrollMenuText.value(~albumMenu, ~albumMenu.items[~albumMenu.value]);
+        });
+        
+        nil; // Don't repeat
+    });
+    
+    nil; // Don't repeat
+});
 
 
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---
