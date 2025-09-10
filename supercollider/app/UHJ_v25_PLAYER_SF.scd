@@ -22,116 +22,6 @@ var win, mainView,
 ~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
-// --- Artwork and metadata handling ---
-~extractFlacArtwork = { |filePath|
-    var tempDir, artworkPath, result;
-    tempDir = "/tmp/uhj_artwork_" ++ Date.getDate.stamp;
-    File.mkdir(tempDir);
-    artworkPath = tempDir +/+ "cover.jpg";? 
-    
-    // Try to extract artwork using metaflac
-    result = ("metaflac --export-picture-to=" ++ artworkPath.quote ++ " " ++ filePath.quote).unixCmd;
-    
-    if(result == 0 and: { File.exists(artworkPath) }, {
-        artworkPath; // Return path if successful
-    }, {
-        // Clean up temp directory if extraction failed
-        ("rm -rf " ++ tempDir).unixCmd;
-        nil; // Return nil if failed
-    });
-};
-
-~findArtwork = { |albumPath|
-    var artworkPath, flacFiles, extractedArtwork, imageFiles;
-
-    // 1) Prefer embedded FLAC artwork
-    flacFiles = PathName(albumPath).entries.select { |f|
-        f.isFile and: { f.extension.asString.toLower == "flac" };
-    };
-    if(flacFiles.size > 0, {
-        extractedArtwork = ~extractFlacArtwork.value(flacFiles[0].fullPath);
-        if(extractedArtwork.notNil, { ^extractedArtwork; });
-    });
-
-    // 2) Then any image file in album folder (jpg/jpeg/png/gif)
-    imageFiles = PathName(albumPath).entries.select { |f|
-        f.isFile and: {
-            var ext = f.extension.asString.toLower;
-            ["jpg", "jpeg", "png", "gif"].includes(ext)
-        }
-    };
-    if(imageFiles.size > 0, { ^imageFiles[0].fullPath; });
-
-    // 3) Fallback: default UHJ logo
-    ^Platform.userHomeDir +/+ "UHJ-Pi/assets/uhj-logo.svg";
-};
-
-~drawUHJLogo = { |view|
-    var bounds, centerX, centerY, radius, speakerRadius, speakerSize,
-        flX, flY, frX, frY, rlX, rlY, rrX, rrY;
-
-    bounds = view.bounds;
-    centerX = bounds.width * 0.5;
-    centerY = bounds.height * 0.5;
-    radius = (bounds.width * 0.4).min(bounds.height * 0.4);
-
-    // Draw UHJ logo as fallback
-    Pen.color = Color.cyan;
-    Pen.width = 2;
-
-    // Background circle
-    Pen.addArc(centerX@centerY, radius, 0, 2pi);
-    Pen.stroke;
-
-    // UHJ Text
-    Pen.font = Font("Arial", 24).boldVariant;
-    Pen.stringAtPoint("UHJ", Point(centerX - 30, centerY - 20), Color.cyan);
-
-    // Subtitle
-    Pen.font = Font("Arial", 8);
-    Pen.stringAtPoint("PSEUDO-SURROUND", Point(centerX - 45, centerY + 5), Color.cyan);
-
-    // Decoder visualization - 4 speakers
-    speakerRadius = radius * 0.3;
-    speakerSize = 6;
-
-    // Front Left
-    flX = centerX - speakerRadius;
-    flY = centerY - speakerRadius;
-    Pen.addArc(flX@flY, speakerSize, 0, 2pi);
-    Pen.fill;
-    Pen.stringAtPoint("FL", Point(flX - 8, flY - 5), Color.black);
-
-    // Front Right
-    frX = centerX + speakerRadius;
-    frY = centerY - speakerRadius;
-    Pen.addArc(frX@frY, speakerSize, 0, 2pi);
-    Pen.fill;
-    Pen.stringAtPoint("FR", Point(frX - 8, frY - 5), Color.black);
-
-    // Rear Left
-    rlX = centerX - speakerRadius;
-    rlY = centerY + speakerRadius;
-    Pen.addArc(rlX@rlY, speakerSize, 0, 2pi);
-    Pen.fill;
-    Pen.stringAtPoint("RL", Point(rlX - 8, rlY - 5), Color.black);
-
-    // Rear Right
-    rrX = centerX + speakerRadius;
-    rrY = centerY + speakerRadius;
-    Pen.addArc(rrX@rrY, speakerSize, 0, 2pi);
-    Pen.fill;
-    Pen.stringAtPoint("RR", Point(rrX - 8, rrY - 5), Color.black);
-
-    // Center dot
-    Pen.addArc(centerX@centerY, 3, 0, 2pi);
-    Pen.fill;
-
-    // Version
-    Pen.font = Font("Arial", 8);
-    Pen.stringAtPoint("v25", Point(centerX - 8, bounds.height - 15), Color.cyan);
-};
-
 // --- Headtracker MAC address (detected at startup) ---
 ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
 // --- Maplin button overlay --- grep hid, i get uhid 4
@@ -2831,30 +2721,54 @@ win.front;
             ~playerArtwork = UserView(~playerOverlay, Rect(20, 40, 180, 180))
                 .background_(Color.black)
                 .drawFunc_({ |view|
-                    var artworkPath, image;
+                    var artworkPath;
                     if(~currentAlbumPath.notNil, {
-                        artworkPath = ~findArtwork.value(~currentAlbumPath);
-                        if(artworkPath.notNil, {
+                        artworkPath = ~currentAlbumPath +/+ "artwork.png";
+                        if(File.exists(artworkPath), {
                             try {
-                                image = Image.open(artworkPath);
+                                var image = Image.open(artworkPath);
                                 if(image.notNil, {
                                     image.drawInRect(Rect(0, 0, view.bounds.width, view.bounds.height), 
                                                    Rect(0, 0, image.width, image.height), 2);
                                 }, {
-                                    // Fallback to UHJ logo if image load failed
-                                    ~drawUHJLogo.value(view);
+                                    Pen.color = Color.cyan;
+                                    Pen.stringAtPoint("LOAD FAIL", Point(80, 100));
                                 });
                             } { |error|
-                                // Fallback to UHJ logo on error
-                                ~drawUHJLogo.value(view);
+                                Pen.color = Color.cyan;
+                                Pen.stringAtPoint("ERROR", Point(90, 100));
                             };
                         }, {
-                            // Fallback to UHJ logo if no artwork found
-                            ~drawUHJLogo.value(view);
+                            var fbPath = Platform.userHomeDir +/+ "UHJ-Pi/assets/UHJ-Pi-C.png";
+                            if(File.exists(fbPath)) {
+                                var fbImg = Image.open(fbPath);
+                                if(fbImg.notNil) {
+                                    fbImg.drawInRect(Rect(0, 0, view.bounds.width, view.bounds.height),
+                                                     Rect(0, 0, fbImg.width, fbImg.height), 2);
+                                } {
+                                    Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
+                                    Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
+                                };
+                            } {
+                                Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
+                                Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
+                            };
                         });
                     }, {
-                        // Show UHJ logo when no album path
-                        ~drawUHJLogo.value(view);
+                        var fbPath2 = Platform.userHomeDir +/+ "UHJ-Pi/assets/UHJ-Pi-C.png";
+                        if(File.exists(fbPath2)) {
+                            var fb2 = Image.open(fbPath2);
+                            if(fb2.notNil) {
+                                fb2.drawInRect(Rect(0, 0, view.bounds.width, view.bounds.height),
+                                               Rect(0, 0, fb2.width, fb2.height), 2);
+                            } {
+                                Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
+                                Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
+                            };
+                        } {
+                            Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
+                            Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
+                        };
                     });
                 });
             
