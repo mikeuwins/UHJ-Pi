@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="90" cy="90" r="85" fill="#000000" stroke="#00FFFF" stroke-width="2"/>
+  
+  <!-- UHJ Text -->
+  <text x="90" y="60" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="#00FFFF">UHJ</text>
+  
+  <!-- Subtitle -->
+  <text x="90" y="85" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#00FFFF">PSEUDO-SURROUND</text>
+  
+  <!-- Decoder visualization - 4 speakers in a circle -->
+  <g stroke="#00FFFF" stroke-width="2" fill="none">
+    <!-- Front Left -->
+    <line x1="90" y1="90" x2="60" y2="60"/>
+    <circle cx="60" cy="60" r="8" fill="#00FFFF"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="10" fill="#00FFFF">FL</text>
+    
+    <!-- Front Right -->
+    <line x1="90" y1="90" x2="120" y2="60"/>
+    <circle cx="120" cy="60" r="8" fill="#00FFFF"/>
+    <text x="130" y="55" font-family="Arial, sans-serif" font-size="10" fill="#00FFFF">FR</text>
+    
+    <!-- Rear Left -->
+    <line x1="90" y1="90" x2="60" y2="120"/>
+    <circle cx="60" cy="120" r="8" fill="#00FFFF"/>
+    <text x="50" y="125" font-family="Arial, sans-serif" font-size="10" fill="#00FFFF">RL</text>
+    
+    <!-- Rear Right -->
+    <line x1="90" y1="90" x2="120" y2="120"/>
+    <circle cx="120" cy="120" r="8" fill="#00FFFF"/>
+    <text x="130" y="125" font-family="Arial, sans-serif" font-size="10" fill="#00FFFF">RR</text>
+  </g>
+  
+  <!-- Center dot -->
+  <circle cx="90" cy="90" r="4" fill="#00FFFF"/>
+  
+  <!-- Version text -->
+  <text x="90" y="160" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#00FFFF">v25</text>
+</svg>
