@@ -27,7 +27,7 @@ var win, mainView,
     var tempDir, artworkPath, result;
     tempDir = "/tmp/uhj_artwork_" ++ Date.getDate.stamp;
     File.mkdir(tempDir);
-    artworkPath = tempDir +/+ "cover.jpg";
+    artworkPath = tempDir +/+ "cover.jpg";? 
     
     // Try to extract artwork using metaflac
     result = ("metaflac --export-picture-to=" ++ artworkPath.quote ++ " " ++ filePath.quote).unixCmd;
@@ -67,63 +67,66 @@ var win, mainView,
 };
 
 ~drawUHJLogo = { |view|
-    var bounds = view.bounds;
-    var centerX = bounds.width * 0.5;
-    var centerY = bounds.height * 0.5;
-    var radius = (bounds.width * 0.4).min(bounds.height * 0.4);
-    
+    var bounds, centerX, centerY, radius, speakerRadius, speakerSize,
+        flX, flY, frX, frY, rlX, rlY, rrX, rrY;
+
+    bounds = view.bounds;
+    centerX = bounds.width * 0.5;
+    centerY = bounds.height * 0.5;
+    radius = (bounds.width * 0.4).min(bounds.height * 0.4);
+
     // Draw UHJ logo as fallback
     Pen.color = Color.cyan;
     Pen.width = 2;
-    
+
     // Background circle
     Pen.addArc(centerX@centerY, radius, 0, 2pi);
     Pen.stroke;
-    
+
     // UHJ Text
     Pen.font = Font("Arial", 24).boldVariant;
     Pen.stringAtPoint("UHJ", Point(centerX - 30, centerY - 20), Color.cyan);
-    
+
     // Subtitle
     Pen.font = Font("Arial", 8);
     Pen.stringAtPoint("PSEUDO-SURROUND", Point(centerX - 45, centerY + 5), Color.cyan);
-    
+
     // Decoder visualization - 4 speakers
-    var speakerRadius = radius * 0.3;
-    var speakerSize = 6;
-    
+    speakerRadius = radius * 0.3;
+    speakerSize = 6;
+
     // Front Left
-    var flX = centerX - speakerRadius;
-    var flY = centerY - speakerRadius;
+    flX = centerX - speakerRadius;
+    flY = centerY - speakerRadius;
     Pen.addArc(flX@flY, speakerSize, 0, 2pi);
     Pen.fill;
     Pen.stringAtPoint("FL", Point(flX - 8, flY - 5), Color.black);
-    
+
     // Front Right
-    var frX = centerX + speakerRadius;
-    var frY = centerY - speakerRadius;
+    frX = centerX + speakerRadius;
+    frY = centerY - speakerRadius;
     Pen.addArc(frX@frY, speakerSize, 0, 2pi);
     Pen.fill;
     Pen.stringAtPoint("FR", Point(frX - 8, frY - 5), Color.black);
-    
+
     // Rear Left
-    var rlX = centerX - speakerRadius;
-    var rlY = centerY + speakerRadius;
+    rlX = centerX - speakerRadius;
+    rlY = centerY + speakerRadius;
     Pen.addArc(rlX@rlY, speakerSize, 0, 2pi);
     Pen.fill;
     Pen.stringAtPoint("RL", Point(rlX - 8, rlY - 5), Color.black);
-    
+
     // Rear Right
-    var rrX = centerX + speakerRadius;
-    var rrY = centerY + speakerRadius;
+    rrX = centerX + speakerRadius;
+    rrY = centerY + speakerRadius;
     Pen.addArc(rrX@rrY, speakerSize, 0, 2pi);
     Pen.fill;
     Pen.stringAtPoint("RR", Point(rrX - 8, rrY - 5), Color.black);
-    
+
     // Center dot
     Pen.addArc(centerX@centerY, 3, 0, 2pi);
     Pen.fill;
-    
+
     // Version
     Pen.font = Font("Arial", 8);
     Pen.stringAtPoint("v25", Point(centerX - 8, bounds.height - 15), Color.cyan);
