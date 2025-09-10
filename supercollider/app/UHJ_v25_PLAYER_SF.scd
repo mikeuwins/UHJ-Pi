@@ -28,25 +28,6 @@ var win, mainView,
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
 ~powerBtnPressed = false;
-
-// --- FLAC artwork extraction ---
-~extractFlacArtwork = { |albumPath|
-    var flacFiles, firstFlac, artworkPath;
-    if(albumPath.isNil) { ^nil };
-    
-    // Find first FLAC file in album folder
-    flacFiles = PathName(albumPath).files.select { |f| f.extension.asString.toLower == "flac" };
-    if(flacFiles.size == 0) { ^nil };
-    
-    firstFlac = flacFiles[0].fullPath;
-    artworkPath = albumPath +/+ "artwork.png";
-    
-    // Export FLAC artwork to album folder as artwork.png
-    ("metaflac --export-picture-to=" ++ artworkPath.quote ++ " " ++ firstFlac.quote).unixCmd({
-        // Success: refresh artwork display
-        if(~playerArtwork.notNil) { ~playerArtwork.refresh; };
-    });
-};
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -189,10 +170,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~originalMenuText = Dictionary.new;
 
 // Set initial values (moved to after menu creation)
-~lastArtistName = nil; // cache of last artist used to build list
-~lastAlbumName = nil;  // cache of last album used to build list
-~cachedFileItems = nil; // cache of last displayed items (names)
-
 ~buildFileList = {
     // Build file list based on current artist and album selection
     var artistName, albumName, albumPath, pn, files, paths, audioExtensions, ext;
@@ -201,10 +178,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     artistName = if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" };
     albumName = if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" };
     
-    // If selection unchanged and we have a cache, return it immediately
-    if((~lastArtistName == artistName) and: (~lastAlbumName == albumName) and: (~cachedFileItems.notNil), {
-        ^~cachedFileItems;
-    });
+    "Building file list for: ".post; artistName.post; " / ".post; albumName.postln;
     
     // Use the buildAlbumPath function to get the correct path for both ATK and USB
     albumPath = ~buildAlbumPath.value;
@@ -215,7 +189,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     });
     
     pn = PathName(albumPath);
-    if(pn.isFolder.not) { ~filePaths = []; ~cachedFileItems = ["(no files)"]; ^~cachedFileItems; };
+    if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
     
     // Filter for audio files only, then hide extensions in display
     files = pn.entries.select({ |f| 
@@ -224,22 +198,17 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
         };
     });
-    
-    // Sort files alphabetically by filename
-    files = files.sortBy(_.fileName.asString.toLower);
-    
-    // Store full paths for playback
+
     paths = files.collect(_.fullPath);
-    ~filePaths = paths;
-    
-    // Display names without extensions
-    ~cachedFileItems = files.collect({ |f| f.fileName.asString.copyFromStart(f.fileName.asString.size - ("." ++ f.extension.asString).size) });
-    
-    // Update cache keys
-    ~lastArtistName = artistName;
-    ~lastAlbumName = albumName;
-    
-    ^~cachedFileItems;
+    ~filePaths = paths; // store as strings
+    files.collect({ |f| 
+        var name = f.fileName.asString;
+        var ext = f.extension;
+        if(ext.notNil, {
+            var endIdx = name.size - ext.asString.size - 2;
+            if(endIdx >= 0, { name.copyRange(0, endIdx) }, { name });
+        }, { name });
+    }).sort;
 };
 
 // Thin cyan border first, then file list above it (to keep list clickable)
@@ -291,7 +260,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                             // Reset button states immediately
                             if(~playerPlayBtn.notNil, { 
                                 ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
-                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
                             });
                             if(~playerLoopBtn.notNil, { 
                                 ~playerLoopBtn.value_(0); // Loop off
@@ -299,7 +267,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                             // Force immediate timer reset and refresh
                             { 
                                 ~updateTimeDisplay.value; 
-                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
+                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                             }.defer(0.1);
                         };
                     });
@@ -440,6 +408,29 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     folders;
 };
 
+// Function to get ATK folder options (mirror USB scan on local ATK tree)
+~getATKFolderOptions = {
+    var atkBase = Atk.userSoundsDir ++ "/uhj";
+    var folders;
+    
+    if(File.exists(atkBase).not, {
+        // No ATK directory found
+        folders = ["<NO DRIVE>"];
+    }, {
+        // ATK directory found - look inside it for artist folders
+        folders = ["<PARENT>"];
+        if(File.exists(atkBase), {
+            // Look inside the ATK directory for actual content folders
+            var entries = PathName(atkBase).entries.select { |entry| entry.isFolder };
+            entries.do { |entry|
+                folders = folders.add(entry.folderName.asString.toUpper);
+            };
+        });
+    });
+    
+    folders;
+};
+
 // Function to build current album path
 ~buildAlbumPath = {
     var artistName, albumName, albumPath, isUSB;
@@ -468,8 +459,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
                 var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
                 
-                if(albumName == "...", {
-                    // No album selected, use artist folder
+                if(albumName == "<NO FOLDER>", {
+                    // No album folders, just files in artist folder
                     albumPath = contentDir +/+ artistName +/+ "/";
                 }, {
                     // Use both artist and album
@@ -478,17 +469,33 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             });
         });
     }, {
-        // ATK mode - use original ATK paths
-        case 
-        { artistName == "RHOMBUS" and: { albumName == "THE LONGEST DAY" } } {
-            albumPath = Atk.userSoundsDir ++ "/uhj/Rhombus/The Longest Day/";
-        }
-        { artistName == "VARIOUS" } {
-            albumPath = Atk.userSoundsDir ++ "/uhj/Various/";
-        }
-        {
-            albumPath = Atk.userSoundsDir ++ "/uhj/";
-        };
+        // ATK mode - use same logic as USB
+        var atkBase = Atk.userSoundsDir ++ "/uhj";
+        if(artistName == "<NO DRIVE>", {
+            albumPath = "/tmp/"; // fallback path
+        }, {
+            if(artistName == "<PARENT>", {
+                albumPath = atkBase;
+            }, {
+                // Find actual artist folder by case-insensitive matching
+                var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                    entry.folderName.asString.toUpper == artistName 
+                };
+                var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
+                
+                if(albumName == "<NO FOLDER>", {
+                    // No album folders, just files in artist folder
+                    albumPath = actualArtistPath +/+ "/";
+                }, {
+                    // Find actual album folder by case-insensitive matching
+                    var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                        entry.folderName.asString.toUpper == albumName 
+                    };
+                    var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
+                    albumPath = actualAlbumPath +/+ "/";
+                });
+            });
+        });
     });
     
     // Final safety check - ensure we always return a valid path
@@ -501,9 +508,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     "Initial current album path: ".post; ~currentAlbumPath.postln;
     if(~fileList.notNil, { ~fileList.items_(~buildFileList.value); });
     if(~albumArtwork.notNil, { ~albumArtwork.refresh; });
-    
-    // Extract FLAC artwork if available
-    ~extractFlacArtwork.value(~currentAlbumPath);
 }.defer(0.6);
 
 // Transport buttons removed from main screen - now only in PLAYER panel
@@ -1007,14 +1011,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             // Reset button states
                             if(~playerPlayBtn.notNil, { 
                                 ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
-                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
                             });
                             if(~playerLoopBtn.notNil, { 
                                 ~playerLoopBtn.value_(0); // Loop off
                             });
                             if(~fileList.notNil) { ~fileList.value_(0); }; // select first track in list
                             { 
-                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
+                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                             }.defer(0.1); // Refresh button display
                         });
                     }.defer(0.2);
@@ -1711,7 +1714,6 @@ win.front;
 // Store original menu text to preserve data integrity
 ~originalMenuText = Dictionary.new;
 ~scrollTasks = Dictionary.new; // Store scrolling tasks
-~isScrolling = false; // Flag to prevent action during scrolling
 
 // Automatic scrolling text for long menu items
 ~scrollMenuText = { |menu, text, maxWidth = 12|
@@ -1737,9 +1739,7 @@ win.front;
                     currentItems[0] = displayText;
                     // Schedule GUI update on AppClock
                     AppClock.sched(0, {
-                        ~isScrolling = true; // Set flag to prevent action
                         menu.items_(currentItems);
-                        ~isScrolling = false; // Clear flag
                         nil; // Don't reschedule
                     });
                     0.2.wait; // Scroll speed
@@ -1772,8 +1772,8 @@ win.front;
             // USB mode - show actual folders found on USB drive
             ~artistMenu.items_(~getUSBFolderOptions.value);
         }, {
-            // ATK mode - show original ATK options
-            ~artistMenu.items_(["RHOMBUS", "VARIOUS"]);
+            // ATK mode - use same discovery logic as USB
+            ~artistMenu.items_(~getATKFolderOptions.value);
         });
         
         // Reset artist menu selection and update album menu based on mode
@@ -1808,7 +1808,7 @@ win.front;
 
 // Create Artist and Album menus after window is visible
 ~artistMenu = PopUpMenu(mainView, Rect(28, 86, 140, 35))
-    .items_( ["RHOMBUS", "VARIOUS"] )
+    .items_( ~getATKFolderOptions.value )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
     .stringColor_(Color.cyan)
@@ -1818,9 +1818,7 @@ win.front;
         view.focus(true);
     })
     .action_({ |view|
-        var artistName, albumList, isUSB;
-        // Skip action if we're just scrolling
-        if(~isScrolling, { ^nil });
+        var artistName, albumList, isUSB, oldAction, albumMenuKey;
         "Artist menu clicked, value: ".post; view.value.postln;
         artistName = view.items[view.value];
         "Selected artist: ".post; artistName.postln;
@@ -1843,43 +1841,94 @@ win.front;
                     
                     if(File.exists(artistPath), {
                         var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
-                        albumList = if(entries.size > 0) {
-                            entries.collect { |entry| entry.folderName.asString.toUpper };
-                        } {
-                            ["..."];
+                        var audioFiles = PathName(artistPath).entries.select { |entry| 
+                            entry.isFile and: { 
+                                var ext = entry.extension.asString.toLower;
+                                (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                            };
+                        };
+                        albumList = [];
+                        // Add album folders if they exist
+                        if(entries.size > 0) {
+                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                        };
+                        // Add <NO FOLDER> if there are files outside album folders
+                        if(audioFiles.size > 0) {
+                            albumList = albumList ++ ["<NO FOLDER>"];
+                        };
+                        // Fallback if nothing found
+                        if(albumList.isEmpty) {
+                            albumList = ["..."];
                         };
                     }, {
                         albumList = ["..."];
                     });
                 };
             }, {
-                // ATK mode - show original ATK options
+                // ATK mode - show actual albums/folders in selected artist directory
                 case 
-                { artistName == "RHOMBUS" } { albumList = ["THE LONGEST DAY"]; }
-                { artistName == "VARIOUS" } { albumList = ["..."]; }
-                { albumList = ["..."]; };
+                { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
+                { artistName == "<PARENT>" } { albumList = ["..."]; }
+                {
+                    // Get actual subdirectories in the artist folder (ATK base is the uhj folder directly)
+                    var atkBase = Atk.userSoundsDir ++ "/uhj";
+                    // Find the actual folder by case-insensitive matching
+                    var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                        entry.folderName.asString.toUpper == artistName 
+                    };
+                    var artistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
+                    
+                    if(File.exists(artistPath), {
+                        var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
+                        var audioFiles = PathName(artistPath).entries.select { |entry| 
+                            entry.isFile and: { 
+                                var ext = entry.extension.asString.toLower;
+                                (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                            };
+                        };
+                        albumList = [];
+                        // Add album folders if they exist
+                        if(entries.size > 0) {
+                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                        };
+                        // Add <NO FOLDER> if there are files outside album folders
+                        if(audioFiles.size > 0) {
+                            albumList = albumList ++ ["<NO FOLDER>"];
+                        };
+                        // Fallback if nothing found
+                        if(albumList.isEmpty) {
+                            albumList = ["..."];
+                        };
+                    }, {
+                        albumList = ["..."];
+                    });
+                };
             });
+            // Stop any existing scrolling first
+            albumMenuKey = ~albumMenu.hash.asString;
+            if(~scrollTasks[albumMenuKey].notNil, {
+                ~scrollTasks[albumMenuKey].stop;
+                ~scrollTasks[albumMenuKey] = nil;
+            });
+            // Always clear and update album menu
             ~albumMenu.items_(albumList);
+            // Temporarily disable action to prevent interference
+            oldAction = ~albumMenu.action;
+            ~albumMenu.action_(nil);
             ~albumMenu.value_(0);
+            ~albumMenu.action_(oldAction);
+            // Force refresh to ensure display updates
+            ~albumMenu.refresh;
             // Start scrolling for long text
             if(albumList[0].size > 12, {
                 ~scrollMenuText.value(~albumMenu, albumList[0]);
             });
-            
-            // Start scrolling for long artist text too
-            if(artistName.size > 12, {
-                ~scrollMenuText.value(~artistMenu, artistName);
-            });
         };
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
-        
-        // Extract FLAC artwork if available (after album menu is updated)
-        ~currentAlbumPath = ~buildAlbumPath.value;
-        ~extractFlacArtwork.value(~currentAlbumPath);
     });
 
 ~albumMenu = PopUpMenu(mainView, Rect(28, 127, 140, 35))
-    .items_( ["THE LONGEST DAY"] )
+    .items_( ["..."] )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
     .stringColor_(Color.cyan)
@@ -1889,14 +1938,9 @@ win.front;
         view.focus(true);
     })
     .action_({ |view|
-        // Skip action if we're just scrolling
-        if(~isScrolling, { ^nil });
         "Album menu clicked, value: ".post; view.value.postln;
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
         ~currentAlbumPath = ~buildAlbumPath.value;
-        
-        // Extract FLAC artwork if available
-        ~extractFlacArtwork.value(~currentAlbumPath);
     });
 
 "Artist menu created: ".post; ~artistMenu.postln;
@@ -1916,8 +1960,8 @@ win.front;
 ~artistMenu.value_(0);
 ~albumMenu.value_(0);
 
-// Start automatic scrolling for long text
-~scrollMenuText.value(~albumMenu, "THE LONGEST DAY");
+// Trigger artist menu action to populate album menu
+~artistMenu.doAction;
 
 
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---
@@ -2716,8 +2760,8 @@ win.front;
     });
 
 // PLAYER button - positioned to the left of EQ button
-~playerBtn = Button(mainView, Rect(28, 410, 140, 35))
-    .states_([["PLAYER CONTROLS", Color.cyan, Color.black], ["PLAYER CONTROLS", Color.black, Color.cyan]])
+~playerBtn = Button(mainView, Rect(70, 410, 100, 35))
+    .states_([["PLAYER", Color.cyan, Color.black], ["PLAYER", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
     .canFocus_(false)
@@ -2794,36 +2838,12 @@ win.front;
                                 Pen.stringAtPoint("ERROR", Point(90, 100));
                             };
                         }, {
-                            var fbPath = Platform.userHomeDir +/+ "UHJ-Pi/assets/UHJ-Pi-C.png";
-                            if(File.exists(fbPath)) {
-                                var fbImg = Image.open(fbPath);
-                                if(fbImg.notNil) {
-                                    fbImg.drawInRect(Rect(0, 0, view.bounds.width, view.bounds.height),
-                                                     Rect(0, 0, fbImg.width, fbImg.height), 2);
-                                } {
-                                    Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
-                                    Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
-                                };
-                            } {
-                                Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
-                                Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
-                            };
+                            Pen.color = Color.cyan;
+                            Pen.stringAtPoint("NO ART", Point(85, 100));
                         });
                     }, {
-                        var fbPath2 = Platform.userHomeDir +/+ "UHJ-Pi/assets/UHJ-Pi-C.png";
-                        if(File.exists(fbPath2)) {
-                            var fb2 = Image.open(fbPath2);
-                            if(fb2.notNil) {
-                                fb2.drawInRect(Rect(0, 0, view.bounds.width, view.bounds.height),
-                                               Rect(0, 0, fb2.width, fb2.height), 2);
-                            } {
-                                Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
-                                Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
-                            };
-                        } {
-                            Pen.color = Color.cyan; Pen.font = Font("LCD 5x7 Segment Monospace", 14);
-                            Pen.stringAtPoint("NO ARTWORK", Point(40, 100));
-                        };
+                        Pen.color = Color.cyan;
+                        Pen.stringAtPoint("ARTWORK", Point(80, 100));
                     });
                 });
             
@@ -2853,24 +2873,21 @@ win.front;
                 .canFocus_(false)
                 .focusColor_(Color.clear)
                 .action_({ |btn|
-                    ("Button action called, value: " ++ btn.value).postln;
                     if(~sfp.notNil, {
                         if(btn.value == 0, {
                             // Play (black icon on cyan background)
-                            ("Playing").postln;
                             ~sfp.play;
                             ~isPlaying = true;
                             ~playStartTime = SystemClock.seconds;
                             ~pausedTime = 0;
                         }, {
                             // Pause (cyan icon on black background)
-                            ("Pausing").postln;
                             ~sfp.pause;
                             ~isPlaying = false;
                             ~pausedTime = SystemClock.seconds - ~playStartTime;
                         });
                         // Refresh the play icon to update color
-                        if(~playerIconView.notNil, { ~playerIconView.refresh; });
+                        if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                     });
                 })
                 .value_(1); // Start in pause state (cyan icon on black background)
@@ -2886,13 +2903,12 @@ win.front;
                         // SFPlayer.stop already resets the playhead to zero
                         ~sfp.stop;
                         ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
-                        if(~playerIconView.notNil, { ~playerIconView.refresh; });
                         ~isPlaying = false;
                         // Reset internal timer state to match SFPlayer's cursor at zero
                         ~playStartTime = 0;
                         ~pausedTime = 0;
                         // Refresh the play icon to update color
-                        if(~playerIconView.notNil, { ~playerIconView.refresh; });
+                        if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                     });
                 });
 
@@ -2966,7 +2982,7 @@ win.front;
                 });
 
             // Play icon
-            ~playerIconView = UserView(~playerOverlay, Rect(220, 88, 80, 35))
+            UserView(~playerOverlay, Rect(220, 88, 80, 35))
                 .background_(Color.clear)
                 .canFocus_(false)
                 .mouseDownAction_({ 
@@ -3031,7 +3047,6 @@ win.front;
 ~layoutBtn = Button(mainView, Rect(508, 410, 100, 35))
     .states_([["LAYOUT", Color.cyan, Color.black], ["LAYOUT", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
-    .canFocus_(false)
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
