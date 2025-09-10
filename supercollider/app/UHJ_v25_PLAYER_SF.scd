@@ -197,8 +197,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     artistName = if(~artistMenu.notNil) { ~artistMenu.items[~artistMenu.value] } { "RHOMBUS" };
     albumName = if(~albumMenu.notNil) { ~albumMenu.items[~albumMenu.value] } { "THE LONGEST DAY" };
     
-    "Building file list for: ".post; artistName.post; " / ".post; albumName.postln;
-    
     // Use the buildAlbumPath function to get the correct path for both ATK and USB
     albumPath = ~buildAlbumPath.value;
     
@@ -217,17 +215,16 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
         };
     });
-
+    
+    // Sort files alphabetically by filename
+    files = files.sortBy(_.fileName.asString.toLower);
+    
+    // Store full paths for playback
     paths = files.collect(_.fullPath);
-    ~filePaths = paths; // store as strings
-    files.collect({ |f| 
-        var name = f.fileName.asString;
-        var ext = f.extension;
-        if(ext.notNil, {
-            var endIdx = name.size - ext.asString.size - 2;
-            if(endIdx >= 0, { name.copyRange(0, endIdx) }, { name });
-        }, { name });
-    }).sort;
+    ~filePaths = paths;
+    
+    // Display names without extensions
+    ^files.collect({ |f| f.fileName.asString.copyFromStart(f.fileName.asString.size - ("." ++ f.extension.asString).size) });
 };
 
 // Thin cyan border first, then file list above it (to keep list clickable)
@@ -279,6 +276,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                             // Reset button states immediately
                             if(~playerPlayBtn.notNil, { 
                                 ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
+                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
                             });
                             if(~playerLoopBtn.notNil, { 
                                 ~playerLoopBtn.value_(0); // Loop off
@@ -286,7 +284,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                             // Force immediate timer reset and refresh
                             { 
                                 ~updateTimeDisplay.value; 
-                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
+                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
                             }.defer(0.1);
                         };
                     });
@@ -994,13 +992,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             // Reset button states
                             if(~playerPlayBtn.notNil, { 
                                 ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
+                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
                             });
                             if(~playerLoopBtn.notNil, { 
                                 ~playerLoopBtn.value_(0); // Loop off
                             });
                             if(~fileList.notNil) { ~fileList.value_(0); }; // select first track in list
                             { 
-                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
+                                if(~playerIconView.notNil, { ~playerIconView.refresh; });
                             }.defer(0.1); // Refresh button display
                         });
                     }.defer(0.2);
@@ -1697,6 +1696,7 @@ win.front;
 // Store original menu text to preserve data integrity
 ~originalMenuText = Dictionary.new;
 ~scrollTasks = Dictionary.new; // Store scrolling tasks
+~isScrolling = false; // Flag to prevent action during scrolling
 
 // Automatic scrolling text for long menu items
 ~scrollMenuText = { |menu, text, maxWidth = 12|
@@ -1722,7 +1722,9 @@ win.front;
                     currentItems[0] = displayText;
                     // Schedule GUI update on AppClock
                     AppClock.sched(0, {
+                        ~isScrolling = true; // Set flag to prevent action
                         menu.items_(currentItems);
+                        ~isScrolling = false; // Clear flag
                         nil; // Don't reschedule
                     });
                     0.2.wait; // Scroll speed
@@ -1802,6 +1804,8 @@ win.front;
     })
     .action_({ |view|
         var artistName, albumList, isUSB;
+        // Skip action if we're just scrolling
+        if(~isScrolling, { ^nil });
         "Artist menu clicked, value: ".post; view.value.postln;
         artistName = view.items[view.value];
         "Selected artist: ".post; artistName.postln;
@@ -1870,6 +1874,8 @@ win.front;
         view.focus(true);
     })
     .action_({ |view|
+        // Skip action if we're just scrolling
+        if(~isScrolling, { ^nil });
         "Album menu clicked, value: ".post; view.value.postln;
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
         ~currentAlbumPath = ~buildAlbumPath.value;
@@ -2832,21 +2838,24 @@ win.front;
                 .canFocus_(false)
                 .focusColor_(Color.clear)
                 .action_({ |btn|
+                    ("Button action called, value: " ++ btn.value).postln;
                     if(~sfp.notNil, {
                         if(btn.value == 0, {
                             // Play (black icon on cyan background)
+                            ("Playing").postln;
                             ~sfp.play;
                             ~isPlaying = true;
                             ~playStartTime = SystemClock.seconds;
                             ~pausedTime = 0;
                         }, {
                             // Pause (cyan icon on black background)
+                            ("Pausing").postln;
                             ~sfp.pause;
                             ~isPlaying = false;
                             ~pausedTime = SystemClock.seconds - ~playStartTime;
                         });
                         // Refresh the play icon to update color
-                        if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
+                        if(~playerIconView.notNil, { ~playerIconView.refresh; });
                     });
                 })
                 .value_(1); // Start in pause state (cyan icon on black background)
@@ -2862,12 +2871,13 @@ win.front;
                         // SFPlayer.stop already resets the playhead to zero
                         ~sfp.stop;
                         ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
+                        if(~playerIconView.notNil, { ~playerIconView.refresh; });
                         ~isPlaying = false;
                         // Reset internal timer state to match SFPlayer's cursor at zero
                         ~playStartTime = 0;
                         ~pausedTime = 0;
                         // Refresh the play icon to update color
-                        if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
+                        if(~playerIconView.notNil, { ~playerIconView.refresh; });
                     });
                 });
 
@@ -2941,7 +2951,7 @@ win.front;
                 });
 
             // Play icon
-            UserView(~playerOverlay, Rect(220, 88, 80, 35))
+            ~playerIconView = UserView(~playerOverlay, Rect(220, 88, 80, 35))
                 .background_(Color.clear)
                 .canFocus_(false)
                 .mouseDownAction_({ 
