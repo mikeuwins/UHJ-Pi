@@ -28,6 +28,8 @@ var win, mainView,
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
 ~powerBtnPressed = false;
+// --- Player button state storage ---
+~savedPlayerPlayState = -1; ~savedPlayerLoopState = -1;
 
 // --- Default album configuration ---
 // Change this to your preferred default album name (case-insensitive)
@@ -176,13 +178,37 @@ formatDbValue = { |dbValue|
 // --- Window setup with platform-specific positioning ---
 win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).background_(Color.black);
 
-// Create initialization overlay - full screen black semi-transparent with "INITIALISING..." text
+// Create initialization overlay - full screen black semi-transparent with logo and "INITIALISING..." text
 ~initOverlay = View(win, Rect(0, 0, 800, 480))
     .background_(Color.black.alpha_(0.8))
     .alpha_(1.0)
     .front;
 
-~initText = StaticText(~initOverlay, Rect(0, 200, 800, 80))
+// Add UHJ-Pi-C logo (maintaining square aspect ratio)
+~initLogo = UserView(~initOverlay, Rect(250, 120, 300, 100))
+    .background_(Color.clear)
+    .drawFunc_({ |view|
+        try {
+            var image = Image.open("assets/UHJ-Pi-C.png");
+            if(image.notNil, {
+                // Calculate square size that fits within the view bounds
+                var maxSize = min(view.bounds.width, view.bounds.height);
+                var xOffset = (view.bounds.width - maxSize) / 2;
+                var yOffset = (view.bounds.height - maxSize) / 2;
+                
+                // Draw image maintaining square aspect ratio, centered
+                image.drawInRect(Rect(xOffset, yOffset, maxSize, maxSize), 
+                               Rect(0, 0, image.width, image.height), 2);
+            });
+        } { |error|
+            // Fallback if logo fails to load
+            Pen.color = Color.cyan;
+            Pen.font = Font("Helvetica", 24);
+            Pen.stringAtPoint("UHJ-Pi-C", Point(100, 40));
+        };
+    });
+
+~initText = StaticText(~initOverlay, Rect(0, 240, 800, 80))
     .string_("INITIALISING...")
     .font_(Font("LCD 5x7 Segment Monospace", 20))
     .align_(\center)
@@ -735,7 +761,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 };
                 // Add overlay to dim button (only if not already present)
                 if(~maplinBtnOverlay.isNil) {
-                    ~maplinBtnOverlay = View(mainView, Rect(290, 410, 100, 35))
+                    ~maplinBtnOverlay = View(mainView, Rect(316, 410, 96, 35))
                         .background_(Color.black.alpha_(0.7))
                         .alpha_(1.0)
                         .front;
@@ -1191,6 +1217,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         ~initOverlay.remove;
                         ~initOverlay = nil;
                         ~initText = nil;
+                        ~initLogo = nil;
                     });
                 });
             }, {
@@ -1375,6 +1402,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             ~initOverlay.remove;
                             ~initOverlay = nil;
                             ~initText = nil;
+                            ~initLogo = nil;
                         });
                     });
                 });
@@ -2264,7 +2292,7 @@ AppClock.sched(0.1, {
 
 
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---
-~eqBtn = Button(mainView, Rect(180, 410, 100, 35))
+~eqBtn = Button(mainView, Rect(220, 410, 96, 35))
     .states_([ ["EQ", Color.cyan, Color.black], ["EQ", Color.black, Color.cyan] ])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
@@ -2282,12 +2310,23 @@ AppClock.sched(0.1, {
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
                 ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
             };
-            if(~playerOverlay.notNil) { ~playerOverlay.remove; ~playerOverlay = nil; ~playerBtn.value_(0); };
+            if(~playerOverlay.notNil) { 
+                // Save button states before removing overlay
+                if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
+                if(~playerLoopBtn.notNil, { ~savedPlayerLoopState = ~playerLoopBtn.value; });
+                ~playerOverlay.remove; ~playerOverlay = nil; ~playerBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
             ~maplinBtn.value_(0);
+            ~metersBtn.value_(0);
             ~playerBtn.value_(0);
+            
+            // Remove meters overlay when EQ is active
+            if(~metersOverlay.notNil) { 
+                ~metersOverlay.remove; ~metersOverlay = nil; 
+            };
             // --- Remove any previous EQ overlay and controls to prevent duplicates ---
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; };
             ~eqSliders = nil; ~eqValues = nil; ~eqPresetMenu = nil;
@@ -2882,7 +2921,7 @@ AppClock.sched(0.1, {
     };
 };
 
-~ambienceBtn = Button(mainView, Rect(399, 410, 100, 35))
+~ambienceBtn = Button(mainView, Rect(412, 410, 96, 35))
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
@@ -2900,12 +2939,23 @@ AppClock.sched(0.1, {
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
                 ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
             };
-            if(~playerOverlay.notNil) { ~playerOverlay.remove; ~playerOverlay = nil; ~playerBtn.value_(0); };
+            if(~playerOverlay.notNil) { 
+                // Save button states before removing overlay
+                if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
+                if(~playerLoopBtn.notNil, { ~savedPlayerLoopState = ~playerLoopBtn.value; });
+                ~playerOverlay.remove; ~playerOverlay = nil; ~playerBtn.value_(0); 
+            };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
             ~maplinBtn.value_(0);
+            ~metersBtn.value_(0);
             ~playerBtn.value_(0);
+            
+            // Remove meters overlay when AMBIENCE is active
+            if(~metersOverlay.notNil) { 
+                ~metersOverlay.remove; ~metersOverlay = nil; 
+            };
             // --- Remove any previous Ambience overlay and controls to prevent duplicates ---
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
             // --- Initialize layout variables (fix nil error) ---
@@ -3058,8 +3108,8 @@ AppClock.sched(0.1, {
         }
     });
 
-// PLAYER button - positioned to the left of EQ button
-~playerBtn = Button(mainView, Rect(70, 410, 100, 35))
+// PLAYER button - aligned with left edge of picker windows
+~playerBtn = Button(mainView, Rect(28, 410, 96, 35))
     .states_([["PLAYER", Color.cyan, Color.black], ["PLAYER", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
@@ -3080,11 +3130,17 @@ AppClock.sched(0.1, {
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
                 ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
             };
-            // Set other buttons to 0 (radio group)
-            ~eqBtn.value_(0);
-            ~ambienceBtn.value_(0);
-            ~layoutBtn.value_(0);
-            ~maplinBtn.value_(0);
+            // Set other buttons to 0 (radio group) - only if they exist
+            if(~eqBtn.notNil, { ~eqBtn.value_(0); });
+            if(~ambienceBtn.notNil, { ~ambienceBtn.value_(0); });
+            if(~layoutBtn.notNil, { ~layoutBtn.value_(0); });
+            if(~maplinBtn.notNil, { ~maplinBtn.value_(0); });
+            if(~metersBtn.notNil, { ~metersBtn.value_(0); });
+            
+            // Remove meters overlay when player is active
+            if(~metersOverlay.notNil) { 
+                ~metersOverlay.remove; ~metersOverlay = nil; 
+            };
             
             // Create PLAYER overlay in central area (only if it doesn't exist)
             if(~playerOverlay.isNil, {
@@ -3367,12 +3423,54 @@ AppClock.sched(0.1, {
                 if(~playerArtwork.notNil, { ~playerArtwork.refresh; });
                 // Button states are managed manually, not synced with SFPlayer
             };
+            
+            // Restore saved button color states (only if we have actually saved states)
+            if(~playerPlayBtn.notNil and: { ~savedPlayerPlayState != -1 }, { ~playerPlayBtn.value_(~savedPlayerPlayState); });
+            if(~playerLoopBtn.notNil and: { ~savedPlayerLoopState != -1 }, { ~playerLoopBtn.value_(~savedPlayerLoopState); });
             });
             
             // Make sure player overlay is visible
             if(~playerOverlay.notNil, { ~playerOverlay.front; });
         } {
             if(~playerOverlay.notNil) { ~playerOverlay.remove; ~playerOverlay = nil; };
+        }
+    })
+    .valueAction_(1); // Start in player view and trigger action
+
+// METERS button - between PLAYER and EQ buttons
+~metersBtn = Button(mainView, Rect(124, 410, 96, 35))
+    .states_([["METERS", Color.cyan, Color.black], ["METERS", Color.black, Color.cyan]])
+    .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
+    .canFocus_(false)
+    .action_({ |btn|
+        if(btn.value == 1) {
+            // Remove other overlays and reset their buttons
+            if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
+            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
+            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~maplinOverlay.notNil) { ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); };
+            if(~playerOverlay.notNil) { 
+                // Save button states before removing overlay
+                if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
+                if(~playerLoopBtn.notNil, { ~savedPlayerLoopState = ~playerLoopBtn.value; });
+                ~playerOverlay.remove; ~playerOverlay = nil; ~playerBtn.value_(0); 
+            };
+            
+            // Create meters overlay (same area as other overlays)
+            if(~metersOverlay.isNil) {
+                ~metersOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+                
+                // Show meter view on top of overlay
+                if(~meterView.notNil) {
+                    ~meterView.front;
+                };
+            };
+        } {
+            // METERS button OFF - remove meters overlay
+            if(~metersOverlay.notNil) { 
+                ~metersOverlay.remove; ~metersOverlay = nil; 
+            };
         }
     });
 
@@ -3399,6 +3497,13 @@ AppClock.sched(0.1, {
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~maplinBtn.value_(0);
+            ~metersBtn.value_(0);
+            ~playerBtn.value_(0);
+            
+            // Remove meters overlay when LAYOUT is active
+            if(~metersOverlay.notNil) { 
+                ~metersOverlay.remove; ~metersOverlay = nil; 
+            };
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -3628,7 +3733,7 @@ AppClock.sched(0.1, {
     });
 
 // --- MAPLIN SM-333 OVERLAY BUTTON ---
-~maplinBtn = Button(mainView, Rect(290, 410, 100, 35))
+~maplinBtn = Button(mainView, Rect(316, 410, 96, 35))
     .states_([["SM-333", Color.cyan, Color.black], ["SM-333", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .action_({ |btn|
@@ -3647,6 +3752,13 @@ AppClock.sched(0.1, {
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
+            ~metersBtn.value_(0);
+            ~playerBtn.value_(0);
+            
+            // Remove meters overlay when SM-333 is active
+            if(~metersOverlay.notNil) { 
+                ~metersOverlay.remove; ~metersOverlay = nil; 
+            };
 
             // Create Maplin overlay
             ~maplinOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
@@ -3807,7 +3919,7 @@ AppClock.sched(0.1, {
 // Set initial SM-333 button state based on current encoder
 if(configKeyE != \maplin) {
     // Add overlay to dim button if not in maplin mode
-    ~maplinBtnOverlay = View(mainView, Rect(290, 410, 100, 35))
+    ~maplinBtnOverlay = View(mainView, Rect(316, 410, 96, 35))
         .background_(Color.black.alpha_(0.7))
         .alpha_(1.0)
         .front;
