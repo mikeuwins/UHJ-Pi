@@ -334,6 +334,10 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                             ~playStartTime = 0;
                             ~pausedTime = 0;
                             ~isPlaying = false;
+                            // Reset slider position to beginning
+                            if(~playerPositionSlider.notNil, {
+                                ~playerPositionSlider.value_(0);
+                            });
                             // Reset button states immediately
                             if(~playerPlayBtn.notNil, { 
                                 ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
@@ -411,13 +415,69 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         elapsedStr = ~formatTime.value(elapsed);
         totalStr = ~formatTime.value(total);
         
+        // Check for track end or loop
+        if(~isPlaying and: { total > 0 and: { elapsed >= total } }, {
+            // Track has ended
+            if(~sfp.loop.not, {
+                // Loop is off - advance to next track
+                if(~fileList.notNil and: { ~filePaths.notNil }, {
+                    var currentIdx = ~fileList.value ? 0;
+                    var nextIdx = currentIdx + 1;
+                    if(nextIdx < ~filePaths.size, {
+                        // Load next track
+                        var nextPath = ~filePaths[nextIdx];
+                        // Load the next track directly
+                        ~sfp.load(nextPath);
+                        ~fileList.value_(nextIdx);
+                        // Reset timer state for new track
+                        ~playStartTime = SystemClock.seconds;
+                        ~pausedTime = 0;
+                        // Update slider position
+                        if(~playerPositionSlider.notNil, {
+                            ~playerPositionSlider.value_(0);
+                        });
+                        // Wait a moment for the track to load, then continue playing from beginning
+                        AppClock.sched(0.1, {
+                            if(~sfp.notNil, {
+                                ~sfp.startTime = 0; // Ensure we start from beginning
+                                ~sfp.play;
+                                // Ensure our internal state is correct
+                                ~isPlaying = true;
+                                ~playerPlayBtn.value_(0); // Play state
+                            });
+                            nil; // Don't reschedule
+                        });
+                    }, {
+                        // No more tracks - stop playback
+                        ~sfp.pause;
+                        ~isPlaying = false;
+                        ~playerPlayBtn.value_(1); // Pause state
+                    });
+                });
+            }, {
+                // Loop is on - reset timer and slider to beginning
+                ~playStartTime = SystemClock.seconds;
+                ~pausedTime = 0;
+                if(~playerPositionSlider.notNil, {
+                    ~playerPositionSlider.value_(0);
+                });
+            });
+        });
+        
         // Update player time display
         if(~playerTimeDisplay.notNil, {
             ~playerTimeDisplay.string_(elapsedStr ++ " / " ++ totalStr);
         });
         
         if(~playerPositionSlider.notNil and: { total > 0 }, {
-            ~playerPositionSlider.value_(elapsed / total);
+            // Only update slider if we're not in the middle of a user drag
+            // Check if slider value is significantly different from calculated position
+            var calculatedPos = elapsed / total;
+            var currentSliderPos = ~playerPositionSlider.value;
+            // Only update if the difference is significant (not user dragging)
+            if((calculatedPos - currentSliderPos).abs < 0.01, {
+                ~playerPositionSlider.value_(calculatedPos);
+            });
         });
     });
 };
@@ -920,7 +980,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     // Create player bus and start SFPlayer
                     ~playerBus = Bus.audio(s, 2);
                     ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Various/AJH_eight-positions-uhj.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
-                    ~sfp.loop = true;
+                    ~sfp.loop = false;
                     // Don't start playback yet - wait for main synth to be ready 
                     
                     { if(~playBtn.notNil, { ~playBtn.value_(0); }); }.defer(0.1);
@@ -1130,7 +1190,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             // Stop existing SFPlayer if it exists
                             if(~sfp.notNil, { ~sfp.stop; });
                             ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
-                            ~sfp.loop = true;
+                            ~sfp.loop = false;
                         });
                         
                         // Define encoder kernels
@@ -1813,11 +1873,14 @@ win.front;
                 // Scroll through the text
                 (text.size + 5).do({ |i|
                     var displayText = scrollText.copyRange(i, i + maxWidth - 1);
-                    var displayItems = originalItems.copy; // Use original items
-                    displayItems[0] = displayText; // Only modify display
-                    // Schedule GUI update on AppClock
+                    // Use a more gentle approach - only update if the menu is still the same
                     AppClock.sched(0, {
-                        menu.items_(displayItems);
+                        // Check if the menu still has the same original items (not modified by other actions)
+                        if(menu.items == originalItems, {
+                            var displayItems = originalItems.copy;
+                            displayItems[0] = displayText;
+                            menu.items_(displayItems);
+                        });
                         nil; // Don't reschedule
                     });
                     0.2.wait; // Scroll speed
@@ -1844,6 +1907,18 @@ win.front;
         var isUSB, menuKey, artistMenuKey, albumMenuKey;
         isUSB = view.value == 1;
         "Source switched to: ".post; (isUSB ? "USB" : "ATK").postln;
+        
+        // Stop playback immediately when switching folders
+        if(~sfp.notNil, {
+            ~sfp.pause;
+            ~isPlaying = false;
+            ~playerPlayBtn.value_(1); // Set to pause state
+            ~playStartTime = 0;
+            ~pausedTime = 0;
+            if(~playerPositionSlider.notNil, {
+                ~playerPositionSlider.value_(0);
+            });
+        });
         
         // Stop any existing scrolling first for both menus and restore original items
         artistMenuKey = ~artistMenu.hash.asString;
@@ -3052,12 +3127,18 @@ AppClock.sched(0.1, {
                     if(~sfp.notNil, {
                         // Check if currently playing
                         var wasPlaying = ~sfp.isPlaying;
-                        // Stop and restart to reset position
-                        ~sfp.stop;
-                        if(wasPlaying, { ~sfp.play; });
+                        // Reset cursor to beginning and restart if was playing
+                        ~sfp.startTime = 0; // Reset cursor to beginning
+                        if(wasPlaying, { 
+                            ~sfp.play; 
+                        });
                         // Reset our timer
                         ~playStartTime = 0;
                         ~pausedTime = 0;
+                        // Update slider position to reflect cursor reset
+                        if(~playerPositionSlider.notNil, {
+                            ~playerPositionSlider.value_(0);
+                        });
                     });
                 });
 
@@ -3068,13 +3149,22 @@ AppClock.sched(0.1, {
                 .canFocus_(false)
                 .focusColor_(Color.clear)
                 .action_({ |btn|
+                    var currentSeekTime;
                     if(~sfp.notNil, {
                         if(btn.value == 0, {
                             // Play (black icon on cyan background)
                             ~sfp.play;
                             ~isPlaying = true;
-                            ~playStartTime = SystemClock.seconds;
-                            ~pausedTime = 0;
+                            // Use existing timer state set by slider, or start from beginning
+                            if(~pausedTime > 0, {
+                                // Resume from paused position
+                                ~playStartTime = SystemClock.seconds - ~pausedTime;
+                                ~pausedTime = 0;
+                            }, {
+                                // Start from beginning if no paused position
+                                ~playStartTime = SystemClock.seconds;
+                                ~pausedTime = 0;
+                            });
                         }, {
                             // Pause (cyan icon on black background)
                             ~sfp.pause;
@@ -3095,13 +3185,19 @@ AppClock.sched(0.1, {
                 .focusColor_(Color.clear)
                 .action_({
                     if(~sfp.notNil, {
-                        // SFPlayer.stop already resets the playhead to zero
-                        ~sfp.stop;
+                        // Stop playback and reset cursor to beginning
+                        ~sfp.pause; // Stop playback
+                        ~sfp.startTime = 0; // Reset cursor to beginning
+                        // Stay stopped/paused
                         ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
                         ~isPlaying = false;
                         // Reset internal timer state to match SFPlayer's cursor at zero
                         ~playStartTime = 0;
                         ~pausedTime = 0;
+                        // Update slider position to reflect cursor reset
+                        if(~playerPositionSlider.notNil, {
+                            ~playerPositionSlider.value_(0);
+                        });
                         // Refresh the play icon to update color
                         if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                     });
@@ -3123,8 +3219,7 @@ AppClock.sched(0.1, {
                         });
                     });
                 })
-                .value_(0);
-
+                .value_(0); // Start with loop off
 
 
             // Position slider - positioned below buttons
@@ -3139,8 +3234,17 @@ AppClock.sched(0.1, {
                         // Set the start time to seek to position (like SFPlayer waveform click)
                         ~sfp.startTime = seekTime;
                         // Update our timer to match the seek position
-                        ~playStartTime = SystemClock.seconds - seekTime;
-                        ~pausedTime = 0;
+                        if(~isPlaying, {
+                            // If playing, calculate playStartTime so elapsed time equals seekTime
+                            ~playStartTime = SystemClock.seconds - seekTime;
+                            ~pausedTime = 0;
+                        }, {
+                            // If paused, just set the paused time to the seek position
+                            ~playStartTime = 0;
+                            ~pausedTime = seekTime;
+                        });
+                        // Force immediate time display update
+                        ~updateTimeDisplay.value;
                     });
                 });
             
