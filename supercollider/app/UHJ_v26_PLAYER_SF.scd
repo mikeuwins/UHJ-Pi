@@ -60,7 +60,7 @@ var win, mainView,
     
     if(artists.isEmpty, {
         // No artists found
-        foundArtist = "<PARENT>";
+        foundArtist = nil;
         foundAlbum = "..."
     }, {
         // Look for preferred album first
@@ -568,7 +568,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - look inside it for artist folders (ignore drive name)
-        folders = ["<PARENT>"];
+        folders = [];
         if(File.exists(usbBase), {
             // Look inside the USB drive for actual content folders
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
@@ -596,7 +596,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         folders = ["<NO DRIVE>"];
     }, {
         // ATK directory found - look inside it for artist folders
-        folders = ["<PARENT>"];
+        folders = [];
         if(File.exists(atkBase), {
             // Look inside the ATK directory for actual content folders
             var entries = PathName(atkBase).entries.select { |entry| entry.isFolder };
@@ -630,20 +630,16 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
         }, {
-            if(artistName == "<PARENT>", {
-                albumPath = usbBase;
+            // Use artist and album selections (account for USB drive name being ignored)
+            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
+            
+            if(albumName == "<NO ALBUMS>", {
+                // No album folders, just files in artist folder
+                albumPath = contentDir +/+ artistName +/+ "/";
             }, {
-                // Use artist and album selections (account for USB drive name being ignored)
-                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-                var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
-                
-                if(albumName == "<NO ALBUMS>", {
-                    // No album folders, just files in artist folder
-                    albumPath = contentDir +/+ artistName +/+ "/";
-                }, {
-                    // Use both artist and album
-                    albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
-                });
+                // Use both artist and album
+                albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
             });
         });
     }, {
@@ -652,26 +648,22 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
         }, {
-            if(artistName == "<PARENT>", {
-                albumPath = atkBase;
+            // Find actual artist folder by case-insensitive matching
+            var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                entry.folderName.asString.toUpper == artistName 
+            };
+            var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
+            
+            if(albumName == "<NO ALBUMS>", {
+                // No album folders, just files in artist folder
+                albumPath = actualArtistPath +/+ "/";
             }, {
-                // Find actual artist folder by case-insensitive matching
-                var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                    entry.folderName.asString.toUpper == artistName 
+                // Find actual album folder by case-insensitive matching
+                var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                    entry.folderName.asString.toUpper == albumName 
                 };
-                var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
-                
-                if(albumName == "<NO ALBUMS>", {
-                    // No album folders, just files in artist folder
-                    albumPath = actualArtistPath +/+ "/";
-                }, {
-                    // Find actual album folder by case-insensitive matching
-                    var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                        entry.folderName.asString.toUpper == albumName 
-                    };
-                    var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
-                    albumPath = actualAlbumPath +/+ "/";
-                });
+                var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
+                albumPath = actualAlbumPath +/+ "/";
             });
         });
     });
@@ -2021,40 +2013,36 @@ win.front;
             // ATK mode - build album list based on selected artist
             var artistName = ~artistMenu.items[~artistMenu.value];
             var albumList;
-            if(artistName == "<PARENT>", {
-                albumList = ["..."];
-            }, {
-                // Build album list for the selected artist
-                var atkBase = Atk.userSoundsDir ++ "/uhj";
-                var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                    entry.folderName.asString.toUpper == artistName 
+            // Build album list for the selected artist
+            var atkBase = Atk.userSoundsDir ++ "/uhj";
+            var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                entry.folderName.asString.toUpper == artistName 
+            };
+            var artistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
+            
+            if(File.exists(artistPath), {
+                var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
+                var audioFiles = PathName(artistPath).entries.select { |entry| 
+                    entry.isFile and: { 
+                        var ext = entry.extension.asString.toLower;
+                        (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                    };
                 };
-                var artistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
-                
-                if(File.exists(artistPath), {
-                    var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
-                    var audioFiles = PathName(artistPath).entries.select { |entry| 
-                        entry.isFile and: { 
-                            var ext = entry.extension.asString.toLower;
-                            (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
-                        };
-                    };
-                    albumList = [];
-                    // Add album folders if they exist
-                    if(entries.size > 0) {
-                        albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
-                    };
-                    // Add <NO ALBUMS> if there are files outside album folders
-                    if(audioFiles.size > 0) {
-                        albumList = albumList ++ ["<NO ALBUMS>"];
-                    };
-                    // Fallback if nothing found
-                    if(albumList.isEmpty) {
-                        albumList = ["..."];
-                    };
-                }, {
+                albumList = [];
+                // Add album folders if they exist
+                if(entries.size > 0) {
+                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                };
+                // Add <NO ALBUMS> if there are files outside album folders
+                if(audioFiles.size > 0) {
+                    albumList = albumList ++ ["<NO ALBUMS>"];
+                };
+                // Fallback if nothing found
+                if(albumList.isEmpty) {
                     albumList = ["..."];
-                });
+                };
+            }, {
+                albumList = ["..."];
             });
             ~albumMenu.items_(albumList);
             ~albumMenu.value_(0);
@@ -2095,7 +2083,6 @@ win.front;
                 // USB mode - show actual albums/folders in selected artist directory
                 case 
                 { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
-                { artistName == "<PARENT>" } { albumList = ["..."]; }
                 {
                     // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
                     var usbBase = ~detectUSBDir.value;
@@ -2132,7 +2119,6 @@ win.front;
                 // ATK mode - show actual albums/folders in selected artist directory
                 case 
                 { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
-                { artistName == "<PARENT>" } { albumList = ["..."]; }
                 {
                     // Get actual subdirectories in the artist folder (ATK base is the uhj folder directly)
                     var atkBase = Atk.userSoundsDir ++ "/uhj";
