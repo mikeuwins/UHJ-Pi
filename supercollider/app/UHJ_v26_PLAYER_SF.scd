@@ -59,7 +59,7 @@ var win, mainView,
     if(artists.isEmpty, {
         // No artists found
         foundArtist = "<PARENT>";
-        foundAlbum = "...";
+        foundAlbum = "..."
     }, {
         // Look for preferred album first
         foundArtist = nil;
@@ -1805,6 +1805,7 @@ win.front;
     
     if(text.size > maxWidth, {
         var scrollText = text ++ "    " ++ text; // Duplicate with spaces
+        var originalItems = menu.items.copy; // Store original items
         var scrollTask = Task({
             inf.do({
                 // Wait before starting to scroll
@@ -1812,11 +1813,11 @@ win.front;
                 // Scroll through the text
                 (text.size + 5).do({ |i|
                     var displayText = scrollText.copyRange(i, i + maxWidth - 1);
-                    var currentItems = menu.items.copy;
-                    currentItems[0] = displayText;
+                    var displayItems = originalItems.copy; // Use original items
+                    displayItems[0] = displayText; // Only modify display
                     // Schedule GUI update on AppClock
                     AppClock.sched(0, {
-                        menu.items_(currentItems);
+                        menu.items_(displayItems);
                         nil; // Don't reschedule
                     });
                     0.2.wait; // Scroll speed
@@ -1840,9 +1841,33 @@ win.front;
     .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |view|
-        var isUSB = view.value == 1;
-        var menuKey;
+        var isUSB, menuKey, artistMenuKey, albumMenuKey;
+        isUSB = view.value == 1;
         "Source switched to: ".post; (isUSB ? "USB" : "ATK").postln;
+        
+        // Stop any existing scrolling first for both menus and restore original items
+        artistMenuKey = ~artistMenu.hash.asString;
+        albumMenuKey = ~albumMenu.hash.asString;
+        if(~scrollTasks[artistMenuKey].notNil, {
+            ~scrollTasks[artistMenuKey].stop;
+            ~scrollTasks[artistMenuKey] = nil;
+            // Restore original artist menu items if they were being scrolled
+            if(~originalMenuText[artistMenuKey].notNil, {
+                var originalItems = ~artistMenu.items.copy;
+                originalItems[0] = ~originalMenuText[artistMenuKey];
+                ~artistMenu.items_(originalItems);
+            });
+        });
+        if(~scrollTasks[albumMenuKey].notNil, {
+            ~scrollTasks[albumMenuKey].stop;
+            ~scrollTasks[albumMenuKey] = nil;
+            // Restore original album menu items if they were being scrolled
+            if(~originalMenuText[albumMenuKey].notNil, {
+                var originalItems = ~albumMenu.items.copy;
+                originalItems[0] = ~originalMenuText[albumMenuKey];
+                ~albumMenu.items_(originalItems);
+            });
+        });
         
         // Update artist menu based on source
         if(isUSB, {
@@ -1856,20 +1881,50 @@ win.front;
         // Reset artist menu selection and update album menu based on mode
         ~artistMenu.value_(0);
         
-        // Stop any existing scrolling first
-        menuKey = ~albumMenu.hash.asString;
-        if(~scrollTasks[menuKey].notNil, {
-            ~scrollTasks[menuKey].stop;
-            ~scrollTasks[menuKey] = nil;
-        });
-        
         if(isUSB, {
             // USB mode - clear album menu
             ~albumMenu.items_(["..."]);
             ~albumMenu.value_(0);
         }, {
-            // ATK mode - set up album menu
-            ~albumMenu.items_(["THE LONGEST DAY"]);
+            // ATK mode - build album list based on selected artist
+            var artistName = ~artistMenu.items[~artistMenu.value];
+            var albumList;
+            if(artistName == "<PARENT>", {
+                albumList = ["..."];
+            }, {
+                // Build album list for the selected artist
+                var atkBase = Atk.userSoundsDir ++ "/uhj";
+                var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                    entry.folderName.asString.toUpper == artistName 
+                };
+                var artistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
+                
+                if(File.exists(artistPath), {
+                    var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
+                    var audioFiles = PathName(artistPath).entries.select { |entry| 
+                        entry.isFile and: { 
+                            var ext = entry.extension.asString.toLower;
+                            (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                        };
+                    };
+                    albumList = [];
+                    // Add album folders if they exist
+                    if(entries.size > 0) {
+                        albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                    };
+                    // Add <NO ALBUMS> if there are files outside album folders
+                    if(audioFiles.size > 0) {
+                        albumList = albumList ++ ["<NO ALBUMS>"];
+                    };
+                    // Fallback if nothing found
+                    if(albumList.isEmpty) {
+                        albumList = ["..."];
+                    };
+                }, {
+                    albumList = ["..."];
+                });
+            });
+            ~albumMenu.items_(albumList);
             ~albumMenu.value_(0);
         });
         
@@ -1895,7 +1950,7 @@ win.front;
         view.focus(true);
     })
     .action_({ |view|
-        var artistName, albumList, isUSB, oldAction, albumMenuKey;
+        var artistName, albumList, isUSB, oldAction, albumMenuKey, artistMenuKey;
         "Artist menu clicked, value: ".post; view.value.postln;
         artistName = view.items[view.value];
         "Selected artist: ".post; artistName.postln;
@@ -1981,11 +2036,28 @@ win.front;
                     });
                 };
             });
-            // Stop any existing scrolling first
+            // Stop any existing scrolling first for both menus and restore original items
+            artistMenuKey = ~artistMenu.hash.asString;
             albumMenuKey = ~albumMenu.hash.asString;
+            if(~scrollTasks[artistMenuKey].notNil, {
+                ~scrollTasks[artistMenuKey].stop;
+                ~scrollTasks[artistMenuKey] = nil;
+                // Restore original artist menu items if they were being scrolled
+                if(~originalMenuText[artistMenuKey].notNil, {
+                    var originalItems = ~artistMenu.items.copy;
+                    originalItems[0] = ~originalMenuText[artistMenuKey];
+                    ~artistMenu.items_(originalItems);
+                });
+            });
             if(~scrollTasks[albumMenuKey].notNil, {
                 ~scrollTasks[albumMenuKey].stop;
                 ~scrollTasks[albumMenuKey] = nil;
+                // Restore original album menu items if they were being scrolled
+                if(~originalMenuText[albumMenuKey].notNil, {
+                    var originalItems = ~albumMenu.items.copy;
+                    originalItems[0] = ~originalMenuText[albumMenuKey];
+                    ~albumMenu.items_(originalItems);
+                });
             });
             // Always clear and update album menu
             ~albumMenu.items_(albumList);
