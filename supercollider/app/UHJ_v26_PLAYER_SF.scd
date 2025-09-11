@@ -68,36 +68,34 @@ var win, mainView,
         foundAlbum = nil;
         
         artists.do { |artist|
-            if(foundArtist.isNil, {
-                var artistPath = artist.fullPath;
-                var albums = PathName(artistPath).entries.select { |entry| entry.isFolder };
-                var looseFiles = PathName(artistPath).entries.select { |entry| 
-                    entry.isFile and: { 
-                        var ext = entry.extension.asString.toLower;
-                        (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
-                    };
+            var artistPath = artist.fullPath;
+            var albums = PathName(artistPath).entries.select { |entry| entry.isFolder };
+            var looseFiles = PathName(artistPath).entries.select { |entry| 
+                entry.isFile and: { 
+                    var ext = entry.extension.asString.toLower;
+                    (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
                 };
-                
-                // Check if preferred album exists
-                var preferredAlbum = albums.detect { |album| 
-                    album.folderName.asString.toUpper == ~preferredDefaultAlbum.toUpper 
-                };
-                
-                if(preferredAlbum.notNil, {
+            };
+            
+            // Check if preferred album exists
+            var preferredAlbum = albums.detect { |album| 
+                album.folderName.asString.toUpper == ~preferredDefaultAlbum.toUpper 
+            };
+            
+            if(preferredAlbum.notNil, {
+                foundArtist = artist.folderName.asString.toUpper;
+                foundAlbum = preferredAlbum.folderName.asString.toUpper;
+            }, {
+                // No preferred album in this artist, use first available as fallback only if no preferred album found yet
+                if(foundArtist.isNil, {
                     foundArtist = artist.folderName.asString.toUpper;
-                    foundAlbum = preferredAlbum.folderName.asString.toUpper;
-                }, {
-                    // No preferred album, use first available
-                    if(foundArtist.isNil, {
-                        foundArtist = artist.folderName.asString.toUpper;
-                        if(albums.size > 0, {
-                            foundAlbum = albums[0].folderName.asString.toUpper;
+                    if(albums.size > 0, {
+                        foundAlbum = albums[0].folderName.asString.toUpper;
+                    }, {
+                        if(looseFiles.size > 0, {
+                            foundAlbum = "<NO ALBUMS>";
                         }, {
-                            if(looseFiles.size > 0, {
-                                foundAlbum = "<NO ALBUMS>";
-                            }, {
-                                foundAlbum = "...";
-                            });
+                            foundAlbum = "...";
                         });
                     });
                 });
@@ -107,6 +105,46 @@ var win, mainView,
     
     [foundArtist, foundAlbum];
 };
+
+// Find artwork file with priority search
+~findArtworkFile = { |albumPath|
+    var artworkNames, extensions, foundPath;
+    
+    // Priority order for artwork file names
+    artworkNames = ["artwork", "cover", "folder"];
+    // Supported image extensions
+    extensions = ["png", "jpg", "jpeg"];
+    
+    foundPath = nil;
+    
+    // Search through all combinations of names and extensions
+    artworkNames.do { |name|
+        extensions.do { |ext|
+            if(foundPath.isNil, {
+                var testPath = albumPath +/+ (name ++ "." ++ ext);
+                if(File.exists(testPath), {
+                    foundPath = testPath;
+                });
+            });
+        };
+    };
+    
+    // If no specific artwork found, look for any .png or .jpg file
+    if(foundPath.isNil, {
+        var entries = PathName(albumPath).entries.select { |entry| 
+            entry.isFile and: { 
+                var ext = entry.extension.asString.toLower;
+                (ext == "png") or: (ext == "jpg") or: (ext == "jpeg");
+            };
+        };
+        if(entries.size > 0, {
+            foundPath = entries[0].fullPath;
+        });
+    });
+    
+    foundPath;
+};
+
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -671,6 +709,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     // Final safety check - ensure we always return a valid path
     albumPath ? "/tmp/";
 };
+
 
 // Initialize current album path and ensure file list populates after GUI is up
 { 
@@ -2056,6 +2095,8 @@ win.front;
         // Update file list and current path
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
         ~currentAlbumPath = ~buildAlbumPath.value;
+        // Refresh artwork when album path changes
+        if(~updatePlayerControls.notNil, { ~updatePlayerControls.value; });
     });
 
 // Create Artist and Album menus after window is visible
@@ -2198,6 +2239,9 @@ win.front;
         });
         
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
+        ~currentAlbumPath = ~buildAlbumPath.value;
+        // Refresh artwork when album path changes
+        if(~updatePlayerControls.notNil, { ~updatePlayerControls.value; });
     });
 
 ~albumMenu = PopUpMenu(mainView, Rect(28, 127, 140, 35))
@@ -2214,6 +2258,8 @@ win.front;
         "Album menu clicked, value: ".post; view.value.postln;
         if(~fileList.notNil) { ~fileList.items_(~buildFileList.value); };
         ~currentAlbumPath = ~buildAlbumPath.value;
+        // Refresh artwork when album path changes
+        if(~updatePlayerControls.notNil, { ~updatePlayerControls.value; });
     });
 
 "Artist menu created: ".post; ~artistMenu.postln;
@@ -3164,8 +3210,9 @@ AppClock.sched(0.1, {
                 .drawFunc_({ |view|
                     var artworkPath;
                     if(~currentAlbumPath.notNil, {
-                        artworkPath = ~currentAlbumPath +/+ "artwork.png";
-                        if(File.exists(artworkPath), {
+                        // Priority search for artwork files
+                        artworkPath = ~findArtworkFile.value(~currentAlbumPath);
+                        if(artworkPath.notNil, {
                             try {
                                 var image = Image.open(artworkPath);
                                 if(image.notNil, {
