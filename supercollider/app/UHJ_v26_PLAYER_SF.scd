@@ -175,6 +175,20 @@ formatDbValue = { |dbValue|
 
 // --- Window setup with platform-specific positioning ---
 win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).background_(Color.black);
+
+// Create initialization overlay - full screen black semi-transparent with "INITIALISING..." text
+~initOverlay = View(win, Rect(0, 0, 800, 480))
+    .background_(Color.black.alpha_(0.8))
+    .alpha_(1.0)
+    .front;
+
+~initText = StaticText(~initOverlay, Rect(0, 200, 800, 80))
+    .string_("INITIALISING...")
+    .font_(Font("LCD 5x7 Segment Monospace", 20))
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .background_(Color.clear);
+
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
     // Stop connection monitor and close pipe
@@ -475,7 +489,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             var calculatedPos = elapsed / total;
             var currentSliderPos = ~playerPositionSlider.value;
             // Only update if the difference is significant (not user dragging)
-            if((calculatedPos - currentSliderPos).abs < 0.01, {
+            // Check that currentSliderPos is not nil before doing the calculation
+            if(currentSliderPos.notNil and: { (calculatedPos - currentSliderPos).abs < 0.01 }, {
                 ~playerPositionSlider.value_(calculatedPos);
             });
         });
@@ -1170,6 +1185,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     }.defer;
 
                     ("Audio synthesis started with level meter").postln;
+                    
+                    // Remove initialization overlay - server is ready
+                    if(~initOverlay.notNil, {
+                        ~initOverlay.remove;
+                        ~initOverlay = nil;
+                        ~initText = nil;
+                    });
                 });
             }, {
                 if(needReboot, {
@@ -1347,6 +1369,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     }.defer;
 
                         ("Audio synthesis started with level meter").postln;
+                        
+                        // Remove initialization overlay - server is ready after reboot
+                        if(~initOverlay.notNil, {
+                            ~initOverlay.remove;
+                            ~initOverlay = nil;
+                            ~initText = nil;
+                        });
                     });
                 });
             });
@@ -3057,8 +3086,9 @@ AppClock.sched(0.1, {
             ~layoutBtn.value_(0);
             ~maplinBtn.value_(0);
             
-            // Create PLAYER overlay in central area
-            ~playerOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+            // Create PLAYER overlay in central area (only if it doesn't exist)
+            if(~playerOverlay.isNil, {
+                ~playerOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
             
             // Add border around player panel
             UserView(~playerOverlay, Rect(0, 0, 320, 275))
@@ -3337,7 +3367,10 @@ AppClock.sched(0.1, {
                 if(~playerArtwork.notNil, { ~playerArtwork.refresh; });
                 // Button states are managed manually, not synced with SFPlayer
             };
+            });
             
+            // Make sure player overlay is visible
+            if(~playerOverlay.notNil, { ~playerOverlay.front; });
         } {
             if(~playerOverlay.notNil) { ~playerOverlay.remove; ~playerOverlay = nil; };
         }
