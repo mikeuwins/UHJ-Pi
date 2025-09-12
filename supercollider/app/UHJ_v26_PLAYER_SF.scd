@@ -223,11 +223,11 @@ win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).backgr
     .front;
 
 // Add UHJ-Pi-C logo (maintaining square aspect ratio)
-~initLogo = UserView(~initOverlay, Rect(250, 120, 300, 100))
+~initLogo = UserView(~initOverlay, Rect(200, 80, 400, 200))
     .background_(Color.clear)
     .drawFunc_({ |view|
         try {
-            var image = Image.open("assets/UHJ-Pi-C.png");
+            var image = Image.open("assets/UHJ-Pi-180.png");
             if(image.notNil, {
                 // Calculate square size that fits within the view bounds
                 var maxSize = min(view.bounds.width, view.bounds.height);
@@ -246,8 +246,8 @@ win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).backgr
         };
     });
 
-~initText = StaticText(~initOverlay, Rect(0, 240, 800, 80))
-    .string_("INITIALISING...")
+~initText = StaticText(~initOverlay, Rect(0, 300, 800, 80))
+    .string_("LOADING...")
     .font_(Font("LCD 5x7 Segment Monospace", 20))
     .align_(\center)
     .stringColor_(Color.cyan)
@@ -464,8 +464,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     seconds = seconds.asFloat;
     mins = (seconds / 60).floor.asInteger;
     secs = (seconds % 60).floor.asInteger;
-    // Debug output to see what we're getting
-    "Formatting: ".post; seconds.post; " -> mins: ".post; mins.post; " secs: ".post; secs.postln;
     if(mins < 10) { mins = "0" ++ mins.asString } { mins = mins.asString };
     if(secs < 10) { secs = "0" ++ secs.asString } { secs = secs.asString };
     mins ++ ":" ++ secs;
@@ -3227,8 +3225,26 @@ AppClock.sched(0.1, {
                                 Pen.stringAtPoint("ERROR", Point(90, 100));
                             };
                         }, {
-                            Pen.color = Color.cyan;
-                            Pen.stringAtPoint("NO ART", Point(85, 100));
+                            // Fallback to UHJ-Pi-180.png icon
+                            try {
+                                var fallbackImage = Image.open("assets/UHJ-Pi-180.png");
+                                if(fallbackImage.notNil, {
+                                    // Calculate centered position with margins
+                                    var margin = 10;
+                                    var imageSize = view.bounds.width - (margin * 2);
+                                    var xOffset = margin;
+                                    var yOffset = (view.bounds.height - imageSize) / 2;
+                                    
+                                    fallbackImage.drawInRect(Rect(xOffset, yOffset, imageSize, imageSize), 
+                                                           Rect(0, 0, fallbackImage.width, fallbackImage.height), 0);
+                                }, {
+                                    Pen.color = Color.cyan;
+                                    Pen.stringAtPoint("NO ART", Point(85, 100));
+                                });
+                            } { |error|
+                                Pen.color = Color.cyan;
+                                Pen.stringAtPoint("NO ART", Point(85, 100));
+                            };
                         });
                     }, {
                         Pen.color = Color.cyan;
