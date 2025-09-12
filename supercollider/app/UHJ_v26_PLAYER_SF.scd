@@ -107,38 +107,55 @@ var win, mainView,
 };
 
 // Find artwork file with priority search
-~findArtworkFile = { |albumPath|
-    var artworkNames, extensions, foundPath;
+~findArtworkFile = { |albumPath, currentTrackPath|
+    var foundPath, artworkNames, extensions;
     
-    // Priority order for artwork file names
-    artworkNames = ["artwork", "cover", "folder"];
-    // Supported image extensions
-    extensions = ["png", "jpg", "jpeg"];
+    "findArtworkFile called with: ".post; albumPath.postln; currentTrackPath.postln;
     
-    foundPath = nil;
+    // If we have a current track path, try FLAC artwork first
+    if(currentTrackPath.notNil, {
+        "Trying FLAC artwork extraction...".postln;
+        foundPath = ~findArtworkForTrack.value(currentTrackPath, albumPath);
+        "FLAC artwork result: ".post; foundPath.postln;
+        if(foundPath.notNil, {
+            "findArtworkFile returning FLAC artwork: ".post; foundPath.postln;
+            // Return the FLAC artwork path immediately
+            foundPath;
+        });
+        // If FLAC artwork extraction failed, continue to fallback
+    });
     
-    // Search through all combinations of names and extensions
-    artworkNames.do { |name|
-        extensions.do { |ext|
-            if(foundPath.isNil, {
-                var testPath = albumPath +/+ (name ++ "." ++ ext);
-                if(File.exists(testPath), {
-                    foundPath = testPath;
-                });
-            });
-        };
-    };
+    // Fall back to original folder artwork search (only if FLAC artwork wasn't found)
     
-    // If no specific artwork found, look for any .png or .jpg file
     if(foundPath.isNil, {
-        var entries = PathName(albumPath).entries.select { |entry| 
-            entry.isFile and: { 
-                var ext = entry.extension.asString.toLower;
-                (ext == "png") or: (ext == "jpg") or: (ext == "jpeg");
+        // Priority order for artwork file names
+        artworkNames = ["artwork", "cover", "folder"];
+        // Supported image extensions
+        extensions = ["png", "jpg", "jpeg"];
+        
+        // Search through all combinations of names and extensions
+        artworkNames.do { |name|
+            extensions.do { |ext|
+                if(foundPath.isNil, {
+                    var testPath = albumPath +/+ (name ++ "." ++ ext);
+                    if(File.exists(testPath), {
+                        foundPath = testPath;
+                    });
+                });
             };
         };
-        if(entries.size > 0, {
-            foundPath = entries[0].fullPath;
+        
+        // If no specific artwork found, look for any .png or .jpg file
+        if(foundPath.isNil, {
+            var entries = PathName(albumPath).entries.select { |entry| 
+                entry.isFile and: { 
+                    var ext = entry.extension.asString.toLower;
+                    (ext == "png") or: (ext == "jpg") or: (ext == "jpeg");
+                };
+            };
+            if(entries.size > 0, {
+                foundPath = entries[0].fullPath;
+            });
         });
     });
     
@@ -318,6 +335,134 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     ["The Longest Day"]; // hardcoded for now to test
 };
 
+// FLAC metadata functions
+~getFLACMetadata = { |filePath|
+    var command, output, lines, metadata, line, key, value, colonIndex;
+    command = "metaflac --export-tags-to=- \"" ++ filePath ++ "\" 2>/dev/null";
+    output = unixCmdGetStdOut(command);
+    if(output.isEmpty, { ^nil });
+    
+    lines = output.split($\n);
+    metadata = Dictionary.new;
+    
+    lines.do { |line|
+        if(line.notEmpty, {
+            colonIndex = line.find("=");
+            if(colonIndex.notNil, {
+                key = line.copyRange(0, colonIndex - 1);
+                value = line.copyRange(colonIndex + 1, line.size - 1);
+                metadata.put(key, value);
+            });
+        });
+    };
+    
+    metadata;
+};
+
+~getFLACTrackNumber = { |filePath|
+    var metadata, trackNumber, slashIndex;
+    metadata = ~getFLACMetadata.value(filePath);
+    if(metadata.isNil, { ^nil });
+    
+    trackNumber = metadata["TRACKNUMBER"];
+    if(trackNumber.isNil, { ^nil });
+    
+    slashIndex = trackNumber.find("/");
+    if(slashIndex.notNil, {
+        trackNumber = trackNumber.copyRange(0, slashIndex - 1);
+    });
+    
+    trackNumber.asInteger;
+};
+
+~extractFLACArtwork = { |filePath, outputPath|
+    // Extract artwork from FLAC file using metaflac
+    var command, success;
+    command = "metaflac --export-picture-to=\"" ++ outputPath ++ "\" \"" ++ filePath ++ "\" 2>/dev/null && echo 'SUCCESS'";
+    // Use unixCmdGetStdOut and check if SUCCESS is in output or file exists
+    success = (unixCmdGetStdOut(command).contains("SUCCESS")) or: File.exists(outputPath);
+    success;
+};
+
+~findArtworkForTrack = { |currentTrackPath, albumPath|
+    // Find artwork with priority: track -> album -> folder -> default
+    var artworkPath, tempPath, firstFlacPath, folderArtwork, result;
+    
+    "findArtworkForTrack called with: ".post; currentTrackPath.postln; albumPath.postln;
+    
+    result = nil;
+    tempPath = "/tmp/track_artwork.jpg";
+    
+    // 1. Try current track artwork
+    if(result.isNil and: File.exists(currentTrackPath) and: { 
+        var ext = PathName(currentTrackPath).extension.asString.toLower;
+        ext == "flac";
+    }, {
+        "Trying to extract from current FLAC track...".postln;
+        if(~extractFLACArtwork.value(currentTrackPath, tempPath), {
+            "SUCCESS: Extracted artwork from current track".postln;
+            "Returning artwork path: ".post; tempPath.postln;
+            result = tempPath;
+        }, {
+            "FAILED: Could not extract from current track".postln;
+        });
+    }, {
+        "Current track is not FLAC or doesn't exist".postln;
+    });
+    
+    // 2. Try first FLAC file in album
+    if(result.isNil and: File.exists(albumPath), {
+        var pn = PathName(albumPath);
+        var flacFiles = pn.entries.select { |f| 
+            f.isFile and: { f.extension.asString.toLower == "flac" };
+        };
+        if(flacFiles.size > 0, {
+            firstFlacPath = flacFiles[0].fullPath;
+            "Trying to extract from first FLAC in album: ".post; firstFlacPath.postln;
+            if(~extractFLACArtwork.value(firstFlacPath, tempPath), {
+                "SUCCESS: Extracted artwork from first FLAC in album".postln;
+                result = tempPath;
+            }, {
+                "FAILED: Could not extract from first FLAC in album".postln;
+            });
+        });
+    });
+    
+    // 3. Try folder artwork (cover.jpg, folder.jpg, etc.)
+    if(result.isNil and: File.exists(albumPath), {
+        var pn = PathName(albumPath);
+        var imageFiles = pn.entries.select { |f| 
+            f.isFile and: { 
+                var ext = f.extension.asString.toLower;
+                (ext == "jpg") or: (ext == "jpeg") or: (ext == "png") or: (ext == "gif") or: (ext == "bmp");
+            };
+        };
+        // Look for common artwork filenames
+        folderArtwork = imageFiles.detect { |f|
+            var name = f.fileNameWithoutExtension.asString.toLower;
+            (name == "cover") or: (name == "folder") or: (name == "album") or: (name == "artwork");
+        };
+        if(folderArtwork.notNil, {
+            "SUCCESS: Found folder artwork: ".post; folderArtwork.fullPath.postln;
+            result = folderArtwork.fullPath;
+        }, {
+            // If no specific artwork file, use first image
+            if(imageFiles.size > 0, {
+                "SUCCESS: Found generic folder image: ".post; imageFiles[0].fullPath.postln;
+                result = imageFiles[0].fullPath;
+            });
+        });
+    });
+    
+    // 4. Return result (nil if no artwork found, will fall back to UHJ-Pi default)
+    if(result.isNil, {
+        "No artwork found".postln;
+    }, {
+        "FINAL RESULT: ".post; result.postln;
+    });
+    result;
+};
+
 // Artist and Album menus (will be created after window is visible)
 
 
@@ -354,6 +499,37 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 
     paths = files.collect(_.fullPath);
     ~filePaths = paths; // store as strings
+    
+    // Sort files by FLAC track number if available, otherwise by filename
+    files = files.sort({ |a, b|
+        var aTrack, bTrack, aExt, bExt;
+        aExt = a.extension.asString.toLower;
+        bExt = b.extension.asString.toLower;
+        
+        // Check if both files are FLAC
+        if((aExt == "flac") and: (bExt == "flac"), {
+            aTrack = ~getFLACTrackNumber.value(a.fullPath);
+            bTrack = ~getFLACTrackNumber.value(b.fullPath);
+            
+            // If both have track numbers, sort by track number
+            if((aTrack.notNil) and: (bTrack.notNil), {
+                aTrack < bTrack;
+            }, {
+                // If only one has track number, it comes first
+                if(aTrack.notNil, { true }, {
+                    if(bTrack.notNil, { false }, {
+                        // Neither has track number, sort alphabetically
+                        a.fileName.asString.toLower < b.fileName.asString.toLower;
+                    });
+                });
+            });
+        }, {
+            // Not both FLAC files, sort alphabetically
+            a.fileName.asString.toLower < b.fileName.asString.toLower;
+        });
+    });
+    
+    // Extract display names (hide extensions)
     files.collect({ |f| 
         var name = f.fileName.asString;
         var ext = f.extension;
@@ -361,7 +537,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             var endIdx = name.size - ext.asString.size - 2;
             if(endIdx >= 0, { name.copyRange(0, endIdx) }, { name });
         }, { name });
-    }).sort;
+    });
 };
 
 // Thin cyan border first, then file list above it (to keep list clickable)
@@ -394,6 +570,10 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             .items_(~buildFileList.value)
             .font_(Font("Arial", 12))
             .focusColor_(Color.clear)
+            .action_({ |view|
+                // Refresh artwork when track selection changes
+                if(~playerArtwork.notNil, { ~playerArtwork.refresh; });
+            })
             .background_(Color.black)
             .stringColor_(Color.cyan)
             .selectedStringColor_(Color.black)
@@ -3127,10 +3307,27 @@ AppClock.sched(0.1, {
             ~playerArtwork = UserView(~playerOverlay, Rect(20, 40, 180, 180))
                 .background_(Color.black)
                 .drawFunc_({ |view|
-                    var artworkPath;
+                    var artworkPath, currentTrackPath;
+                    "=== DRAW FUNC CALLED ===".postln;
                     if(~currentAlbumPath.notNil, {
-                        // Priority search for artwork files
-                        artworkPath = ~findArtworkFile.value(~currentAlbumPath);
+                        "=== INSIDE IF BLOCK ===".postln;
+                        // Get current track path if available
+                        currentTrackPath = if(~filePaths.notNil and: { ~filePaths.size > 0 } and: { ~fileList.notNil }, {
+                            var currentIdx = ~fileList.value ? 0;
+                            ~filePaths[currentIdx];
+                        });
+                        "=== AFTER currentTrackPath ASSIGNMENT ===".postln;
+                        // Debug output
+                        "Artwork debug - Album path: ".post; ~currentAlbumPath.postln;
+                        "Artwork debug - Current track: ".post; currentTrackPath.postln;
+                        "=== ABOUT TO CALL findArtworkFile ===".postln;
+                        // Priority search for artwork files (FLAC first, then folder)
+                        artworkPath = ~findArtworkFile.value(~currentAlbumPath, currentTrackPath);
+                        "=== AFTER findArtworkFile CALL ===".postln;
+                        "Artwork debug - Found artwork: ".post; artworkPath.postln;
+                        "Artwork debug - artworkPath type: ".post; artworkPath.class.postln;
+                        "Artwork debug - artworkPath isNil: ".post; artworkPath.isNil.postln;
+                        "Artwork debug - About to check if artworkPath.notNil".postln;
                         if(artworkPath.notNil, {
                             try {
                                 var image = Image.open(artworkPath);
