@@ -918,13 +918,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 
 
 // --- ENCODER/DECODER MENUS ---
-StaticText(mainView, Rect(180, 10, 140, 28))
+StaticText(mainView, Rect(180, 10, 154, 28))
     .string_("ENCODER")
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
-StaticText(mainView, Rect(360, 10, 140, 28))
+StaticText(mainView, Rect(346, 10, 154, 28))
     .string_("DECODER")
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
@@ -933,7 +933,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 // Encoder menu (Input format selection)
 ~emenu = EZPopUpMenu.new(
     mainView,
-    Rect(180, 45, 140, 35),
+    Rect(180, 45, 154, 35),
     "",
     [
         \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
@@ -1043,7 +1043,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 // Decoder menu (Output format selection) - dynamically built
 ~dmenu = EZPopUpMenu.new(
     mainView,
-    Rect(360, 45, 140, 35),
+    Rect(346, 45, 154, 35),
     "",
     ~buildDecoderMenu.value,
     globalAction: { |menu|
