@@ -472,6 +472,22 @@ else
     echo "MaplinMatrix already exists, skipping"
 fi
 
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinSM333" ]; then
+    echo "Installing MaplinSM333..."
+    cp -r MaplinSM333 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "MaplinSM333 installation completed"
+else
+    echo "MaplinSM333 already exists, skipping"
+fi
+
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/SFPlayerMeter" ]; then
+    echo "Installing SFPlayerMeter..."
+    cp -r SFPlayerMeter /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "SFPlayerMeter installation completed"
+else
+    echo "SFPlayerMeter already exists, skipping"
+fi
+
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
