@@ -480,13 +480,7 @@ else
     echo "MaplinSM333 already exists, skipping"
 fi
 
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/SFPlayerMeter" ]; then
-    echo "Installing SFPlayerMeter..."
-    cp -r SFPlayerMeter /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "SFPlayerMeter installation completed"
-else
-    echo "SFPlayerMeter already exists, skipping"
-fi
+# SFPlayerMeter is already installed in Step 6 (system-wide installation)
 
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
