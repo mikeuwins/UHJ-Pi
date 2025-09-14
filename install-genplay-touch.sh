@@ -252,7 +252,24 @@ else
     exit 1
 fi
 
-step_header "STEP 6/17: Setting up Audio and Device Permissions"
+step_header "STEP 6/17: Install SFPlayer Quark and Extensions"
+echo "Installing SFPlayer quark..."
+cd /home/$ACTUAL_USER
+sclang -u 57120 << 'EOF' >> $INSTALL_LOG 2>&1
+Quarks.install("SFPlayer");
+Quarks.install("ATK");
+Quarks.install("AmbiVerbSC");
+0.exit;
+EOF
+echo "✓ SFPlayer quark installed"
+
+echo "Installing UHJ-Pi extensions..."
+mkdir -p /usr/local/share/SuperCollider/Extensions
+cp -r /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions/* /usr/local/share/SuperCollider/Extensions/
+chown -R $ACTUAL_USER:$ACTUAL_USER /usr/local/share/SuperCollider/Extensions
+echo "✓ UHJ-Pi extensions installed"
+
+step_header "STEP 7/18: Setting up Audio and Device Permissions"
 echo "Setting up device permissions..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -267,7 +284,7 @@ EOF
 usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
 echo "✓ Audio configuration complete"
 
-step_header "STEP 7/17: Setting up SuperCollider Environment"
+step_header "STEP 8/18: Setting up SuperCollider Environment"
 echo "Checking UHJ-Pi application..."
 cd /home/$ACTUAL_USER
 
@@ -421,7 +438,7 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 # Custom UHJ test sounds will be installed after ATK sounds (step 10)
 
 # STEP 14: Install custom user classes
-step_header "STEP 8/17: Installing Custom User Classes"
+step_header "STEP 9/18: Installing Custom User Classes"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -459,7 +476,7 @@ fi
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 10: Install ATK kernels and matrices
-step_header "STEP 9/17: Installing ATK Kernels and Matrices"
+step_header "STEP 10/18: Installing ATK Kernels and Matrices"
 echo "Downloading ATK kernels and matrices..."
 cd /home/$ACTUAL_USER/.local/share/ATK
 
@@ -562,7 +579,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 10: Install Custom UHJ Test Sounds (after ATK sounds are downloaded and sounds/ directory exists)
-step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
+step_header "STEP 11/18: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -584,7 +601,7 @@ else
 fi
 
 # STEP 13: Install UHJ-Pi application files
-step_header "STEP 11/17: Installing UHJ-Pi Application Files"
+step_header "STEP 12/18: Installing UHJ-Pi Application Files"
 echo "Installing UHJ-Pi application files..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/app
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
@@ -592,7 +609,7 @@ sudo -u $ACTUAL_USER cp *.scd /home/$ACTUAL_USER/.local/share/SuperCollider/Exte
 echo "✓ UHJ-Pi application files installed"
 
 # STEP 14: Configure JACK audio
-step_header "STEP 12/17: Configuring JACK Audio"
+step_header "STEP 13/18: Configuring JACK Audio"
 echo "Configuring JACK audio..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.config/jack
 cat > /home/$ACTUAL_USER/.config/jack/jackdrc << 'EOF'
@@ -601,7 +618,7 @@ EOF
 echo "✓ JACK configuration complete"
 
 # STEP 15: Configure ALSA
-step_header "STEP 13/17: Configuring ALSA"
+step_header "STEP 14/18: Configuring ALSA"
 echo "Configuring ALSA..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
 cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
@@ -617,14 +634,14 @@ EOF
 echo "✓ ALSA configuration complete"
 
 # STEP 16: Configure Bluetooth
-step_header "STEP 14/17: Configuring Bluetooth"
+step_header "STEP 15/18: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
 # STEP 17: Configure Qt platform for headless operation
-step_header "STEP 15/17: Configuring Qt Platform for Headless Operation"
+step_header "STEP 16/18: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -654,7 +671,7 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-step_header "STEP 16/17: Installing Bluetooth Pairing Script"
+step_header "STEP 17/18: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
@@ -709,7 +726,7 @@ systemctl enable uhj-pi-autoboot.service
 echo "✓ Autoboot service configured"
 
 # STEP 23: Install utility scripts
-step_header "STEP 17/17: Installing Utility Scripts"
+step_header "STEP 18/18: Installing Utility Scripts"
 echo "Installing launcher scripts..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start
 cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start-live
