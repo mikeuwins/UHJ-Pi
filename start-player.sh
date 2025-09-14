@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-CONFIG_FILE="$HOME/.uhj-player-audio.conf"
 clear
-echo "Starting UHJ-Pi Player audio setup..."
-echo "Note: Input audio device is optional - works with output-only setups"
+echo "Starting UHJ-Pi Player Mode..."
+echo "Player Mode uses SuperCollider's built-in audio server"
 
 show_device_info() {
     local card_num=$1
@@ -276,50 +275,10 @@ detect_flac_devices() {
     echo ""
 }
 
-echo "Preparing audio system..."
-killall jackd >/dev/null 2>&1 || true
+echo "Preparing Player Mode..."
 killall sclang >/dev/null 2>&1 || true
-sleep 2
+sleep 1
 
-detect_flac_devices
-source "$CONFIG_FILE"
-
-echo "Starting audio system..."
-
-# Configure JACK based on whether we have input or not
-if [ -n "$INPUT_CARD" ] && [ "$INPUT_CARD" != "" ]; then
-    # Input and output on same or different cards
-    if [ "$INPUT_CARD" = "$OUTPUT_CARD" ]; then
-        jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
-    else
-        jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
-    fi
-else
-    # Output only
-    jackd -P75 -d alsa -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
-fi
-
-sleep 3
-if ! pgrep jackd > /dev/null; then
-    echo "ERROR: Audio system failed to start."
-    exit 1
-fi
-echo "✓ Audio system ready"
-
-# Set and export capability flags and input details to the app environment
-HAS_INPUT_GAIN=${HAS_INPUT_GAIN:-0}
-HAS_INPUT_MUTE=${HAS_INPUT_MUTE:-0}
-INPUT_CARD=${INPUT_CARD:-""}
-INPUT_SOURCE=${INPUT_SOURCE:-""}
-INPUT_CONTROL=${INPUT_CONTROL:-""}
-INPUT_PAIR=${INPUT_PAIR:-""}
-export HAS_INPUT_GAIN
-export HAS_INPUT_MUTE
-export INPUT_CARD
-export INPUT_SOURCE
-export INPUT_CONTROL
-export INPUT_PAIR
-
-# Launch SuperCollider application
 echo "Starting Player application..."
-exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v26_PLAYER_SF.scd"
+cd /home/$USER/UHJ-Pi
+exec sclang supercollider/app/UHJ_v26_PLAYER_SF.scd

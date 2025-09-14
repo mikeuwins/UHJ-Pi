@@ -147,33 +147,20 @@ packages=(
     "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
     "jackd2" "jack-tools" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
     "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
-    "dialog"
+    "dialog" "flac" "metaflac" "bluez" "bluez-tools"
 )
 
-# FLAC and audio utility packages for player mode
-flac_packages=(
-    "flac" "metaflac" "bluez" "bluez-tools"
-)
-
-total_packages=$((${#packages[@]} + ${#flac_packages[@]}))
+total_packages=${#packages[@]}
 current_package=0
 
-# Install main dependencies
+# Install all dependencies
 for package in "${packages[@]}"; do
     current_package=$((current_package + 1))
     show_progress $current_package $total_packages
     apt-get install -y "$package" >> $INSTALL_LOG 2>&1
 done
-
-# Install FLAC and audio utility dependencies
-echo "Installing FLAC and audio utility packages..."
-for package in "${flac_packages[@]}"; do
-    current_package=$((current_package + 1))
-    show_progress $current_package $total_packages
-    apt-get install -y "$package" >> $INSTALL_LOG 2>&1
-done
 echo
-echo "✓ All dependencies installed (including FLAC tools and audio utilities)"
+echo "✓ All dependencies installed"
 
 step_header "STEP 4/17: Clone SuperCollider"
 echo "Downloading SuperCollider source code..."
@@ -723,11 +710,16 @@ echo "✓ Autoboot service configured"
 
 # STEP 23: Install utility scripts
 step_header "STEP 17/17: Installing Utility Scripts"
-echo "Installing launcher script..."
+echo "Installing launcher scripts..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start
-chmod +x /usr/local/bin/start
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
-echo "Launcher script installed to /usr/local/bin/start"
+cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start-live
+cp /home/$ACTUAL_USER/UHJ-Pi/start-player.sh /usr/local/bin/start-player
+chmod +x /usr/local/bin/start /usr/local/bin/start-live /usr/local/bin/start-player
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start /usr/local/bin/start-live /usr/local/bin/start-player
+echo "Launcher scripts installed:"
+echo "  • /usr/local/bin/start (default - Live Input Mode)"
+echo "  • /usr/local/bin/start-live (Live Input Mode)"
+echo "  • /usr/local/bin/start-player (Player Mode)"
 
 echo "Installing utility scripts..."
 cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/
@@ -753,7 +745,11 @@ echo "   • ATK (Ambisonic Toolkit) + AmbiVerbSC extensions"
 echo "   • UHJ decoder with headtracker pairing support"
 echo ""
 echo "✅ Ready to use:"
-echo "   • Launcher: /usr/local/bin/start"
+echo "   • Default launcher: /usr/local/bin/start (Live Input Mode)"
+echo "   • Live Input Mode: /usr/local/bin/start-live"
+echo "   • Player Mode: /usr/local/bin/start-player"
+echo "   • Bluetooth setup: /usr/local/bin/ble-ht"
+echo "   • System reset: /usr/local/bin/reset-pi"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🚀 INSTALLATION COMPLETE - REBOOT REQUIRED"
