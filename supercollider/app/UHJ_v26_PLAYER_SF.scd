@@ -4238,8 +4238,9 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        "Rebooting system...".postln;
-        "sudo reboot".unixCmd;
+        "Switching to Live Input Mode...".postln;
+        "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
+        win.close;
     });
     
 // Add touch support only if touchscreen is available
@@ -4247,9 +4248,10 @@ if(Platform.case(\linux, { true }, { false })) {
     // Check if touchscreen is available by looking for touch devices
     var touchDevices = "ls /dev/input/by-path/ | grep touch".unixCmdGetStdOut;
     if(touchDevices.notEmpty) {
-        ~rebootBtn.touchBeginAction_({ |view, x, y, pressure, id|
-            "Rebooting system...".postln;
-            "sudo reboot".unixCmd;
+        ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
+            "Switching to Live Input Mode...".postln;
+            "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
+            win.close;
         });
     };
 };
