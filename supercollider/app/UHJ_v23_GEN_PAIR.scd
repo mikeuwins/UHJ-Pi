@@ -2940,6 +2940,9 @@ HIDdef.usage( \hidTumble, { |val|
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         "Switching to Player Mode...".postln;
+        // Clean up server before switching
+        s.quit;
+        0.5.wait;
         "/home/$USER/UHJ-Pi/start-player.sh".unixCmd;
         win.close;
     });
@@ -2951,6 +2954,9 @@ if(Platform.case(\linux, { true }, { false })) {
     if(touchDevices.notEmpty) {
         ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
             "Switching to Player Mode...".postln;
+            // Clean up server before switching
+            s.quit;
+            0.5.wait;
             "/home/$USER/UHJ-Pi/start-player.sh".unixCmd;
             win.close;
         });

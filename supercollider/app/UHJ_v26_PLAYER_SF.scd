@@ -1,9 +1,26 @@
 // ============================================================================
-// UHJ v25_SF - PSEUDO-SURROUND ENCODER WITH UNIFIED SFPlayerMeter
+// UHJ v26_PLAYER_SF - PSEUDO-SURROUND ENCODER WITH UNIFIED SFPlayerMeter
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
+
+// --- Server initialization ---
+s = Server.local;
+s.options.numOutputBusChannels = 8;
+s.options.numInputBusChannels = 2;
+s.options.sampleRate = 44100;
+s.options.blockSize = 1024;
+
+// Clean shutdown before starting
+s.quit;
+0.5.wait;
+
+// Boot the server
+s.boot;
+s.waitForBoot({
+    "Player Mode server ready".postln;
+});
 
 var win, mainView,
     decoderChanged,
@@ -4239,6 +4256,9 @@ HIDdef.usage( \hidTumble, { |val|
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         "Switching to Live Input Mode...".postln;
+        // Clean up server before switching
+        s.quit;
+        0.5.wait;
         "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
         win.close;
     });
@@ -4250,6 +4270,9 @@ if(Platform.case(\linux, { true }, { false })) {
     if(touchDevices.notEmpty) {
         ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
             "Switching to Live Input Mode...".postln;
+            // Clean up server before switching
+            s.quit;
+            0.5.wait;
             "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
             win.close;
         });
