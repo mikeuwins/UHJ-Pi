@@ -1,5 +1,5 @@
 // ============================================================================
-// UHJ v26_PLAYER_SF - PSEUDO-SURROUND ENCODER WITH UNIFIED SFPlayerMeter
+// UHJ v25_SF - PSEUDO-SURROUND ENCODER WITH UNIFIED SFPlayerMeter
 // ============================================================================
 
 // Using standard Knob class with custom 360-degree action handling
@@ -30,23 +30,6 @@ var win, mainView,
 ~powerBtnPressed = false;
 // --- Player button state storage ---
 ~savedPlayerPlayState = -1; ~savedPlayerLoopState = -1;
-
-// --- Server initialization ---
-s = Server.local;
-s.options.numOutputBusChannels = 8;
-s.options.numInputBusChannels = 2;
-s.options.sampleRate = 44100;
-s.options.blockSize = 1024;
-
-// Clean shutdown before starting
-s.quit;
-0.5.wait;
-
-// Boot the server
-s.boot;
-s.waitForBoot({
-    "Player Mode server ready".postln;
-});
 
 // --- Default album configuration ---
 // Change this to your preferred default album name (case-insensitive)
@@ -4255,14 +4238,8 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        "Switching to Live Input Mode...".postln;
-        // Clean up server before switching
-        s.quit;
-        // Use defer to avoid blocking the UI thread
-        AppClock.sched(0.5, {
-            "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
-            win.close;
-        });
+        "Rebooting system...".postln;
+        "sudo reboot".unixCmd;
     });
     
 // Add touch support only if touchscreen is available
@@ -4270,15 +4247,9 @@ if(Platform.case(\linux, { true }, { false })) {
     // Check if touchscreen is available by looking for touch devices
     var touchDevices = "ls /dev/input/by-path/ | grep touch".unixCmdGetStdOut;
     if(touchDevices.notEmpty) {
-        ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
-            "Switching to Live Input Mode...".postln;
-            // Clean up server before switching
-            s.quit;
-            // Use defer to avoid blocking the UI thread
-            AppClock.sched(0.5, {
-                "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
-                win.close;
-            });
+        ~rebootBtn.touchBeginAction_({ |view, x, y, pressure, id|
+            "Rebooting system...".postln;
+            "sudo reboot".unixCmd;
         });
     };
 };
