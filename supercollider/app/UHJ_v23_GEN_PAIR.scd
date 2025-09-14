@@ -2939,12 +2939,8 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        "Switching to Player Mode...".postln;
-        // Clean up server before switching
-        s.quit;
-        0.5.wait;
-        "/home/$USER/UHJ-Pi/start-player.sh".unixCmd;
-        win.close;
+        "Rebooting system...".postln;
+        "sudo reboot".unixCmd;
     });
     
 // Add touch support only if touchscreen is available
@@ -2952,13 +2948,9 @@ if(Platform.case(\linux, { true }, { false })) {
     // Check if touchscreen is available by looking for touch devices
     var touchDevices = "ls /dev/input/by-path/ | grep touch".unixCmdGetStdOut;
     if(touchDevices.notEmpty) {
-        ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
-            "Switching to Player Mode...".postln;
-            // Clean up server before switching
-            s.quit;
-            0.5.wait;
-            "/home/$USER/UHJ-Pi/start-player.sh".unixCmd;
-            win.close;
+        ~rebootBtn.touchBeginAction_({ |view, x, y, pressure, id|
+            "Rebooting system...".postln;
+            "sudo reboot".unixCmd;
         });
     };
 };

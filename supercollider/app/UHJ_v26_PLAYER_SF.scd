@@ -4258,9 +4258,11 @@ HIDdef.usage( \hidTumble, { |val|
         "Switching to Live Input Mode...".postln;
         // Clean up server before switching
         s.quit;
-        0.5.wait;
-        "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
-        win.close;
+        // Use defer to avoid blocking the UI thread
+        AppClock.sched(0.5, {
+            "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
+            win.close;
+        });
     });
     
 // Add touch support only if touchscreen is available
@@ -4272,9 +4274,11 @@ if(Platform.case(\linux, { true }, { false })) {
             "Switching to Live Input Mode...".postln;
             // Clean up server before switching
             s.quit;
-            0.5.wait;
-            "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
-            win.close;
+            // Use defer to avoid blocking the UI thread
+            AppClock.sched(0.5, {
+                "/home/$USER/UHJ-Pi/start-live.sh".unixCmd;
+                win.close;
+            });
         });
     };
 };
