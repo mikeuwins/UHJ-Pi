@@ -275,16 +275,41 @@ detect_flac_devices() {
     echo ""
 }
 
-# Configuration file path
-CONFIG_FILE="/tmp/uhj-pi-config"
+CONFIG_FILE="$HOME/.uhj-generic-audio.conf"
 
-# Detect audio devices (output required, input optional)
-detect_flac_devices
-
-echo "Preparing Player Mode..."
+echo "Preparing audio system..."
+killall jackd >/dev/null 2>&1 || true
 killall sclang >/dev/null 2>&1 || true
-sleep 1
+sleep 2
 
+detect_generic_devices
+source "$CONFIG_FILE"
+
+echo "Starting audio system..."
+
+jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 1024 -n 3 -S >/dev/null 2>&1 &
+sleep 3
+if ! pgrep jackd > /dev/null; then
+    echo "ERROR: Audio system failed to start."
+    exit 1
+fi
+echo "✓ Audio system ready"
+
+# Set and export capability flags and input details to the app environment
+HAS_INPUT_GAIN=$has_input_gain
+HAS_INPUT_MUTE=$has_input_mute
+INPUT_CARD=$input_card
+INPUT_SOURCE=$input_source
+INPUT_CONTROL=$input_control
+INPUT_PAIR=$input_pair
+export HAS_INPUT_GAIN
+export HAS_INPUT_MUTE
+export INPUT_CARD
+export INPUT_SOURCE
+export INPUT_CONTROL
+export INPUT_PAIR
+
+# Launch SuperCollider application
 echo "Starting Player application..."
 cd /home/$USER/UHJ-Pi
 exec sclang supercollider/app/UHJ_v26_PLAYER_SF.scd
