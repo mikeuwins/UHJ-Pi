@@ -1227,7 +1227,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     ("echo 'Audio volume controlled by output interface'").postln;
                     // Create player bus and start SFPlayer
                     ~playerBus = Bus.audio(s, 2);
-                    ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Various/AJH_eight-positions-uhj.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
+                    // ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Various/AJH_eight-positions-uhj.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
                     ~sfp.loop = false;
                     // Don't start playback yet - wait for main synth to be ready 
                     
@@ -1445,7 +1445,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
                             // Stop existing SFPlayer if it exists
                             if(~sfp.notNil, { ~sfp.stop; });
-                            ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
+                            // ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false).gui;
                             ~sfp.loop = false;
                         });
                         
