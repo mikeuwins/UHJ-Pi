@@ -275,6 +275,12 @@ detect_flac_devices() {
     echo ""
 }
 
+# Configuration file path
+CONFIG_FILE="/tmp/uhj-pi-config"
+
+# Detect audio devices (output required, input optional)
+detect_flac_devices
+
 echo "Preparing Player Mode..."
 killall sclang >/dev/null 2>&1 || true
 sleep 1
