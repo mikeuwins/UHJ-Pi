@@ -1,8 +1,8 @@
 #!/bin/bash
 
+
 # UHJ-Pi Raspberry Pi Setup Script - Generic Touch Version (Live Input + Player)
 # Unified installer supporting both live input and FLAC player modes
-
 
 # Progress bar function
 show_progress() {
@@ -140,20 +140,18 @@ if [ -f /etc/security/limits.conf ]; then
     fi
 fi
 
-# Main packages for SuperCollider and audio development
+# List of packages to install
 packages=(
     "build-essential" "cmake" "libjack-jackd2-dev" "libsndfile1-dev"
     "libfftw3-dev" "libxt-dev" "libavahi-client-dev" "libudev-dev" 
     "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
-    "jackd2" "jack-tools" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
+    "jackd2" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
     "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
-    "dialog" "flac" "metaflac" "bluez" "bluez-tools"
 )
 
 total_packages=${#packages[@]}
 current_package=0
 
-# Install all dependencies
 for package in "${packages[@]}"; do
     current_package=$((current_package + 1))
     show_progress $current_package $total_packages
@@ -252,41 +250,7 @@ else
     exit 1
 fi
 
-step_header "STEP 6/17: Install SFPlayer Quark and Extensions"
-echo "Installing SFPlayer quark..."
-cd /home/$ACTUAL_USER
-echo -n "Installing SFPlayer quark "
-sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
-Quarks.install("SFPlayer");
-0.exit;
-EOF' >> $INSTALL_LOG 2>&1 &
-QUARK_PID=$!
-while kill -0 $QUARK_PID 2>/dev/null; do
-    echo -n "."
-    sleep 1
-done
-wait $QUARK_PID
-if [ $? -eq 0 ]; then
-    echo "✓ SFPlayer quark installed"
-else
-    echo "✗ SFPlayer quark installation failed - check $INSTALL_LOG"
-    exit 1
-fi
-
-echo "Installing UHJ-Pi extensions..."
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
-
-# Check if extensions directory exists
-if [ ! -d "/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions" ]; then
-    echo "✗ Extensions directory not found: /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
-    exit 1
-fi
-
-# Copy extensions
-cp -r /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions/* /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-echo "✓ UHJ-Pi extensions installed (including SFPlayerMeter)"
-
-step_header "STEP 7/18: Setting up Audio and Device Permissions"
+step_header "STEP 6/17: Setting up Audio and Device Permissions"
 echo "Setting up device permissions..."
 cat > /etc/udev/rules.d/99-phonorama.rules << 'EOF'
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="plugdev", MODE="0660"
@@ -301,7 +265,7 @@ EOF
 usermod -aG audio,plugdev $ACTUAL_USER > /dev/null 2>&1
 echo "✓ Audio configuration complete"
 
-step_header "STEP 8/18: Setting up SuperCollider Environment"
+step_header "STEP 7/17: Setting up SuperCollider Environment"
 echo "Checking UHJ-Pi application..."
 cd /home/$ACTUAL_USER
 
@@ -343,8 +307,8 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/down
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
-# Install ATK, AmbiVerbSC, and SFPlayer using Quark system (handles dependencies automatically)
-echo "Installing ATK, AmbiVerbSC, and SFPlayer using Quark system..."
+# Install ATK and AmbiVerbSC using Quark system (handles dependencies automatically)
+echo "Installing ATK and AmbiVerbSC using Quark system..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
 # Install ATK using Quark system (includes all dependencies)
@@ -460,10 +424,6 @@ if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
     echo "Moved AmbiVerbSC to Extensions"
 fi
-if [ -d "downloaded-quarks/SFPlayer" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/SFPlayer Extensions/
-    echo "Moved SFPlayer to Extensions"
-fi
 
 # Set proper ownership for Extensions
 echo "Setting proper ownership for Extensions..."
@@ -478,7 +438,7 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 # Custom UHJ test sounds will be installed after ATK sounds (step 10)
 
 # STEP 14: Install custom user classes
-step_header "STEP 9/18: Installing Custom User Classes"
+step_header "STEP 8/17: Installing Custom User Classes"
 echo "Installing custom user classes..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
 
@@ -512,14 +472,6 @@ else
     echo "MaplinMatrix already exists, skipping"
 fi
 
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinSM333" ]; then
-    echo "Installing MaplinSM333..."
-    cp -r MaplinSM333 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "MaplinSM333 installation completed"
-else
-    echo "MaplinSM333 already exists, skipping"
-fi
-
 if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/SFPlayerMeter" ]; then
     echo "Installing SFPlayerMeter..."
     cp -r SFPlayerMeter /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
@@ -532,7 +484,7 @@ fi
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 10: Install ATK kernels and matrices
-step_header "STEP 10/18: Installing ATK Kernels and Matrices"
+step_header "STEP 9/17: Installing ATK Kernels and Matrices"
 echo "Downloading ATK kernels and matrices..."
 cd /home/$ACTUAL_USER/.local/share/ATK
 
@@ -624,10 +576,6 @@ if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
     echo "Moved AmbiVerbSC to Extensions"
 fi
-if [ -d "downloaded-quarks/SFPlayer" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/SFPlayer Extensions/
-    echo "Moved SFPlayer to Extensions"
-fi
 
 # Set proper ownership for Extensions
 echo "Setting proper ownership for Extensions..."
@@ -639,7 +587,7 @@ sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 # STEP 10: Install Custom UHJ Test Sounds (after ATK sounds are downloaded and sounds/ directory exists)
-step_header "STEP 11/18: Installing Custom UHJ Test Sounds"
+step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
@@ -661,7 +609,7 @@ else
 fi
 
 # STEP 13: Install UHJ-Pi application files
-step_header "STEP 12/18: Installing UHJ-Pi Application Files"
+step_header "STEP 11/17: Installing UHJ-Pi Application Files"
 echo "Installing UHJ-Pi application files..."
 cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/app
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
@@ -669,7 +617,7 @@ sudo -u $ACTUAL_USER cp *.scd /home/$ACTUAL_USER/.local/share/SuperCollider/Exte
 echo "✓ UHJ-Pi application files installed"
 
 # STEP 14: Configure JACK audio
-step_header "STEP 13/18: Configuring JACK Audio"
+step_header "STEP 12/17: Configuring JACK Audio"
 echo "Configuring JACK audio..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.config/jack
 cat > /home/$ACTUAL_USER/.config/jack/jackdrc << 'EOF'
@@ -678,7 +626,7 @@ EOF
 echo "✓ JACK configuration complete"
 
 # STEP 15: Configure ALSA
-step_header "STEP 14/18: Configuring ALSA"
+step_header "STEP 13/17: Configuring ALSA"
 echo "Configuring ALSA..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.asoundrc
 cat > /home/$ACTUAL_USER/.asoundrc << 'EOF'
@@ -694,14 +642,14 @@ EOF
 echo "✓ ALSA configuration complete"
 
 # STEP 16: Configure Bluetooth
-step_header "STEP 15/18: Configuring Bluetooth"
+step_header "STEP 14/17: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
 # STEP 17: Configure Qt platform for headless operation
-step_header "STEP 16/18: Configuring Qt Platform for Headless Operation"
+step_header "STEP 15/17: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -731,30 +679,12 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-step_header "STEP 17/18: Installing Bluetooth Pairing Script"
+step_header "STEP 16/17: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
-
-echo "Installing system scripts..."
-cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
-chmod +x /usr/local/bin/reset-pi
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
-
-cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start-live
-chmod +x /usr/local/bin/start-live
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-live
-
-cp /home/$ACTUAL_USER/UHJ-Pi/start-player.sh /usr/local/bin/start-player
-chmod +x /usr/local/bin/start-player
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-player
-
-cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start
-chmod +x /usr/local/bin/start
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
-echo "System scripts installed to /usr/local/bin/"
 
 # Configure passwordless sudo for reboot
 echo "Configuring passwordless sudo for reboot..."
@@ -762,8 +692,8 @@ echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-re
 chmod 440 /etc/sudoers.d/uhj-pi-reboot
 echo "✓ Passwordless reboot configured"
 
-# Configure automatic login and autoboot
-echo "Configuring automatic login and autoboot..."
+# Configure automatic login
+echo "Configuring automatic login..."
 if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then
     echo "Automatic login already configured"
 else
@@ -777,35 +707,26 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-# Create autoboot service for UHJ-Pi menu
-echo "Creating autoboot service..."
-cat > /etc/systemd/system/uhj-pi-autoboot.service << EOF
-[Unit]
-Description=UHJ-Pi Audio System Autoboot
-After=graphical.target
-Wants=graphical.target
+# STEP 23: Install launcher script
+step_header "STEP 17/17: Installing Launcher Script"
+echo "Installing launcher script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/start-gen.sh /usr/local/bin/start
+chmod +x /usr/local/bin/start
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
+echo "Launcher script installed to /usr/local/bin/start"
 
-[Service]
-Type=simple
-User=$ACTUAL_USER
-WorkingDirectory=/home/$ACTUAL_USER
-ExecStart=/usr/local/bin/start
-Restart=no
-StandardOutput=journal
-StandardError=journal
+cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
+chmod +x /usr/local/bin/reset-pi
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
 
-[Install]
-WantedBy=graphical.target
-EOF
+cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start-live
+chmod +x /usr/local/bin/start-live
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-live
 
-# Enable the autoboot service
-systemctl daemon-reload
-systemctl enable uhj-pi-autoboot.service
-echo "✓ Autoboot service configured"
-
-# STEP 18: Installation Complete
-step_header "STEP 18/18: Installation Complete"
-echo "All scripts and utilities have been installed."
+cp /home/$ACTUAL_USER/UHJ-Pi/start-player.sh /usr/local/bin/start-player
+chmod +x /usr/local/bin/start-player
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-player
+echo "Additional scripts installed to /usr/local/bin/"
 
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -829,7 +750,6 @@ echo "✅ Ready to use:"
 echo "   • Default launcher: /usr/local/bin/start (Live Input Mode)"
 echo "   • Live Input Mode: /usr/local/bin/start-live"
 echo "   • Player Mode: /usr/local/bin/start-player"
-echo "   • Bluetooth setup: /usr/local/bin/ble-ht"
 echo "   • System reset: /usr/local/bin/reset-pi"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
