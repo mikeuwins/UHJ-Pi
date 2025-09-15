@@ -596,10 +596,18 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 # STEP 10: Install Custom UHJ Test Sounds (after ATK sounds are downloaded and sounds/ directory exists)
 step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/
+# Create ATK sounds directory structure
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/Various
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/RHOMBUS
+
+# Copy audio samples to correct ATK location
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/Various/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/Various/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/Various/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/Various/
+
+# Copy all other UHJ samples to Various folder
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/*.wav /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ATK/sounds/uhj/Various/
 echo "Custom UHJ test sounds installed successfully"
 
 # Move custom sounds to sounds subdirectory (now that it exists from ATK sounds download)
