@@ -217,6 +217,10 @@ detect_generic_devices() {
             
             # Find the capture source control name dynamically
             capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
+            # Special handling for Audio7D which uses "PCM Capture Source"
+            if [ -z "$capture_source_control" ]; then
+                capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "pcm capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
+            fi
             if [ -n "$capture_source_control" ]; then
                 echo "Setting $capture_source_control to: $input_source"
                 amixer -c "$input_card" sset "$capture_source_control" "$input_source" >/dev/null 2>&1 || true
