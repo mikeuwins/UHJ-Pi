@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # UHJ-Pi Raspberry Pi Setup Script - Generic Touch Version (Live Input + Player)
 # Unified installer supporting both live input and FLAC player modes
 
@@ -424,6 +423,10 @@ if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
     echo "Moved AmbiVerbSC to Extensions"
 fi
+if [ -d "downloaded-quarks/SFPlayer" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SFPlayer Extensions/
+    echo "Moved SFPlayer to Extensions"
+fi
 
 # Set proper ownership for Extensions
 echo "Setting proper ownership for Extensions..."
@@ -575,6 +578,10 @@ fi
 if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
     echo "Moved AmbiVerbSC to Extensions"
+fi
+if [ -d "downloaded-quarks/SFPlayer" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SFPlayer Extensions/
+    echo "Moved SFPlayer to Extensions"
 fi
 
 # Set proper ownership for Extensions
