@@ -2,8 +2,8 @@
 
 CONFIG_FILE="$HOME/.uhj-generic-audio.conf"
 
+clear
 echo "Starting UHJ-Pi in Live Input Mode..."
-echo "Press the X button in the app to switch to Player Mode"
 echo ""
 echo "Starting UHJ-Pi live input audio setup..."
 
