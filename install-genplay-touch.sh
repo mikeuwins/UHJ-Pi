@@ -767,9 +767,9 @@ echo "  • /usr/local/bin/start-live (Live Input Mode)"
 echo "  • /usr/local/bin/start-player (Player Mode)"
 
 echo "Installing utility scripts..."
-cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/
-chmod +x /usr/local/bin/reset-pi.sh
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi.sh
+cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
+chmod +x /usr/local/bin/reset-pi
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
 echo "Utility scripts installed"
 
 clear
