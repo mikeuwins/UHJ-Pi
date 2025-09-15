@@ -146,6 +146,7 @@ packages=(
     "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
     "jackd2" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
     "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
+    "dialog" "flac" "metaflac" "bluez" "bluez-tools"
 )
 
 total_packages=${#packages[@]}
@@ -656,15 +657,28 @@ ctl.!default {
 EOF
 echo "✓ ALSA configuration complete"
 
-# STEP 16: Configure Bluetooth
-step_header "STEP 14/17: Configuring Bluetooth"
+# STEP 16: Configure USB Auto-mounting and Bluetooth
+step_header "STEP 14/17: Configuring USB Auto-mounting and Bluetooth"
+echo "Installing USB auto-mounting..."
+apt-get install -y udisks2 >> $INSTALL_LOG 2>&1
+systemctl enable udisks2 >> $INSTALL_LOG 2>&1
+systemctl start udisks2 >> $INSTALL_LOG 2>&1
+
+# Create udev rule for USB auto-mounting
+cat > /etc/udev/rules.d/99-usb-automount.rules << EOF
+# Auto-mount USB drives
+KERNEL=="sd[a-z][0-9]*", SUBSYSTEM=="block", ACTION=="add", RUN+="/usr/bin/udisksctl mount -b /dev/%k"
+EOF
+udevadm control --reload-rules
+echo "✓ USB auto-mounting configured"
+
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
-# STEP 17: Configure Qt platform for headless operation
-step_header "STEP 15/17: Configuring Qt Platform for Headless Operation"
+# STEP 18: Configure Qt platform for headless operation
+step_header "STEP 16/18: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
