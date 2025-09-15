@@ -255,19 +255,29 @@ fi
 step_header "STEP 6/17: Install SFPlayer Quark and Extensions"
 echo "Installing SFPlayer quark..."
 cd /home/$ACTUAL_USER
-sclang -u 57120 << 'EOF' >> $INSTALL_LOG 2>&1
+echo -n "Installing SFPlayer quark "
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
 Quarks.install("SFPlayer");
-Quarks.install("ATK");
-Quarks.install("AmbiVerbSC");
 0.exit;
-EOF
-echo "✓ SFPlayer quark installed"
+EOF' >> $INSTALL_LOG 2>&1 &
+QUARK_PID=$!
+while kill -0 $QUARK_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
+wait $QUARK_PID
+if [ $? -eq 0 ]; then
+    echo "✓ SFPlayer quark installed"
+else
+    echo "✗ SFPlayer quark installation failed - check $INSTALL_LOG"
+    exit 1
+fi
 
 echo "Installing UHJ-Pi extensions..."
 mkdir -p /usr/local/share/SuperCollider/Extensions
 cp -r /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions/* /usr/local/share/SuperCollider/Extensions/
 chown -R $ACTUAL_USER:$ACTUAL_USER /usr/local/share/SuperCollider/Extensions
-echo "✓ UHJ-Pi extensions installed"
+echo "✓ UHJ-Pi extensions installed (including SFPlayerMeter)"
 
 step_header "STEP 7/18: Setting up Audio and Device Permissions"
 echo "Setting up device permissions..."
@@ -424,6 +434,10 @@ if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
     echo "Moved AmbiVerbSC to Extensions"
 fi
+if [ -d "downloaded-quarks/SFPlayer" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SFPlayer Extensions/
+    echo "Moved SFPlayer to Extensions"
+fi
 
 # Set proper ownership for Extensions
 echo "Setting proper ownership for Extensions..."
@@ -577,6 +591,10 @@ fi
 if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
     sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
     echo "Moved AmbiVerbSC to Extensions"
+fi
+if [ -d "downloaded-quarks/SFPlayer" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SFPlayer Extensions/
+    echo "Moved SFPlayer to Extensions"
 fi
 
 # Set proper ownership for Extensions
@@ -768,6 +786,7 @@ echo "   • Optimized for turntable input + any USB audio output"
 echo ""
 echo "✅ SuperCollider:"
 echo "   • SuperCollider with Qt GUI support"
+echo "   • SFPlayer quark for FLAC playback"
 echo "   • ATK (Ambisonic Toolkit) + AmbiVerbSC extensions"
 echo "   • UHJ decoder with headtracker pairing support"
 echo ""
