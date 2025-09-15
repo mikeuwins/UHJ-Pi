@@ -497,9 +497,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         };
     });
 
-    paths = files.collect(_.fullPath);
-    ~filePaths = paths; // store as strings
-    
     // Sort files by FLAC track number if available, otherwise by filename
     files = files.sort({ |a, b|
         var aTrack, bTrack, aExt, bExt;
@@ -528,6 +525,9 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             a.fileName.asString.toLower < b.fileName.asString.toLower;
         });
     });
+    
+    // Store sorted file paths after sorting
+    ~filePaths = files.collect(_.fullPath);
     
     // Extract display names (hide extensions)
     files.collect({ |f| 
