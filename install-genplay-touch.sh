@@ -275,6 +275,14 @@ fi
 
 echo "Installing UHJ-Pi extensions..."
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
+
+# Check if extensions directory exists
+if [ ! -d "/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions" ]; then
+    echo "✗ Extensions directory not found: /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
+    exit 1
+fi
+
+# Copy extensions
 cp -r /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions/* /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 echo "✓ UHJ-Pi extensions installed (including SFPlayerMeter)"
 
@@ -335,8 +343,8 @@ sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/down
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
-# Install ATK and AmbiVerbSC using Quark system (handles dependencies automatically)
-echo "Installing ATK and AmbiVerbSC using Quark system..."
+# Install ATK, AmbiVerbSC, and SFPlayer using Quark system (handles dependencies automatically)
+echo "Installing ATK, AmbiVerbSC, and SFPlayer using Quark system..."
 cd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
 
 # Install ATK using Quark system (includes all dependencies)
@@ -374,6 +382,25 @@ if [ $? -eq 0 ]; then
     echo "✓ AmbiVerbSC quark installed"
 else
     echo "✗ AmbiVerbSC quark installation failed - check $INSTALL_LOG"
+    exit 1
+fi
+
+# Install SFPlayer using Quark system
+echo -n "Installing SFPlayer quark "
+sudo -u $ACTUAL_USER bash -c 'export QT_QPA_PLATFORM=offscreen; sclang -l /dev/null << EOF
+Quarks.install("SFPlayer");
+0.exit;
+EOF' >> $INSTALL_LOG 2>&1 &
+QUARK_PID=$!
+while kill -0 $QUARK_PID 2>/dev/null; do
+    echo -n "."
+    sleep 1
+done
+wait $QUARK_PID
+if [ $? -eq 0 ]; then
+    echo "✓ SFPlayer quark installed"
+else
+    echo "✗ SFPlayer quark installation failed - check $INSTALL_LOG"
     exit 1
 fi
 
@@ -493,7 +520,13 @@ else
     echo "MaplinSM333 already exists, skipping"
 fi
 
-# SFPlayerMeter is already installed in Step 6 (system-wide installation)
+if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/SFPlayerMeter" ]; then
+    echo "Installing SFPlayerMeter..."
+    cp -r SFPlayerMeter /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+    echo "SFPlayerMeter installation completed"
+else
+    echo "SFPlayerMeter already exists, skipping"
+fi
 
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
@@ -705,6 +738,24 @@ chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
+echo "Installing system scripts..."
+cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
+chmod +x /usr/local/bin/reset-pi
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
+
+cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start-live
+chmod +x /usr/local/bin/start-live
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-live
+
+cp /home/$ACTUAL_USER/UHJ-Pi/start-player.sh /usr/local/bin/start-player
+chmod +x /usr/local/bin/start-player
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-player
+
+cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start
+chmod +x /usr/local/bin/start
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
+echo "System scripts installed to /usr/local/bin/"
+
 # Configure passwordless sudo for reboot
 echo "Configuring passwordless sudo for reboot..."
 echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-reboot
@@ -752,24 +803,9 @@ systemctl daemon-reload
 systemctl enable uhj-pi-autoboot.service
 echo "✓ Autoboot service configured"
 
-# STEP 23: Install utility scripts
-step_header "STEP 18/18: Installing Utility Scripts"
-echo "Installing launcher scripts..."
-cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start
-cp /home/$ACTUAL_USER/UHJ-Pi/start-live.sh /usr/local/bin/start-live
-cp /home/$ACTUAL_USER/UHJ-Pi/start-player.sh /usr/local/bin/start-player
-chmod +x /usr/local/bin/start /usr/local/bin/start-live /usr/local/bin/start-player
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start /usr/local/bin/start-live /usr/local/bin/start-player
-echo "Launcher scripts installed:"
-echo "  • /usr/local/bin/start (default - Live Input Mode)"
-echo "  • /usr/local/bin/start-live (Live Input Mode)"
-echo "  • /usr/local/bin/start-player (Player Mode)"
-
-echo "Installing utility scripts..."
-cp /home/$ACTUAL_USER/UHJ-Pi/reset-pi.sh /usr/local/bin/reset-pi
-chmod +x /usr/local/bin/reset-pi
-chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/reset-pi
-echo "Utility scripts installed"
+# STEP 18: Installation Complete
+step_header "STEP 18/18: Installation Complete"
+echo "All scripts and utilities have been installed."
 
 clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
