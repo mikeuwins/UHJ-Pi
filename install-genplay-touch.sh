@@ -274,9 +274,8 @@ else
 fi
 
 echo "Installing UHJ-Pi extensions..."
-mkdir -p /usr/local/share/SuperCollider/Extensions
-cp -r /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions/* /usr/local/share/SuperCollider/Extensions/
-chown -R $ACTUAL_USER:$ACTUAL_USER /usr/local/share/SuperCollider/Extensions
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions
+cp -r /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions/* /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 echo "✓ UHJ-Pi extensions installed (including SFPlayerMeter)"
 
 step_header "STEP 7/18: Setting up Audio and Device Permissions"
