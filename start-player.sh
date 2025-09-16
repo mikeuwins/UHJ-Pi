@@ -2,7 +2,6 @@
 
 clear
 echo "Starting UHJ-Pi Player Mode..."
-echo "Player Mode uses SuperCollider's built-in audio server"
 
 show_device_info() {
     local card_num=$1
