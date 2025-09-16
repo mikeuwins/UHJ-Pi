@@ -778,7 +778,18 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     var folders;
     
     if(usbBase == "/tmp/", {
-        // No USB drive detected
+        // No USB drive detected - try to mount USB drives
+        "No USB drive detected. Attempting to mount USB drives...".postln;
+        ("/usr/local/bin/mount-usb").unixCmd({ |result|
+            "Mount USB script completed with result: ".post; result.postln;
+            // Re-detect USB drives after mounting attempt
+            usbBase = ~detectUSBDir.value;
+            if(usbBase != "/tmp/", {
+                "USB drive mounted successfully!".postln;
+            }, {
+                "No USB drives found after mount attempt.".postln;
+            });
+        });
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - look inside it for artist folders (ignore drive name)

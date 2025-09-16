@@ -727,6 +727,10 @@ chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-live
 cp /home/$ACTUAL_USER/UHJ-Pi/start-player.sh /usr/local/bin/start-player
 chmod +x /usr/local/bin/start-player
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start-player
+
+cp /home/$ACTUAL_USER/UHJ-Pi/mount-usb.sh /usr/local/bin/mount-usb
+chmod +x /usr/local/bin/mount-usb
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/mount-usb
 echo "Additional scripts installed to /usr/local/bin/"
 
 clear
