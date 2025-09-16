@@ -5,10 +5,10 @@
 
 echo "Scanning for USB drives..."
 
-# Get current user info
-USER_NAME=$(whoami)
-USER_UID=$(id -u)
-USER_GID=$(id -g)
+# Get current user info (use SUDO_USER if running with sudo, otherwise whoami)
+USER_NAME=${SUDO_USER:-$(whoami)}
+USER_UID=$(id -u $USER_NAME)
+USER_GID=$(id -g $USER_NAME)
 
 # Find USB block devices
 USB_DEVICES=$(lsblk -no NAME,TYPE,MOUNTPOINT | grep -E "sd[a-z][0-9]*.*part" | grep -v "/")
