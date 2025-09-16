@@ -95,7 +95,7 @@ var win, mainView,
                         if(looseFiles.size > 0, {
                             foundAlbum = "<NO ALBUMS>";
                         }, {
-                            foundAlbum = "<NO ALBUMS>";
+                            foundAlbum = "<EMPTY>";
                         });
                     });
                 });
@@ -2227,10 +2227,10 @@ win.front;
                 };
                 // Fallback if nothing found
                 if(albumList.isEmpty) {
-                    albumList = ["..."];
+                    albumList = ["<NO ALBUMS>"];
                 };
             }, {
-                albumList = ["..."];
+                albumList = ["<NO ALBUMS>"];
             });
             
             ~albumMenu.items_(albumList);
@@ -2265,10 +2265,10 @@ win.front;
                 };
                 // Fallback if nothing found
                 if(albumList.isEmpty) {
-                    albumList = ["..."];
+                    albumList = ["<NO ALBUMS>"];
                 };
             }, {
-                albumList = ["..."];
+                albumList = ["<NO ALBUMS>"];
             });
             ~albumMenu.items_(albumList);
             ~albumMenu.value_(0);
@@ -2306,7 +2306,7 @@ win.front;
             if(isUSB, {
                 // USB mode - show actual albums/folders in selected artist directory
                 case 
-                { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
+                { artistName == "<NO DRIVE>" } { albumList = ["<NO ALBUMS>"]; }
                 {
                     // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
                     var usbBase = ~detectUSBDir.value;
@@ -2333,16 +2333,16 @@ win.front;
                         };
                         // Fallback if nothing found
                         if(albumList.isEmpty) {
-                            albumList = ["..."];
+                            albumList = ["<NO ALBUMS>"];
                         };
                     }, {
-                        albumList = ["..."];
+                        albumList = ["<NO ALBUMS>"];
                     });
                 };
             }, {
                 // ATK mode - show actual albums/folders in selected artist directory
                 case 
-                { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
+                { artistName == "<NO DRIVE>" } { albumList = ["<NO ALBUMS>"]; }
                 {
                     // Get actual subdirectories in the artist folder (ATK base is the uhj folder directly)
                     var atkBase = Atk.userSoundsDir ++ "/uhj";
@@ -2371,10 +2371,10 @@ win.front;
                         };
                         // Fallback if nothing found
                         if(albumList.isEmpty) {
-                            albumList = ["..."];
+                            albumList = ["<NO ALBUMS>"];
                         };
                     }, {
-                        albumList = ["..."];
+                        albumList = ["<NO ALBUMS>"];
                     });
                 };
             });
