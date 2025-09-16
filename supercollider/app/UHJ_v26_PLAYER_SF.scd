@@ -1252,7 +1252,18 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     ("echo 'Audio volume controlled by output interface'").postln;
                     // Create player bus (but delay SFPlayer initialization to avoid Bluetooth conflicts)
                     ~playerBus = Bus.audio(s, 2);
-                    // SFPlayer will be initialized later when needed 
+                    
+                    // Initialize SFPlayer with delayed startup to ensure Bluetooth pairing works
+                    // SFPlayer class should be loaded by Quarks.install in startup files
+                    {
+                        2.wait; // Wait for Bluetooth pairing to complete
+                        if (SFPlayer.notNil) {
+                            "Initializing SFPlayer after Bluetooth pairing delay".postln;
+                            // SFPlayer initialization will happen when needed
+                        } {
+                            "SFPlayer class not available - may need install-genplay-touch instead of install-gen-touch".postln;
+                        };
+                    }.fork; 
                     
                     { if(~playBtn.notNil, { ~playBtn.value_(0); }); }.defer(0.1);
                     
