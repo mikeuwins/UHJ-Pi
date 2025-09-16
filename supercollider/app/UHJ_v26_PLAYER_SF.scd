@@ -757,9 +757,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                     // Exclude common system mount points
                     entry.folderName != "root" and: 
                     entry.folderName != Platform.userHomeDir.basename and:
-                    entry.folderName != "pi" and:
-                    // Only include directories that have content (not empty system mounts)
-                    PathName(entry.fullPath).entries.size > 0
+                    entry.folderName != "pi"
                 }
             };
             if(dirs.size > 0, {
