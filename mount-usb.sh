@@ -34,8 +34,21 @@ echo "$USB_DEVICES" | while read -r device_info; do
     mount_point="/media/$USER_NAME/$device_name"
     sudo mkdir -p "$mount_point"
     
+    # Detect filesystem type and mount with appropriate options
+    local fs_type=$(sudo blkid -o value -s TYPE "$device_path" 2>/dev/null || echo "unknown")
+    echo "Detected filesystem: $fs_type"
+    
+    local mount_options=""
+    if [ "$fs_type" = "vfat" ] || [ "$fs_type" = "msdos" ]; then
+        # VFAT/FAT32 needs different options
+        mount_options="uid=$USER_UID,gid=$USER_GID,umask=000,utf8"
+    else
+        # Other filesystems (ext4, ntfs, etc.)
+        mount_options="uid=$USER_UID,gid=$USER_GID,fmask=022,dmask=022"
+    fi
+    
     # Mount with proper permissions
-    if sudo mount -o uid=$USER_UID,gid=$USER_GID,fmask=022,dmask=022 "$device_path" "$mount_point"; then
+    if sudo mount -o "$mount_options" "$device_path" "$mount_point"; then
         echo "✓ Successfully mounted $device_path at $mount_point"
         
         # Make sure the user owns the mount point
