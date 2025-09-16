@@ -486,6 +486,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         albumPath = "/tmp/";
     });
     
+    "DEBUG: Scanning album path: ".post; albumPath.postln;
     pn = PathName(albumPath);
     if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
     
