@@ -1749,16 +1749,6 @@ dbValue = cliToDbMaster.(lastInL);
 // Start audio engine with initial configuration after a short delay
 {
     ~initAudioEngine.value();
-    
-    // Initialize SFPlayer after a longer delay to allow Bluetooth to initialize first
-    AppClock.sched(2.0, {
-        if(~sfp.isNil and: { ~filePaths.notNil and: { ~filePaths.size > 0 } }, {
-            ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false);
-            ~sfp.loop = false;
-            ("SFPlayer initialized after Bluetooth delay with file: " ++ ~filePaths[0]).postln;
-        });
-        nil; // Don't repeat
-    });
 }.defer(0.5);
 
 // --- HEADTRACKER AND PANNER CONTROLS (with Standard Knobs) ---
