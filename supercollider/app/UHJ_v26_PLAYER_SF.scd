@@ -487,6 +487,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     });
     
     "DEBUG: Scanning album path: ".post; albumPath.postln;
+    // Write debug info to file for troubleshooting
+    ("echo 'DEBUG: Scanning album path: " ++ albumPath ++ "' >> /tmp/uhj-debug.log").unixCmd;
     pn = PathName(albumPath);
     if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
     
@@ -758,7 +760,9 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                     // Exclude common system mount points
                     entry.folderName != "root" and: 
                     entry.folderName != Platform.userHomeDir.basename and:
-                    entry.folderName != "pi"
+                    entry.folderName != "pi" and:
+                    // Only include directories that have content (not empty system mounts)
+                    PathName(entry.fullPath).entries.size > 0
                 }
             };
             if(dirs.size > 0, {
