@@ -598,13 +598,16 @@ step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
 echo "Installing custom UHJ test sounds..."
 # Create ATK sounds directory structure
 sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/RHOMBUS
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus
 
 # Copy audio samples to correct ATK location
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/
-sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/
 sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/
+
+# Copy Sodium Sunrise to Rhombus folder to prevent empty directory issues
+sudo -u $ACTUAL_USER cp "/home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium Sunrise.wav" /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/artwork_sodium_sunrise.jpg /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/
 echo "Custom UHJ test sounds installed successfully"
 
 echo "Custom UHJ test sounds installation completed"
