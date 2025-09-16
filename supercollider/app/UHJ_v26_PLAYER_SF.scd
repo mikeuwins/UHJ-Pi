@@ -2167,30 +2167,22 @@ win.front;
         
         // Update artist menu based on source
         if(isUSB, {
-            // USB mode - show actual folders found on USB drive
-            var usbOptions = ~getUSBFolderOptions.value;
-            ("echo 'USB button: detected options: " ++ usbOptions.asString ++ "' >> /tmp/uhj-debug.log").unixCmd;
-            ~artistMenu.items_(usbOptions);
-            
-            // If no USB drive detected, try to mount and refresh after delay
-            if(usbOptions == ["<NO DRIVE>"], {
-                "No USB drive detected. Attempting to mount USB drives...".postln;
-                ("echo 'USB button: calling mount-usb script' >> /tmp/uhj-debug.log").unixCmd;
-                ("/usr/local/bin/mount-usb").unixCmd({ |result|
-                    "Mount USB script completed with result: ".post; result.postln;
-                    // Wait a moment for filesystem to settle, then refresh
-                    1.wait;
-                    {
-                        var newUsbOptions = ~getUSBFolderOptions.value;
-                        "Refreshing USB folder list...".postln;
-                        ~artistMenu.items_(newUsbOptions);
-                        if(newUsbOptions != ["<NO DRIVE>"], {
-                            "USB drive mounted successfully! Please select from the artist menu.".postln;
-                        }, {
-                            "No USB drives found after mount attempt.".postln;
-                        });
-                    }.defer;
-                });
+            // USB mode - always run mount script and refresh
+            "USB button pressed - running mount script...".postln;
+            ("/usr/local/bin/mount-usb").unixCmd({ |result|
+                "Mount USB script completed with result: ".post; result.postln;
+                // Wait a moment for filesystem to settle, then refresh
+                1.wait;
+                {
+                    var usbOptions = ~getUSBFolderOptions.value;
+                    "Refreshing USB folder list...".postln;
+                    ~artistMenu.items_(usbOptions);
+                    if(usbOptions != ["<NO DRIVE>"], {
+                        "USB drive mounted successfully! Please select from the artist menu.".postln;
+                    }, {
+                        "No USB drives found after mount attempt.".postln;
+                    });
+                }.defer;
             });
         }, {
             // ATK mode - use same discovery logic as USB
