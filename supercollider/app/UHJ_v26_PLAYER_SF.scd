@@ -526,7 +526,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         });
     });
     
-    // Store sorted file paths after sorting
+    // Store sorted file paths after  only sorting
     ~filePaths = files.collect(_.fullPath);
     
     // Extract display names (hide extensions)
@@ -977,6 +977,19 @@ StaticText(mainView, Rect(346, 10, 154, 28))
             };
         };
         ("Selected encoder: " ++ menu.item).postln;
+        
+        // Stop playback and reset position when changing encoder (audio system needs reinitialization)
+        if(~sfp.notNil, {
+            ~sfp.pause;
+            ~isPlaying = false;
+            ~playerPlayBtn.value_(1); // Set to pause state
+            ~playStartTime = 0;
+            ~pausedTime = 0;
+            if(~playerPositionSlider.notNil, {
+                ~playerPositionSlider.value_(0);
+            });
+        });
+        
         // Save current synth parameters before reinitializing
         ~saveSynthParams.value();
         // Always call audio engine init; it will reload only if needed
@@ -1165,6 +1178,18 @@ StaticText(mainView, Rect(346, 10, 154, 28))
         };
         // --- Audio engine reinitialization logic (must be last) ---
         if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
+            // Stop playback and reset position when changing decoder (audio system needs reinitialization)
+            if(~sfp.notNil, {
+                ~sfp.pause;
+                ~isPlaying = false;
+                ~playerPlayBtn.value_(1); // Set to pause state
+                ~playStartTime = 0;
+                ~pausedTime = 0;
+                if(~playerPositionSlider.notNil, {
+                    ~playerPositionSlider.value_(0);
+                });
+            });
+            
             // Save current synth parameters before reinitializing
             ~saveSynthParams.value();
             ~initAudioEngine.value();
