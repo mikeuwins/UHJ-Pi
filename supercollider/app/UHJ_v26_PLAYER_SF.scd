@@ -806,6 +806,11 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 };
             });
         });
+        
+        // If no artist folders found, show <NO ARTISTS>
+        if(folders.isEmpty) {
+            folders = ["<NO ARTISTS>"];
+        }
     });
     
     folders;
@@ -829,6 +834,11 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 folders = folders.add(entry.folderName.asString.toUpper);
             };
         });
+        
+        // If no artist folders found, show <NO ARTISTS>
+        if(folders.isEmpty) {
+            folders = ["<NO ARTISTS>"];
+        }
     });
     
     folders;
