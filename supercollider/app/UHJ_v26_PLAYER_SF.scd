@@ -1250,11 +1250,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                 s.waitForBoot({
                     // Set audio card volume after server boot (vinyl deck setup)
                     ("echo 'Audio volume controlled by output interface'").postln;
-                    // Create player bus and start SFPlayer
+                    // Create player bus (but delay SFPlayer initialization to avoid Bluetooth conflicts)
                     ~playerBus = Bus.audio(s, 2);
-                    ~sfp = SFPlayer.new(Atk.userSoundsDir ++ "/uhj/Various/AJH_eight-positions-uhj.wav", outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false);
-                    ~sfp.loop = false;
-                    // Don't start playback yet - wait for main synth to be ready 
+                    // SFPlayer will be initialized later when needed 
                     
                     { if(~playBtn.notNil, { ~playBtn.value_(0); }); }.defer(0.1);
                     
@@ -1466,13 +1464,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Recreate player bus after server reboot
                         ~playerBus = Bus.audio(s, 2);
                         
-                        // Recreate SFPlayer after server reboot
-                        if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
-                            // Stop existing SFPlayer if it exists
-                            if(~sfp.notNil, { ~sfp.stop; });
-                            ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false);
-                            ~sfp.loop = false;
-                        });
+                        // SFPlayer will be recreated when needed (delayed to avoid Bluetooth conflicts)
                         
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
@@ -3450,6 +3442,14 @@ AppClock.sched(0.1, {
                 .focusColor_(Color.clear)
                 .action_({ |btn|
                     var currentSeekTime;
+                    
+                    // Initialize SFPlayer if it doesn't exist yet (delayed to avoid Bluetooth conflicts)
+                    if(~sfp.isNil and: { ~filePaths.notNil and: { ~filePaths.size > 0 } }, {
+                        ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false);
+                        ~sfp.loop = false;
+                        ("SFPlayer initialized with file: " ++ ~filePaths[0]).postln;
+                    });
+                    
                     if(~sfp.notNil, {
                         if(btn.value == 0, {
                             // Play (black icon on cyan background)
