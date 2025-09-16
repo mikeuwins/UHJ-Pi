@@ -2169,11 +2169,13 @@ win.front;
         if(isUSB, {
             // USB mode - show actual folders found on USB drive
             var usbOptions = ~getUSBFolderOptions.value;
+            ("echo 'USB button: detected options: " ++ usbOptions.asString ++ "' >> /tmp/uhj-debug.log").unixCmd;
             ~artistMenu.items_(usbOptions);
             
             // If no USB drive detected, try to mount and refresh after delay
             if(usbOptions == ["<NO DRIVE>"], {
                 "No USB drive detected. Attempting to mount USB drives...".postln;
+                ("echo 'USB button: calling mount-usb script' >> /tmp/uhj-debug.log").unixCmd;
                 ("/usr/local/bin/mount-usb").unixCmd({ |result|
                     "Mount USB script completed with result: ".post; result.postln;
                     // Wait a moment for filesystem to settle, then refresh
