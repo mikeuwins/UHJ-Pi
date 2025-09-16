@@ -24,7 +24,8 @@ echo "$USB_DEVICES"
 echo ""
 
 # Process each USB device
-echo "$USB_DEVICES" | while read -r device_info; do
+mounted_count=0
+while IFS= read -r device_info; do
     device_name=$(echo "$device_info" | awk '{print $1}')
     device_path="/dev/$device_name"
     
@@ -35,10 +36,10 @@ echo "$USB_DEVICES" | while read -r device_info; do
     sudo mkdir -p "$mount_point"
     
     # Detect filesystem type and mount with appropriate options
-    local fs_type=$(sudo blkid -o value -s TYPE "$device_path" 2>/dev/null || echo "unknown")
+    fs_type=$(sudo blkid -o value -s TYPE "$device_path" 2>/dev/null || echo "unknown")
     echo "Detected filesystem: $fs_type"
     
-    local mount_options=""
+    mount_options=""
     if [ "$fs_type" = "vfat" ] || [ "$fs_type" = "msdos" ]; then
         # VFAT/FAT32 needs different options
         mount_options="uid=$USER_UID,gid=$USER_GID,umask=000,utf8"
@@ -48,7 +49,7 @@ echo "$USB_DEVICES" | while read -r device_info; do
     fi
     
     # Mount with proper permissions
-    if sudo mount -o "$mount_options" "$device_path" "$mount_point"; then
+    if sudo mount -o "$mount_options" "$device_path" "$mount_point" 2>/dev/null; then
         echo "✓ Successfully mounted $device_path at $mount_point"
         
         # Make sure the user owns the mount point
@@ -60,12 +61,35 @@ echo "$USB_DEVICES" | while read -r device_info; do
         ls -la "$mount_point" | head -5
         echo "..."
         
+        mounted_count=$((mounted_count + 1))
+        
     else
         echo "❌ Failed to mount $device_path"
-        # Clean up failed mount point
-        sudo rmdir "$mount_point" 2>/dev/null || true
+        echo "   Trying alternative mount options..."
+        
+        # Try without user options for VFAT
+        if [ "$fs_type" = "vfat" ] || [ "$fs_type" = "msdos" ]; then
+            if sudo mount "$device_path" "$mount_point" 2>/dev/null; then
+                echo "✓ Successfully mounted $device_path at $mount_point (default options)"
+                sudo chown $USER_NAME:$USER_NAME "$mount_point"
+                mounted_count=$((mounted_count + 1))
+            else
+                echo "❌ Failed to mount $device_path even with default options"
+                sudo rmdir "$mount_point" 2>/dev/null || true
+            fi
+        else
+            sudo rmdir "$mount_point" 2>/dev/null || true
+        fi
     fi
-done
+done <<< "$USB_DEVICES"
+
+echo ""
+if [ $mounted_count -eq 0 ]; then
+    echo "❌ No USB drives were successfully mounted."
+    exit 1
+else
+    echo "✓ Successfully mounted $mounted_count USB drive(s)."
+fi
 
 echo ""
 echo "USB mounting complete. Check /media/$USER_NAME/ for mounted drives."
