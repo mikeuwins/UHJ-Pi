@@ -778,18 +778,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     var folders;
     
     if(usbBase == "/tmp/", {
-        // No USB drive detected - try to mount USB drives
-        "No USB drive detected. Attempting to mount USB drives...".postln;
-        ("/usr/local/bin/mount-usb").unixCmd({ |result|
-            "Mount USB script completed with result: ".post; result.postln;
-            // Re-detect USB drives after mounting attempt
-            usbBase = ~detectUSBDir.value;
-            if(usbBase != "/tmp/", {
-                "USB drive mounted successfully!".postln;
-            }, {
-                "No USB drives found after mount attempt.".postln;
-            });
-        });
+        // No USB drive detected
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - look inside it for artist folders (ignore drive name)
@@ -2155,7 +2144,28 @@ win.front;
         // Update artist menu based on source
         if(isUSB, {
             // USB mode - show actual folders found on USB drive
-            ~artistMenu.items_(~getUSBFolderOptions.value);
+            var usbOptions = ~getUSBFolderOptions.value;
+            ~artistMenu.items_(usbOptions);
+            
+            // If no USB drive detected, try to mount and refresh after delay
+            if(usbOptions == ["<NO DRIVE>"], {
+                "No USB drive detected. Attempting to mount USB drives...".postln;
+                ("/usr/local/bin/mount-usb").unixCmd({ |result|
+                    "Mount USB script completed with result: ".post; result.postln;
+                    // Wait a moment for filesystem to settle, then refresh
+                    1.wait;
+                    {
+                        var newUsbOptions = ~getUSBFolderOptions.value;
+                        "Refreshing USB folder list...".postln;
+                        ~artistMenu.items_(newUsbOptions);
+                        if(newUsbOptions != ["<NO DRIVE>"], {
+                            "USB drive mounted successfully! Please select from the artist menu.".postln;
+                        }, {
+                            "No USB drives found after mount attempt.".postln;
+                        });
+                    }.defer;
+                });
+            });
         }, {
             // ATK mode - use same discovery logic as USB
             ~artistMenu.items_(~getATKFolderOptions.value);
