@@ -1831,6 +1831,7 @@ dbValue = cliToDbMaster.(lastInL);
     .x_(0.5).y_(0.5)
     .knobColor_(Color.cyan)
     .background_(Color.black)
+    .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |sl|
         // Equal-power law for left/right (x axis)
@@ -3480,6 +3481,7 @@ AppClock.sched(0.1, {
                 .background_(Color.black)
                 .knobColor_(Color.cyan)
                 .value_(0)
+                .focusColor_(Color.clear)
                 .action_({ |slider|
                     if(~sfp.notNil and: { ~sfp.sf.notNil and: { ~sfp.sf.duration > 0 } }, {
                         var seekTime = slider.value * ~sfp.sf.duration;
@@ -3644,6 +3646,7 @@ AppClock.sched(0.1, {
 ~layoutBtn = Button(mainView, Rect(508, 410, 100, 35))
     .states_([["LAYOUT", Color.cyan, Color.black], ["LAYOUT", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
