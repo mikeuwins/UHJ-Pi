@@ -872,12 +872,22 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
             var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             
+            // Find actual artist folder by case-insensitive matching
+            var actualArtistName = PathName(contentDir).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                entry.folderName.asString.toUpper == artistName 
+            };
+            var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { contentDir +/+ artistName };
+            
             if(albumName == "<NO ALBUMS>", {
                 // No album folders, just files in artist folder
-                albumPath = contentDir +/+ artistName +/+ "/";
+                albumPath = actualArtistPath +/+ "/";
             }, {
-                // Use both artist and album
-                albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
+                // Find actual album folder by case-insensitive matching
+                var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                    entry.folderName.asString.toUpper == albumName 
+                };
+                var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
+                albumPath = actualAlbumPath +/+ "/";
             });
         });
     }, {
