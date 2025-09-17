@@ -18,12 +18,9 @@ var win, mainView,
 // --- Maplin overlay variables ---
 ~maplinSurroundKnob = nil; ~maplinEffectKnob = nil; ~maplinDelayKnob = nil; ~maplinActiveBtn = nil;
 ~maplinSurroundValue = nil; ~maplinEffectValue = nil; ~maplinDelayValue = nil;
-// --- Headtracker overlays ---
-~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
+// --- Headtracker overlanil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
-// --- Headtracker MAC address (detected at startup) ---
-~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
 // --- Maplin button overlay ---
 ~maplinBtnOverlay = nil;
 // --- Power button state ---
@@ -100,9 +97,6 @@ formatDbValue = { |dbValue|
 win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).background_(Color.black);
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
-    // Stop connection monitor and close pipe
-    if(~connectionMonitor.notNil) { ~connectionMonitor.stop; };
-    if(~bluetoothMonitorPipe.notNil) { ~bluetoothMonitorPipe.close; };
     if(s.serverRunning) { s.quit; };
     0.exit;
 });
@@ -1189,190 +1183,18 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .stringColor_(Color.cyan);
 
 // --- BLUETOOTH PAIR BUTTON ---
-~pairingInProgress = false;  // Flag to prevent multiple clicks
 ~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
-    .states_([
-        ["PAIR", Color.cyan, Color.black],      // 0: Ready to pair
-        ["...", Color.cyan, Color.black],       // 1: Pairing in progress  
-        ["PAIR", Color.black, Color.cyan],      // 2: Success - cyan background like line button
-        ["FAIL", Color.cyan, Color.black]       // 3: Failed
-    ])
+    .states_([["PAIR", Color.cyan, Color.black]])
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
-    .value_(0)  // Explicitly set to PAIR state
     .action_({
-        var scriptPath;
-        
-        // Check if pairing is already in progress
-        if (~pairingInProgress) { 
-            ^this 
-        };
-        
-        // Check actual device status to determine action
-        ~pairingInProgress = true;
-        ~headtrackPairBtn.value_(1); // Show working
-        
-        Task({
-            var deviceInfo, isPaired, isConnected, result, success = false;
-            
-            // Use the MAC address detected at startup
-            if (~headtrackerMac.notEmpty) {
-                // Check the ACTUAL device status using startup MAC
-                deviceInfo = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-                isPaired = deviceInfo.contains("Paired: yes");
-                isConnected = deviceInfo.contains("Connected: yes");
-            } {
-                // No headtracker found - proceed to pair
-                isPaired = false;
-                isConnected = false;
-            };
-            
-            if (isPaired) {
-                // Device is paired - UNPAIR (remove device)
-                ("Device is paired - removing...").postln;
-                try {
-                    // Disconnect first, then remove
-                    ("Disconnecting headtracker...").postln;
-                    result = ("bluetoothctl disconnect " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    ("Disconnect result: " ++ result).postln;
-                    1.wait; // Wait for disconnect to complete
-                    
-                    ("Removing headtracker...").postln;
-                    result = ("bluetoothctl remove " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    ("Remove result: " ++ result).postln;
-                    1.wait; // Wait for removal to complete
-                    
-                    // Check if it's really gone
-                    result = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    ("Final status: " ++ result).postln;
-                    success = true;
-                } { |error|
-                    ("Unpair error: " ++ error).postln;
-                    success = false;
-                };
-                
-                {
-                    ~pairingInProgress = false;
-                    ~headtrackPairBtn.value_(0); // Reset to PAIR after unpair
-                }.defer;
-                
-            } {
-                // Device is not paired - PAIR the device
-                ("Device not paired - pairing...").postln;
-                
-                // Run pairing script in background with timeout
-                scriptPath = "/usr/local/bin/ble-ht.sh";
-                
-                // Safety timeout - reset button after 15 seconds if script hangs
-                AppClock.sched(15, { 
-                    if (~pairingInProgress) {
-                        ~pairingInProgress = false;  // Reset flag
-                        ~headtrackPairBtn.value_(3); // Show failed if still in progress
-                        AppClock.sched(3, { ~headtrackPairBtn.value_(0); nil });
-                    };
-                    nil 
-                });
-                
-                // First attempt
-                try {
-                    result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
-                    success = result.contains("PAIRED_AND_CONNECTED");
-                } { |error|
-                    ("Pairing script error: " ++ error).postln;
-                    success = false;
-                };
-                
-                // If first attempt failed, automatically retry once
-                if (success.not) {
-                    ("First pairing attempt failed, retrying automatically...").postln;
-                    1.wait; // Brief pause between attempts
-                    
-                    try {
-                        result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
-                        success = result.contains("PAIRED_AND_CONNECTED");
-                        if (success) {
-                            ("Second attempt succeeded!").postln;
-                        } {
-                            ("Both pairing attempts failed").postln;
-                        };
-                    } { |error|
-                        ("Retry script error: " ++ error).postln;
-                        success = false;
-                    };
-                };
-                
-                // Always update button, even if script failed
-                {
-                    ~pairingInProgress = false;  // Reset flag
-                    if (success) {
-                        ~headtrackPairBtn.value_(2); // Success - stay cyan to show paired
-                    } {
-                        ~headtrackPairBtn.value_(3); // Failed - red X
-                        // Reset to PAIR after 3 seconds only on failure
-                        AppClock.sched(3, { 
-                            ~headtrackPairBtn.value_(0); 
-                            nil 
-                        });
-                    };
-                }.defer;
-            };
-        }).start;
+        var out;
+        // Run pairing script and capture stdout for post window
+        out = "bash -lc 'auto_pair_headtracker.sh'".unixCmdGetStdOut;
+        out.postln;
     });
 // Ensure button is above overlays
 ~headtrackPairBtn.front;
-
-// Simple connection monitor - checks initial status and monitors ongoing
-~connectionMonitor = Routine({
-    var checkResult, isConnected, isPaired, htMac;
-    
-    // Wait a bit before starting monitoring to avoid startup delays
-    3.wait;
-    
-    // Additional short delay for headtracker detection to stabilize
-    2.wait;
-    
-    // Check initial pairing status on first run
-    if (~headtrackerMac.notEmpty) {
-        checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-        isConnected = checkResult.contains("Connected: yes");
-        isPaired = checkResult.contains("Paired: yes");
-    } {
-        isConnected = false;
-        isPaired = false;
-    };
-    
-    if (isPaired && isConnected) {
-        // Device is already paired and connected - show paired state
-        {
-            ~headtrackPairBtn.value_(2); // Show paired state
-        }.defer;
-    };
-    
-    // Simple monitoring loop
-    loop {
-        5.wait; // Check every 5 seconds
-        
-        // Only check if button exists, shows paired status and not currently pairing
-        // Use defer to access GUI elements from background thread
-        {
-            if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
-                if (~headtrackerMac.notEmpty) {
-                    checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    isConnected = checkResult.contains("Connected: yes");
-                    isPaired = checkResult.contains("Paired: yes");
-                    
-                    if (isPaired.not || isConnected.not) {
-                        // Device is disconnected/removed - reset button
-                        ~headtrackPairBtn.value_(0);
-                    };
-                } {
-                    // No headtracker MAC - reset button
-                    ~headtrackPairBtn.value_(0);
-                };
-            };
-        }.defer;
-    };
-}).play;
 
 // --- CONTROL LABELS ---
 StaticText(mainView, Rect(594, 80, 55, 20)).string_("ROTATE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
@@ -2812,18 +2634,8 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        "Rebooting system...".postln;
-        "sudo reboot".unixCmd;
+        win.close;
+    })
+    .touchBeginAction_({ |view, x, y, pressure, id|
+        win.close;
     });
-
-// Add touchscreen support only if touchscreen devices are detected
-if(Platform.case(\linux, { true }, { false })) {
-    // Check if touchscreen is available by looking for touch devices
-    var touchDevices = "ls /dev/input/by-path/ | grep touch".unixCmdGetStdOut;
-    if(touchDevices.notEmpty) {
-        ~powerBtn.touchBeginAction_({ |view, x, y, pressure, id|
-            "Rebooting system...".postln;
-            "sudo reboot".unixCmd;
-        });
-    };
-};

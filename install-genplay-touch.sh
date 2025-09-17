@@ -146,6 +146,7 @@ packages=(
     "libasound2-dev" "libreadline-dev" "libxkbcommon-dev" "git" 
     "jackd2" "libhidapi-dev" "qt6-base-dev" "qt6-svg-dev" 
     "qt6-tools-dev" "qt6-wayland" "qt6-websockets-dev" "qt6-webengine-dev"
+    "flac"
 )
 
 total_packages=${#packages[@]}
