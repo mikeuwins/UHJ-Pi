@@ -789,6 +789,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~getUSBFolderOptions = {
     var usbBase = ~detectUSBDir.value;
     var folders;
+    var debugFile;
     
     
     if(usbBase == "/tmp/", {
@@ -819,7 +820,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 "DEBUG: USB content entries: ".post; entries.collect { |entry| entry.folderName.asString }.postln;
                 
                 // Write debug info to file for Pi debugging
-                var debugFile = File("/tmp/usb_debug.txt", "w");
+                debugFile = File("/tmp/usb_debug.txt", "w");
                 debugFile.write("USB Content Dir: " ++ contentDir ++ "\n");
                 debugFile.write("USB Content Entries: " ++ entries.collect { |entry| entry.folderName.asString }.asString ++ "\n");
                 debugFile.close;
