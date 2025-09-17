@@ -759,7 +759,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 
 // Function to detect USB drives and get available folders
 ~detectUSBDir = {
-    var usbPaths = ["/media/pi/", "/media/" ++ Platform.userHomeDir.basename ++ "/", "/mnt/", "/media/"];
+    var usbPaths = ["/media/" ++ Platform.userHomeDir.basename ++ "/", "/media/pi/", "/mnt/", "/media/"];
     var foundPath;
     
     usbPaths.do { |path|
