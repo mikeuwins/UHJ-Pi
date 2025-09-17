@@ -815,6 +815,14 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 // Use the first folder inside the USB drive as the content directory
                 var contentDir = usbEntries[0].fullPath;
                 var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
+                "DEBUG: USB content dir: ".post; contentDir.postln;
+                "DEBUG: USB content entries: ".post; entries.collect { |entry| entry.folderName.asString }.postln;
+                
+                // Write debug info to file for Pi debugging
+                var debugFile = File("/tmp/usb_debug.txt", "w");
+                debugFile.write("USB Content Dir: " ++ contentDir ++ "\n");
+                debugFile.write("USB Content Entries: " ++ entries.collect { |entry| entry.folderName.asString }.asString ++ "\n");
+                debugFile.close;
                 entries.do { |entry|
                     folders = folders.add(entry.folderName.asString); // Keep original case
                 };
