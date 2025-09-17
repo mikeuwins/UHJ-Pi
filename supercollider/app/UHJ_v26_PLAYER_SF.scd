@@ -14,6 +14,7 @@
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
 
+{
 var win, mainView,
     decoderChanged,
     lastInL, lastInR, minIn, maxIn,
@@ -4305,3 +4306,5 @@ if(Platform.case(\linux, { true }, { false })) {
         });
     };
 };
+
+}.value; // Execute the main function block
