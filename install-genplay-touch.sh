@@ -675,6 +675,14 @@ cp "led_dot_matrix/LED Dot-Matrix.ttf" /usr/local/share/fonts/truetype/uhj-pi/ >
 
 # Install Arial font for power button
 apt-get install -y cabextract >> $INSTALL_LOG 2>&1
+
+# STEP 22.5: Install USB mounting script
+step_header "STEP 16.5/17: Installing USB Mounting Script"
+echo "Installing USB mounting script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/mount-usb.sh /usr/local/bin/mount-usb
+chmod +x /usr/local/bin/mount-usb
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/mount-usb
+echo "✓ USB mounting script installed to /usr/local/bin/mount-usb"
 mkdir -p /usr/share/fonts/truetype/msttcorefonts >> $INSTALL_LOG 2>&1
 cd /usr/share/fonts/truetype/msttcorefonts
 wget -q https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf >> $INSTALL_LOG 2>&1
