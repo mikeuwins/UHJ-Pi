@@ -791,7 +791,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     var folders;
     var debugFile;
     
-    "DEBUG: getUSBFolderOptions called, usbBase: ".post; usbBase.postln;
     
     
     if(usbBase == "/tmp/", {
@@ -818,18 +817,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 // Use the first folder inside the USB drive as the content directory
                 var contentDir = usbEntries[0].fullPath;
                 var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
-                "DEBUG: USB content dir: ".post; contentDir.postln;
-                "DEBUG: USB content entries: ".post; entries.collect { |entry| entry.folderName.asString }.postln;
-                
-                // Write debug info to file for Pi debugging
-                try {
-                    debugFile = File("/tmp/usb_debug.txt", "w");
-                    debugFile.write("USB Content Dir: " ++ contentDir ++ "\n");
-                    debugFile.write("USB Content Entries: " ++ entries.collect { |entry| entry.folderName.asString }.asString ++ "\n");
-                    debugFile.close;
-                } { |error|
-                    "Debug file write failed: ".post; error.postln;
-                };
                 entries.do { |entry|
                     folders = folders.add(entry.folderName.asString); // Keep original case
                 };
@@ -2200,7 +2187,6 @@ win.front;
             // USB mode - check if mount script exists, if not just refresh directly
             if(File.exists("/usr/local/bin/mount-usb"), {
                 "USB button pressed - running mount script...".postln;
-                "DEBUG: About to call mount-usb script".postln;
                 ("/usr/local/bin/mount-usb").unixCmd({ |result|
                     "Mount USB script completed with result: ".post; result.postln;
                     "DEBUG: Mount script result: ".post; result.postln;

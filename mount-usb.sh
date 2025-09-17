@@ -3,6 +3,16 @@
 # USB Mounting Script for UHJ-Pi
 # Dynamically detects and mounts USB drives with proper user permissions
 
+echo "Unmounting existing USB drives..."
+# Unmount all USB drives first to clear any caching issues
+for mount_point in /media/$USER_NAME/*; do
+    if [ -d "$mount_point" ] && [ "$mount_point" != "/media/$USER_NAME" ]; then
+        echo "Unmounting $mount_point..."
+        umount "$mount_point" 2>/dev/null || true
+        rmdir "$mount_point" 2>/dev/null || true
+    fi
+done
+
 echo "Scanning for USB drives..."
 
 # Get current user info (use SUDO_USER if running with sudo, otherwise whoami)
