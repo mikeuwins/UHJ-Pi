@@ -2,6 +2,15 @@
 // UHJ v25_SF - PSEUDO-SURROUND ENCODER WITH UNIFIED SFPlayerMeter
 // ============================================================================
 
+// Helper function to convert to uppercase for display only
+~displayCase = { |text| text.asString.toUpper };
+
+// Helper function to get original case from menu selection
+~getOriginalCase = { |displayText, originalList|
+    var idx = originalList.detectIndex { |item| item.asString.toUpper == displayText.asString.toUpper };
+    if(idx.notNil) { originalList[idx] } { displayText };
+};
+
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
 
@@ -805,7 +814,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 var contentDir = usbEntries[0].fullPath;
                 var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
                 entries.do { |entry|
-                    folders = folders.add(entry.folderName.asString.toUpper);
+                    folders = folders.add(entry.folderName.asString); // Keep original case
                 };
             });
         });
@@ -834,7 +843,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             // Look inside the ATK directory for actual content folders
             var entries = PathName(atkBase).entries.select { |entry| entry.isFolder };
             entries.do { |entry|
-                folders = folders.add(entry.folderName.asString.toUpper);
+                folders = folders.add(entry.folderName.asString); // Keep original case
             };
         });
         
@@ -872,22 +881,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
             var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             
-            // Find actual artist folder by case-insensitive matching
-            var actualArtistName = PathName(contentDir).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == artistName 
-            };
-            var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { contentDir +/+ artistName };
-            
+            // Use artist name directly (already in original case from menu)
             if(albumName == "<NO ALBUMS>", {
                 // No album folders, just files in artist folder
-                albumPath = actualArtistPath +/+ "/";
+                albumPath = contentDir +/+ artistName +/+ "/";
             }, {
-                // Find actual album folder by case-insensitive matching
-                var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                    entry.folderName.asString.toUpper == albumName 
-                };
-                var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
-                albumPath = actualAlbumPath +/+ "/";
+                // Use both artist and album (both in original case from menus)
+                albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
             });
         });
     }, {
@@ -2186,7 +2186,7 @@ win.front;
                 {
                     var usbOptions = ~getUSBFolderOptions.value;
                     "Refreshing USB folder list...".postln;
-                    ~artistMenu.items_(usbOptions);
+                    ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
                     if(usbOptions != ["<NO DRIVE>"], {
                         "USB drive mounted successfully! Please select from the artist menu.".postln;
                     }, {
@@ -2196,7 +2196,7 @@ win.front;
             });
         }, {
             // ATK mode - use same discovery logic as USB
-            ~artistMenu.items_(~getATKFolderOptions.value);
+            ~artistMenu.items_(~getATKFolderOptions.value.collect { |item| ~displayCase.value(item) });
         });
         
         // Reset artist menu selection and update album menu based on mode
@@ -2226,7 +2226,7 @@ win.front;
                 albumList = [];
                 // Add album folders if they exist
                 if(entries.size > 0) {
-                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
                 };
                 // Add <NO ALBUMS> if there are files outside album folders
                 if(audioFiles.size > 0) {
@@ -2240,7 +2240,7 @@ win.front;
                 albumList = ["<NO ALBUMS>"];
             });
             
-            ~albumMenu.items_(albumList);
+            ~albumMenu.items_(albumList.collect { |item| ~displayCase.value(item) });
             ~albumMenu.value_(0);
         }, {
             // ATK mode - build album list based on selected artist
@@ -2264,7 +2264,7 @@ win.front;
                 albumList = [];
                 // Add album folders if they exist
                 if(entries.size > 0) {
-                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
                 };
                 // Add <NO ALBUMS> if there are files outside album folders
                 if(audioFiles.size > 0) {
@@ -2277,7 +2277,7 @@ win.front;
             }, {
                 albumList = ["<NO ALBUMS>"];
             });
-            ~albumMenu.items_(albumList);
+            ~albumMenu.items_(albumList.collect { |item| ~displayCase.value(item) });
             ~albumMenu.value_(0);
         });
         
@@ -2291,7 +2291,7 @@ win.front;
 
 // Create Artist and Album menus after window is visible
 ~artistMenu = PopUpMenu(mainView, Rect(28, 86, 140, 35))
-    .items_( ~getATKFolderOptions.value )
+    .items_( ~getATKFolderOptions.value.collect { |item| ~displayCase.value(item) } )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
     .stringColor_(Color.cyan)
@@ -2332,7 +2332,7 @@ win.front;
                         albumList = [];
                         // Add album folders if they exist
                         if(entries.size > 0) {
-                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
                         };
                         // Add <NO ALBUMS> if there are files outside album folders
                         if(audioFiles.size > 0) {
@@ -2370,7 +2370,7 @@ win.front;
                         albumList = [];
                         // Add album folders if they exist
                         if(entries.size > 0) {
-                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
+                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
                         };
                         // Add <NO ALBUMS> if there are files outside album folders
                         if(audioFiles.size > 0) {
@@ -2386,7 +2386,7 @@ win.front;
                 };
             });
             // Always clear and update album menu
-            ~albumMenu.items_(albumList);
+            ~albumMenu.items_(albumList.collect { |item| ~displayCase.value(item) });
             // Temporarily disable action to prevent interference
             oldAction = ~albumMenu.action;
             ~albumMenu.action_(nil);
