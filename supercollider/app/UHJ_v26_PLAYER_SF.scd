@@ -811,16 +811,16 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         // USB drive found - look inside it for artist folders (ignore drive name)
         folders = [];
         if(File.exists(usbBase), {
-            // Look inside the USB drive for actual content folders
+            // Look inside ALL mounted USB roots and aggregate artist folders
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-            if(usbEntries.size > 0, {
-                // Use the first folder inside the USB drive as the content directory
-                var contentDir = usbEntries[0].fullPath;
-                var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
+            usbEntries.do { |root|
+                var entries = PathName(root.fullPath).entries.select { |entry| entry.isFolder };
                 entries.do { |entry|
                     folders = folders.add(entry.folderName.asString); // Keep original case
                 };
-            });
+            };
+            // Remove duplicates if the same artist exists under multiple roots
+            folders = folders.removeDups;
         });
         
         // If no artist folders found, show <NO ARTISTS>
@@ -882,16 +882,20 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
         }, {
-            // Use artist and album selections (account for USB drive name being ignored)
+            // Find which mounted root actually contains the selected artist
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-            var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
-            
-            // Use artist name directly (already in original case from menu)
+            var contentDir = usbBase;
+            var matchedRoot = usbEntries.detect { |root|
+                PathName(root.fullPath).entries.select { |e| e.isFolder }.any { |e|
+                    e.folderName.asString.toUpper == artistName
+                }
+            };
+            if(matchedRoot.notNil) { contentDir = matchedRoot.fullPath };
+
+            // Build final path using the matched root
             if(albumName == "<NO ALBUMS>", {
-                // No album folders, just files in artist folder
                 albumPath = contentDir +/+ artistName +/+ "/";
             }, {
-                // Use both artist and album (both in original case from menus)
                 albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
             });
         });
@@ -2343,11 +2347,18 @@ win.front;
                 case 
                 { artistName == "<NO DRIVE>" } { albumList = ["<NO ALBUMS>"]; }
                 {
-                    // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
+                    // Get actual subdirectories: find the root which contains the selected artist
                     var usbBase = ~detectUSBDir.value;
                     var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-                    var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
-                    var artistPath = contentDir +/+ artistName;
+                    var artistPath; // declare variable in this scope
+                    var contentDir = usbBase;
+                    var matchedRoot = usbEntries.detect { |root|
+                        PathName(root.fullPath).entries.select { |e| e.isFolder }.any { |e|
+                            e.folderName.asString.toUpper == artistName
+                        }
+                    };
+                    if(matchedRoot.notNil) { contentDir = matchedRoot.fullPath };
+                    artistPath = contentDir +/+ artistName;
                     
                     if(File.exists(artistPath), {
                         var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
