@@ -30,8 +30,11 @@ echo "$USB_DEVICES" | while read -r device_info; do
     
     echo "Attempting to mount $device_path..."
     
+    # Prefer volume label for mount point; fall back to device name (sda1)
+    LABEL=$(sudo blkid -o value -s LABEL "$device_path" 2>/dev/null | head -n1)
+    mount_dir=${LABEL:-$device_name}
     # Create mount point
-    mount_point="/media/$USER_NAME/$device_name"
+    mount_point="/media/$USER_NAME/$mount_dir"
     sudo mkdir -p "$mount_point"
     
     # Mount with proper permissions
