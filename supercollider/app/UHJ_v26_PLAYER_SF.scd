@@ -876,7 +876,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             var contentDir = usbBase;
             var matchedRoot = usbEntries.detect { |root|
                 PathName(root.fullPath).entries.select { |e| e.isFolder }.any { |e|
-                    e.folderName.asString.toUpper == artistName
+                    e.folderName.asString.toUpper == artistName.toUpper
                 }
             };
             if(matchedRoot.notNil) { contentDir = matchedRoot.fullPath };
@@ -896,7 +896,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         }, {
             // Find actual artist folder by case-insensitive matching
             var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == artistName 
+                entry.folderName.asString.toUpper == artistName.toUpper 
             };
             var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
             
@@ -905,8 +905,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 albumPath = actualArtistPath +/+ "/";
             }, {
                 // Find actual album folder by case-insensitive matching
-                var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                    entry.folderName.asString.toUpper == albumName 
+            var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                entry.folderName.asString.toUpper == albumName.toUpper 
                 };
                 var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
                 albumPath = actualAlbumPath +/+ "/";
@@ -2213,7 +2213,7 @@ win.front;
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
             var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             var actualArtistName = PathName(contentDir).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == artistName 
+                entry.folderName.asString.toUpper == artistName.toUpper 
             };
             var artistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { contentDir +/+ artistName };
             
