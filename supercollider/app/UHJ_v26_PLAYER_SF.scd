@@ -781,10 +781,17 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         // No USB drive detected
         folders = ["<NO DRIVE>"];
     }, {
-        // USB drive found - list artist folders directly under the mount root
+        // USB drive found - determine content directory
         folders = [];
         if(File.exists(usbBase), {
-            var entries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            var contentDir = usbBase;
+            var parts = usbBase.split($/).reject { |s| s.isEmpty };
+            // If usbBase is the parent mount root (/media/<user>/), dive into first mounted drive
+            if(parts.size == 2, {
+                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+                if(usbEntries.size > 0, { contentDir = usbEntries[0].fullPath; });
+            });
+            var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
             entries.do { |entry|
                 folders = folders.add(entry.folderName.asString.toUpper);
             };
@@ -833,17 +840,23 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     
     // Build path based on source and selections
     if(isUSB, {
-        // USB mode - use detected USB directory with artist and album directly under mount root
+        // USB mode - resolve content directory first
         var usbBase = ~detectUSBDir.value;
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
         }, {
+            var contentDir = usbBase;
+            var parts = usbBase.split($/).reject { |s| s.isEmpty };
+            if(parts.size == 2, {
+                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+                if(usbEntries.size > 0, { contentDir = usbEntries[0].fullPath; });
+            });
             if(albumName == "<NO ALBUMS>", {
                 // No album folders, just files in artist folder
-                albumPath = usbBase +/+ artistName +/+ "/";
+                albumPath = contentDir +/+ artistName +/+ "/";
             }, {
                 // Use both artist and album
-                albumPath = usbBase +/+ artistName +/+ albumName +/+ "/";
+                albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
             });
         });
     }, {
