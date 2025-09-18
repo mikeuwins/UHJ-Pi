@@ -810,6 +810,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~getATKFolderOptions = {
     var atkBase = Atk.userSoundsDir ++ "/uhj";
     var folders;
+    var atkEntries;
     
     if(File.exists(atkBase).not, {
         // No ATK directory found
@@ -819,8 +820,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         folders = [];
         if(File.exists(atkBase), {
             // Look inside the ATK directory for actual content folders
-            var entries = PathName(atkBase).entries.select { |entry| entry.isFolder };
-            entries.do { |entry|
+            atkEntries = PathName(atkBase).entries.select { |entry| entry.isFolder };
+            atkEntries.do { |entry|
                 folders = folders.add(entry.folderName.asString.toUpper);
             };
         });
