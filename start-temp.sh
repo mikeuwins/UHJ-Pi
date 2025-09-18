@@ -13,3 +13,5 @@ fi
 export DISPLAY=${DISPLAY:-:0}
 
 exec sclang "$APP"
+
+

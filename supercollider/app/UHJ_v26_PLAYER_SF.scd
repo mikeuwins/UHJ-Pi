@@ -2186,14 +2186,14 @@ win.front;
                     1.0.wait;
                     {
                         usbOptions = ~getUSBFolderOptions.value;
-                        ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
+                        ~artistMenu.items_(usbOptions);
                     }.defer(0.2);
                 });
             }, {
                 "USB button pressed - refreshing folder list...".postln;
                 {
                     usbOptions = ~getUSBFolderOptions.value;
-                    ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
+                    ~artistMenu.items_(usbOptions);
                 }.defer(1.2);
             });
         }, {
