@@ -3,7 +3,14 @@
 # USB Mounting Script for UHJ-Pi
 # Dynamically detects and mounts USB drives with proper user permissions
 
-echo "Unmounting existing USB drives..."
+echo "Scanning for USB drives..."
+
+# Get current user info (use SUDO_USER if running with sudo, otherwise whoami)
+USER_NAME=${SUDO_USER:-$(whoami)}
+USER_UID=$(id -u $USER_NAME)
+USER_GID=$(id -g $USER_NAME)
+
+echo "Unmounting existing USB drives for user $USER_NAME..."
 # Unmount all USB drives first to clear any caching issues
 for mount_point in /media/$USER_NAME/*; do
     if [ -d "$mount_point" ] && [ "$mount_point" != "/media/$USER_NAME" ]; then
@@ -12,13 +19,6 @@ for mount_point in /media/$USER_NAME/*; do
         rmdir "$mount_point" 2>/dev/null || true
     fi
 done
-
-echo "Scanning for USB drives..."
-
-# Get current user info (use SUDO_USER if running with sudo, otherwise whoami)
-USER_NAME=${SUDO_USER:-$(whoami)}
-USER_UID=$(id -u $USER_NAME)
-USER_GID=$(id -g $USER_NAME)
 
 # Find USB block devices (use --raw to avoid tree characters)
 USB_DEVICES=$(lsblk --raw -no NAME,TYPE,MOUNTPOINT | grep -E "sd[a-z][0-9]*.*part" | grep -v "/")
