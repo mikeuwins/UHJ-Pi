@@ -5,23 +5,13 @@
 
 echo "Scanning for USB drives..."
 
-# Get current user info (use SUDO_USER if running with sudo, otherwise whoami)
-USER_NAME=${SUDO_USER:-$(whoami)}
-USER_UID=$(id -u $USER_NAME)
-USER_GID=$(id -g $USER_NAME)
+# Get current user info
+USER_NAME=$(whoami)
+USER_UID=$(id -u)
+USER_GID=$(id -g)
 
-echo "Unmounting existing USB drives for user $USER_NAME..."
-# Unmount all USB drives first to clear any caching issues
-for mount_point in /media/$USER_NAME/*; do
-    if [ -d "$mount_point" ] && [ "$mount_point" != "/media/$USER_NAME" ]; then
-        echo "Unmounting $mount_point..."
-        umount "$mount_point" 2>/dev/null || true
-        rmdir "$mount_point" 2>/dev/null || true
-    fi
-done
-
-# Find USB block devices (use --raw to avoid tree characters)
-USB_DEVICES=$(lsblk --raw -no NAME,TYPE,MOUNTPOINT | grep -E "sd[a-z][0-9]*.*part" | grep -v "/")
+# Find USB block devices
+USB_DEVICES=$(lsblk -no NAME,TYPE,MOUNTPOINT | grep -E "sd[a-z][0-9]*.*part" | grep -v "/")
 
 if [ -z "$USB_DEVICES" ]; then
     echo "No unmounted USB drives found."
@@ -34,86 +24,35 @@ echo "$USB_DEVICES"
 echo ""
 
 # Process each USB device
-mounted_count=0
-while IFS= read -r device_info; do
+echo "$USB_DEVICES" | while read -r device_info; do
     device_name=$(echo "$device_info" | awk '{print $1}')
     device_path="/dev/$device_name"
     
     echo "Attempting to mount $device_path..."
     
-    # Prefer volume label for mount point; fall back to device name
-    LABEL=$(sudo blkid -o value -s LABEL "$device_path" 2>/dev/null | head -n1)
-    if [ -n "$LABEL" ]; then
-        mount_dir="$LABEL"
-    else
-        mount_dir="$device_name"
-    fi
-    mount_point="/media/$USER_NAME/$mount_dir"
+    # Create mount point
+    mount_point="/media/$USER_NAME/$device_name"
     sudo mkdir -p "$mount_point"
     
-    # Detect filesystem type and mount with appropriate options
-    fs_type=$(sudo blkid -o value -s TYPE "$device_path" 2>/dev/null || echo "unknown")
-    echo "Detected filesystem: $fs_type"
-    
-    mount_options=""
-    if [ "$fs_type" = "vfat" ] || [ "$fs_type" = "msdos" ]; then
-        # VFAT/FAT32 needs different options
-        mount_options="uid=$USER_UID,gid=$USER_GID,umask=000,utf8"
-    else
-        # Other filesystems (ext4, ntfs, etc.)
-        mount_options="uid=$USER_UID,gid=$USER_GID,fmask=022,dmask=022"
-    fi
-    
     # Mount with proper permissions
-    if sudo mount -o "$mount_options" "$device_path" "$mount_point" 2>/dev/null; then
+    if sudo mount -o uid=$USER_UID,gid=$USER_GID,fmask=022,dmask=022 "$device_path" "$mount_point"; then
         echo "✓ Successfully mounted $device_path at $mount_point"
         
         # Make sure the user owns the mount point
         sudo chown $USER_NAME:$USER_NAME "$mount_point"
         echo "✓ Set ownership to $USER_NAME"
         
-        # Allow udev/fs to settle so new directories appear consistently
-        sudo udevadm settle 2>/dev/null || true
-        sync
-        sleep 0.3
-        
         # List contents to verify
         echo "Contents:"
         ls -la "$mount_point" | head -5
         echo "..."
         
-        mounted_count=$((mounted_count + 1))
-        
     else
         echo "❌ Failed to mount $device_path"
-        echo "   Trying alternative mount options..."
-        
-        # Try without user options for VFAT
-        if [ "$fs_type" = "vfat" ] || [ "$fs_type" = "msdos" ]; then
-            if sudo mount "$device_path" "$mount_point" 2>/dev/null; then
-                echo "✓ Successfully mounted $device_path at $mount_point (default options)"
-                sudo chown $USER_NAME:$USER_NAME "$mount_point"
-                sudo udevadm settle 2>/dev/null || true
-                sync
-                sleep 0.3
-                mounted_count=$((mounted_count + 1))
-            else
-                echo "❌ Failed to mount $device_path even with default options"
-                sudo rmdir "$mount_point" 2>/dev/null || true
-            fi
-        else
-            sudo rmdir "$mount_point" 2>/dev/null || true
-        fi
+        # Clean up failed mount point
+        sudo rmdir "$mount_point" 2>/dev/null || true
     fi
-done <<< "$USB_DEVICES"
-
-echo ""
-if [ $mounted_count -eq 0 ]; then
-    echo "❌ No USB drives were successfully mounted."
-    exit 1
-else
-    echo "✓ Successfully mounted $mounted_count USB drive(s)."
-fi
+done
 
 echo ""
 echo "USB mounting complete. Check /media/$USER_NAME/ for mounted drives."
