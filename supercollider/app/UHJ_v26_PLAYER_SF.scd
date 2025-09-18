@@ -776,26 +776,17 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~getUSBFolderOptions = {
     var usbBase = ~detectUSBDir.value;
     var folders;
-    var contentDir, parts, usbEntries, entries, driveLikeEntries;
+    var contentDir, usbEntries, entries;
     
     if(usbBase == "/tmp/", {
         // No USB drive detected
         folders = ["<NO DRIVE>"];
     }, {
-        // USB drive found - determine content directory
+        // USB drive found - use the first folder inside the drive as content directory
         folders = [];
         if(File.exists(usbBase), {
-            contentDir = usbBase;
-            parts = usbBase.split($/).reject { |s| s.isEmpty };
-            // If usbBase is the parent mount root (/media/<user>/), or it contains drive-like folder names, dive into a drive folder first
             usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-            driveLikeEntries = usbEntries.select { |e|
-                var name = e.folderName.asString;
-                name.matchesRegexp("(?i)^sd[a-z][0-9]+$") or: { name == "FAT" or: { name == "FAT32" } }
-            };
-            if(parts.size == 2 or: { driveLikeEntries.size > 0 }, {
-                if(usbEntries.size > 0, { contentDir = usbEntries[0].fullPath; });
-            });
+            contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
             entries.do { |entry|
                 folders = folders.add(entry.folderName.asString.toUpper);
@@ -851,12 +842,9 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
         }, {
-            var contentDir = usbBase;
-            var parts = usbBase.split($/).reject { |s| s.isEmpty };
-            if(parts.size == 2, {
-                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-                if(usbEntries.size > 0, { contentDir = usbEntries[0].fullPath; });
-            });
+            // Resolve content directory the same way as ~getUSBFolderOptions
+            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             if(albumName == "<NO ALBUMS>", {
                 // No album folders, just files in artist folder
                 albumPath = contentDir +/+ artistName +/+ "/";
