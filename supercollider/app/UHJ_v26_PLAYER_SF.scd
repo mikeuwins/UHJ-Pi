@@ -2177,12 +2177,25 @@ win.front;
         
         // Update artist menu based on source
         if(isUSB, {
-            // USB mode - do not invoke mount here; just rescan after a short defer for FS settle
-            "USB button pressed - refreshing folder list...".postln;
-            {
-                usbOptions = ~getUSBFolderOptions.value;
-                ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
-            }.defer(1.2); // allow Pi to settle
+            // USB mode - prefer invoking mount-usb if present; fallback to direct rescan
+            if(File.exists("/usr/local/bin/mount-usb"), {
+                "USB button pressed - running mount script...".postln;
+                ("/usr/local/bin/mount-usb").unixCmd({ |result|
+                    "Mount USB script completed with result: ".post; result.postln;
+                    // Short settle before scanning
+                    1.0.wait;
+                    {
+                        usbOptions = ~getUSBFolderOptions.value;
+                        ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
+                    }.defer(0.2);
+                });
+            }, {
+                "USB button pressed - refreshing folder list...".postln;
+                {
+                    usbOptions = ~getUSBFolderOptions.value;
+                    ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
+                }.defer(1.2);
+            });
         }, {
             // ATK mode - use same discovery logic as USB
             ~artistMenu.items_(~getATKFolderOptions.value.collect { |item| ~displayCase.value(item) });
