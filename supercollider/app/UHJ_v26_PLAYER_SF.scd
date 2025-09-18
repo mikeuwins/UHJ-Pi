@@ -5,6 +5,13 @@
 // Helper function to convert to uppercase for display only
 ~displayCase = { |text| text.asString.toUpper };
 
+// Robust directory lister (bypasses PathName quirks on some filesystems)
+~listDirs = { |path|
+    var cmd = "LC_ALL=C find " ++ path.asString.quote ++ " -maxdepth 1 -mindepth 1 -type d -printf '%f\\n' 2>/dev/null";
+    var out = cmd.unixCmdGetStdOut;
+    out.split($\n).reject(_.isEmpty)
+};
+
 // Helper function to get original case from menu selection
 ~getOriginalCase = { |displayText, originalList|
     var idx = originalList.detectIndex { |item| item.asString.toUpper == displayText.asString.toUpper };
@@ -800,15 +807,25 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         // USB drive found - look inside it for artist folders (ignore drive name)
         folders = [];
         if(File.exists(usbBase), {
-            // Look inside ALL mounted USB roots and aggregate artist folders
-            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-            usbEntries.do { |root|
-                var entries = PathName(root.fullPath).entries.select { |entry| entry.isFolder };
-                entries.do { |entry|
-                    folders = folders.add(entry.folderName.asString); // Keep original case
+            // Aggregate artist folders at two levels:
+            // 1) Directly under /media/<user>/<LABEL>/ (some sticks use label root)
+            // 2) One level below each root (older layout)
+            var roots = ~listDirs.value(usbBase);
+            // Artists directly under label roots
+            roots.do { |rootName|
+                var rootPath = usbBase +/+ rootName +/+ "";
+                ~listDirs.value(rootPath).do { |artist|
+                    folders = folders.add(artist.asString);
                 };
             };
-            // Remove duplicates if the same artist exists under multiple roots
+            // Also add any artists directly under /media/<user> if a label wasn't used
+            ~listDirs.value(usbBase).do { |maybeArtist|
+                // Treat as artist only if it itself contains subdirectories or media files
+                var testPath = usbBase +/+ maybeArtist +/+ "";
+                if(("LC_ALL=C find " ++ testPath.quote ++ " -maxdepth 1 -mindepth 1 -printf '.' 2>/dev/null").unixCmdGetStdOut.size > 0) {
+                    folders = folders.add(maybeArtist.asString);
+                };
+            };
             folders = folders.removeDups;
         });
         
@@ -872,14 +889,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             albumPath = "/tmp/"; // fallback path
         }, {
             // Find which mounted root actually contains the selected artist
-            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            var usbRoots = ~listDirs.value(usbBase);
             var contentDir = usbBase;
-            var matchedRoot = usbEntries.detect { |root|
-                PathName(root.fullPath).entries.select { |e| e.isFolder }.any { |e|
-                    e.folderName.asString.toUpper == artistName.toUpper
-                }
+            var matchedRoot = usbRoots.detect { |rootName|
+                var rootPath = usbBase +/+ rootName +/+ "";
+                ~listDirs.value(rootPath).any { |e| e.asString.toUpper == artistName.toUpper }
             };
-            if(matchedRoot.notNil) { contentDir = matchedRoot.fullPath };
+            if(matchedRoot.notNil) { contentDir = usbBase +/+ matchedRoot +/+ "" };
 
             // Build final path using the matched root
             if(albumName == "<NO ALBUMS>", {
@@ -2178,15 +2194,19 @@ win.front;
         // Update artist menu based on source
         if(isUSB, {
             // USB mode - prefer invoking mount-usb if present; fallback to direct rescan
+            // Prevent double-press while mounting/scanning
+            view.enabled_(false);
             if(File.exists("/usr/local/bin/mount-usb"), {
                 "USB button pressed - running mount script...".postln;
                 ("/usr/local/bin/mount-usb").unixCmd({ |result|
                     "Mount USB script completed with result: ".post; result.postln;
-                    // Short settle before scanning
-                    1.0.wait;
+                    // Settle more on Pi to avoid second press
+                    1.8.wait;
                     {
                         usbOptions = ~getUSBFolderOptions.value;
                         ~artistMenu.items_(usbOptions);
+                        // Re-enable button after refresh
+                        view.enabled_(true);
                     }.defer(0.2);
                 });
             }, {
@@ -2194,7 +2214,8 @@ win.front;
                 {
                     usbOptions = ~getUSBFolderOptions.value;
                     ~artistMenu.items_(usbOptions);
-                }.defer(1.2);
+                    view.enabled_(true);
+                }.defer(1.8);
             });
         }, {
             // ATK mode - use same discovery logic as USB
