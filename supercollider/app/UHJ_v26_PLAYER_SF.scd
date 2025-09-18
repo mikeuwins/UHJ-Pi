@@ -2194,14 +2194,14 @@ win.front;
         // Update artist menu based on source
         if(isUSB, {
             // USB mode - prefer invoking mount-usb if present; fallback to direct rescan
-            // Prevent double-press while mounting/scanning
+            // Briefly disable to avoid accidental double-press, but keep UI responsive
             view.enabled_(false);
             if(File.exists("/usr/local/bin/mount-usb"), {
                 "USB button pressed - running mount script...".postln;
                 ("/usr/local/bin/mount-usb").unixCmd({ |result|
                     "Mount USB script completed with result: ".post; result.postln;
-                    // Settle more on Pi to avoid second press
-                    1.8.wait;
+                    // Short settle on Pi
+                    0.6.wait;
                     {
                         usbOptions = ~getUSBFolderOptions.value;
                         ~artistMenu.items_(usbOptions);
@@ -2215,7 +2215,7 @@ win.front;
                     usbOptions = ~getUSBFolderOptions.value;
                     ~artistMenu.items_(usbOptions);
                     view.enabled_(true);
-                }.defer(1.8);
+                }.defer(0.6);
             });
         }, {
             // ATK mode - use same discovery logic as USB
