@@ -776,7 +776,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~getUSBFolderOptions = {
     var usbBase = ~detectUSBDir.value;
     var folders;
-    var contentDir, parts, usbEntries, entries;
+    var contentDir, parts, usbEntries, entries, driveLikeEntries;
     
     if(usbBase == "/tmp/", {
         // No USB drive detected
@@ -787,9 +787,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(File.exists(usbBase), {
             contentDir = usbBase;
             parts = usbBase.split($/).reject { |s| s.isEmpty };
-            // If usbBase is the parent mount root (/media/<user>/), dive into first mounted drive
-            if(parts.size == 2, {
-                usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            // If usbBase is the parent mount root (/media/<user>/), or it contains drive-like folder names, dive into a drive folder first
+            usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            driveLikeEntries = usbEntries.select { |e|
+                var name = e.folderName.asString;
+                name.matchesRegexp("(?i)^sd[a-z][0-9]+$") or: { name == "FAT" or: { name == "FAT32" } }
+            };
+            if(parts.size == 2 or: { driveLikeEntries.size > 0 }, {
                 if(usbEntries.size > 0, { contentDir = usbEntries[0].fullPath; });
             });
             entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
