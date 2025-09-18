@@ -2,26 +2,9 @@
 // UHJ v25_SF - PSEUDO-SURROUND ENCODER WITH UNIFIED SFPlayerMeter
 // ============================================================================
 
-// Helper function to convert to uppercase for display only
-~displayCase = { |text| text.asString.toUpper };
-
-// Robust directory lister (bypasses PathName quirks on some filesystems)
-~listDirs = { |path|
-    var cmd = "LC_ALL=C find " ++ path.asString.quote ++ " -maxdepth 1 -mindepth 1 -type d -printf '%f\\n' 2>/dev/null";
-    var out = cmd.unixCmdGetStdOut;
-    out.split($\n).reject(_.isEmpty)
-};
-
-// Helper function to get original case from menu selection
-~getOriginalCase = { |displayText, originalList|
-    var idx = originalList.detectIndex { |item| item.asString.toUpper == displayText.asString.toUpper };
-    if(idx.notNil) { originalList[idx] } { displayText };
-};
-
 // Using standard Knob class with custom 360-degree action handling
 // Features automatic mouse/headtracker detection for intuitive control
 
-{
 var win, mainView,
     decoderChanged,
     lastInL, lastInR, minIn, maxIn,
@@ -78,7 +61,7 @@ var win, mainView,
     if(artists.isEmpty, {
         // No artists found
         foundArtist = nil;
-        foundAlbum = "<NO ARTISTS>"
+        foundAlbum = "..."
     }, {
         // Look for preferred album first
         foundArtist = nil;
@@ -112,7 +95,7 @@ var win, mainView,
                         if(looseFiles.size > 0, {
                             foundAlbum = "<NO ALBUMS>";
                         }, {
-                            foundAlbum = "<EMPTY>";
+                            foundAlbum = "...";
                         });
                     });
                 });
@@ -503,9 +486,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         albumPath = "/tmp/";
     });
     
-    "DEBUG: Scanning album path: ".post; albumPath.postln;
-    // Write debug info to file for troubleshooting
-    ("echo 'DEBUG: Scanning album path: " ++ albumPath ++ "' >> /tmp/uhj-debug.log").unixCmd;
     pn = PathName(albumPath);
     if(pn.isFolder.not) { ~filePaths = []; ^["(no files)"]; };
     
@@ -796,43 +776,25 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~getUSBFolderOptions = {
     var usbBase = ~detectUSBDir.value;
     var folders;
-    var debugFile;
-    
-    
     
     if(usbBase == "/tmp/", {
-        // No USB drive detected – do not attempt to mount here; app stays read-only
+        // No USB drive detected
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - look inside it for artist folders (ignore drive name)
         folders = [];
         if(File.exists(usbBase), {
-            // Aggregate artist folders at two levels:
-            // 1) Directly under /media/<user>/<LABEL>/ (some sticks use label root)
-            // 2) One level below each root (older layout)
-            var roots = ~listDirs.value(usbBase);
-            // Artists directly under label roots
-            roots.do { |rootName|
-                var rootPath = usbBase +/+ rootName +/+ "";
-                ~listDirs.value(rootPath).do { |artist|
-                    folders = folders.add(artist.asString);
+            // Look inside the USB drive for actual content folders
+            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            if(usbEntries.size > 0, {
+                // Use the first folder inside the USB drive as the content directory
+                var contentDir = usbEntries[0].fullPath;
+                var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
+                entries.do { |entry|
+                    folders = folders.add(entry.folderName.asString.toUpper);
                 };
-            };
-            // Also add any artists directly under /media/<user> if a label wasn't used
-            ~listDirs.value(usbBase).do { |maybeArtist|
-                // Treat as artist only if it itself contains subdirectories or media files
-                var testPath = usbBase +/+ maybeArtist +/+ "";
-                if(("LC_ALL=C find " ++ testPath.quote ++ " -maxdepth 1 -mindepth 1 -printf '.' 2>/dev/null").unixCmdGetStdOut.size > 0) {
-                    folders = folders.add(maybeArtist.asString);
-                };
-            };
-            folders = folders.removeDups;
+            });
         });
-        
-        // If no artist folders found, show <NO ARTISTS>
-        if(folders.isEmpty) {
-            folders = ["<NO ARTISTS>"];
-        }
     });
     
     folders;
@@ -852,16 +814,10 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(File.exists(atkBase), {
             // Look inside the ATK directory for actual content folders
             var entries = PathName(atkBase).entries.select { |entry| entry.isFolder };
-            // "DEBUG: Found ATK folders: ".post; entries.collect { |entry| entry.folderName.asString }.postln;
             entries.do { |entry|
-                folders = folders.add(entry.folderName.asString); // Keep original case
+                folders = folders.add(entry.folderName.asString.toUpper);
             };
         });
-        
-        // If no artist folders found, show <NO ARTISTS>
-        if(folders.isEmpty) {
-            folders = ["<NO ARTISTS>"];
-        }
     });
     
     folders;
@@ -888,19 +844,15 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
         }, {
-            // Find which mounted root actually contains the selected artist
-            var usbRoots = ~listDirs.value(usbBase);
-            var contentDir = usbBase;
-            var matchedRoot = usbRoots.detect { |rootName|
-                var rootPath = usbBase +/+ rootName +/+ "";
-                ~listDirs.value(rootPath).any { |e| e.asString.toUpper == artistName.toUpper }
-            };
-            if(matchedRoot.notNil) { contentDir = usbBase +/+ matchedRoot +/+ "" };
-
-            // Build final path using the matched root
+            // Use artist and album selections (account for USB drive name being ignored)
+            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+            var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
+            
             if(albumName == "<NO ALBUMS>", {
+                // No album folders, just files in artist folder
                 albumPath = contentDir +/+ artistName +/+ "/";
             }, {
+                // Use both artist and album
                 albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
             });
         });
@@ -912,7 +864,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         }, {
             // Find actual artist folder by case-insensitive matching
             var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == artistName.toUpper 
+                entry.folderName.asString.toUpper == artistName 
             };
             var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
             
@@ -921,8 +873,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 albumPath = actualArtistPath +/+ "/";
             }, {
                 // Find actual album folder by case-insensitive matching
-            var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == albumName.toUpper 
+                var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                    entry.folderName.asString.toUpper == albumName 
                 };
                 var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
                 albumPath = actualAlbumPath +/+ "/";
@@ -1268,7 +1220,6 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                 s.options.memSize = 65536;
                 s.options.numOutputBusChannels = outputs;
                 s.options.numInputBusChannels = inputs;
-                s.options.device = "JACK";
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
@@ -1481,7 +1432,6 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.options.memSize = 65536;
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
-                    s.options.device = "JACK";
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
@@ -2174,7 +2124,7 @@ win.front;
     .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |view|
-        var isUSB, usbOptions;
+        var isUSB;
         isUSB = view.value == 1;
         "Source switched to: ".post; (isUSB ? "USB" : "ATK").postln;
         
@@ -2193,33 +2143,32 @@ win.front;
         
         // Update artist menu based on source
         if(isUSB, {
-            // USB mode - prefer invoking mount-usb if present; fallback to direct rescan
-            // Briefly disable to avoid accidental double-press, but keep UI responsive
-            view.enabled_(false);
-            if(File.exists("/usr/local/bin/mount-usb"), {
-                "USB button pressed - running mount script...".postln;
+            // USB mode - show actual folders found on USB drive
+            var usbOptions = ~getUSBFolderOptions.value;
+            ~artistMenu.items_(usbOptions);
+            
+            // If no USB drive detected, try to mount and refresh after delay
+            if(usbOptions == ["<NO DRIVE>"], {
+                "No USB drive detected. Attempting to mount USB drives...".postln;
                 ("/usr/local/bin/mount-usb").unixCmd({ |result|
                     "Mount USB script completed with result: ".post; result.postln;
-                    // Short settle on Pi
-                    0.6.wait;
+                    // Wait a moment for filesystem to settle, then refresh
+                    1.wait;
                     {
-                        usbOptions = ~getUSBFolderOptions.value;
-                        ~artistMenu.items_(usbOptions);
-                        // Re-enable button after refresh
-                        view.enabled_(true);
-                    }.defer(0.2);
+                        var newUsbOptions = ~getUSBFolderOptions.value;
+                        "Refreshing USB folder list...".postln;
+                        ~artistMenu.items_(newUsbOptions);
+                        if(newUsbOptions != ["<NO DRIVE>"], {
+                            "USB drive mounted successfully! Please select from the artist menu.".postln;
+                        }, {
+                            "No USB drives found after mount attempt.".postln;
+                        });
+                    }.defer;
                 });
-            }, {
-                "USB button pressed - refreshing folder list...".postln;
-                {
-                    usbOptions = ~getUSBFolderOptions.value;
-                    ~artistMenu.items_(usbOptions);
-                    view.enabled_(true);
-                }.defer(0.6);
             });
         }, {
             // ATK mode - use same discovery logic as USB
-            ~artistMenu.items_(~getATKFolderOptions.value.collect { |item| ~displayCase.value(item) });
+            ~artistMenu.items_(~getATKFolderOptions.value);
         });
         
         // Reset artist menu selection and update album menu based on mode
@@ -2234,7 +2183,7 @@ win.front;
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
             var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             var actualArtistName = PathName(contentDir).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == artistName.toUpper 
+                entry.folderName.asString.toUpper == artistName 
             };
             var artistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { contentDir +/+ artistName };
             
@@ -2249,7 +2198,7 @@ win.front;
                 albumList = [];
                 // Add album folders if they exist
                 if(entries.size > 0) {
-                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
+                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
                 };
                 // Add <NO ALBUMS> if there are files outside album folders
                 if(audioFiles.size > 0) {
@@ -2257,13 +2206,13 @@ win.front;
                 };
                 // Fallback if nothing found
                 if(albumList.isEmpty) {
-                    albumList = ["<NO ALBUMS>"];
+                    albumList = ["..."];
                 };
             }, {
-                albumList = ["<NO ALBUMS>"];
+                albumList = ["..."];
             });
             
-            ~albumMenu.items_(albumList.collect { |item| ~displayCase.value(item) });
+            ~albumMenu.items_(albumList);
             ~albumMenu.value_(0);
         }, {
             // ATK mode - build album list based on selected artist
@@ -2287,7 +2236,7 @@ win.front;
                 albumList = [];
                 // Add album folders if they exist
                 if(entries.size > 0) {
-                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
+                    albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
                 };
                 // Add <NO ALBUMS> if there are files outside album folders
                 if(audioFiles.size > 0) {
@@ -2295,12 +2244,12 @@ win.front;
                 };
                 // Fallback if nothing found
                 if(albumList.isEmpty) {
-                    albumList = ["<NO ALBUMS>"];
+                    albumList = ["..."];
                 };
             }, {
-                albumList = ["<NO ALBUMS>"];
+                albumList = ["..."];
             });
-            ~albumMenu.items_(albumList.collect { |item| ~displayCase.value(item) });
+            ~albumMenu.items_(albumList);
             ~albumMenu.value_(0);
         });
         
@@ -2314,7 +2263,7 @@ win.front;
 
 // Create Artist and Album menus after window is visible
 ~artistMenu = PopUpMenu(mainView, Rect(28, 86, 140, 35))
-    .items_( ~getATKFolderOptions.value.collect { |item| ~displayCase.value(item) } )
+    .items_( ~getATKFolderOptions.value )
     .font_(Font("LCD 5x7 Segment Monospace", 11))
     .background_(Color.black)
     .stringColor_(Color.cyan)
@@ -2336,20 +2285,13 @@ win.front;
             if(isUSB, {
                 // USB mode - show actual albums/folders in selected artist directory
                 case 
-                { artistName == "<NO DRIVE>" } { albumList = ["<NO ALBUMS>"]; }
+                { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
                 {
-                    // Get actual subdirectories: find the root which contains the selected artist
+                    // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
                     var usbBase = ~detectUSBDir.value;
                     var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-                    var artistPath; // declare variable in this scope
-                    var contentDir = usbBase;
-                    var matchedRoot = usbEntries.detect { |root|
-                        PathName(root.fullPath).entries.select { |e| e.isFolder }.any { |e|
-                            e.folderName.asString.toUpper == artistName
-                        }
-                    };
-                    if(matchedRoot.notNil) { contentDir = matchedRoot.fullPath };
-                    artistPath = contentDir +/+ artistName;
+                    var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
+                    var artistPath = contentDir +/+ artistName;
                     
                     if(File.exists(artistPath), {
                         var entries = PathName(artistPath).entries.select { |entry| entry.isFolder };
@@ -2362,7 +2304,7 @@ win.front;
                         albumList = [];
                         // Add album folders if they exist
                         if(entries.size > 0) {
-                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
+                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
                         };
                         // Add <NO ALBUMS> if there are files outside album folders
                         if(audioFiles.size > 0) {
@@ -2370,16 +2312,16 @@ win.front;
                         };
                         // Fallback if nothing found
                         if(albumList.isEmpty) {
-                            albumList = ["<NO ALBUMS>"];
+                            albumList = ["..."];
                         };
                     }, {
-                        albumList = ["<NO ALBUMS>"];
+                        albumList = ["..."];
                     });
                 };
             }, {
                 // ATK mode - show actual albums/folders in selected artist directory
                 case 
-                { artistName == "<NO DRIVE>" } { albumList = ["<NO ALBUMS>"]; }
+                { artistName == "<NO DRIVE>" } { albumList = ["..."]; }
                 {
                     // Get actual subdirectories in the artist folder (ATK base is the uhj folder directly)
                     var atkBase = Atk.userSoundsDir ++ "/uhj";
@@ -2400,7 +2342,7 @@ win.front;
                         albumList = [];
                         // Add album folders if they exist
                         if(entries.size > 0) {
-                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString }; // Keep original case
+                            albumList = albumList ++ entries.collect { |entry| entry.folderName.asString.toUpper };
                         };
                         // Add <NO ALBUMS> if there are files outside album folders
                         if(audioFiles.size > 0) {
@@ -2408,15 +2350,15 @@ win.front;
                         };
                         // Fallback if nothing found
                         if(albumList.isEmpty) {
-                            albumList = ["<NO ALBUMS>"];
+                            albumList = ["..."];
                         };
                     }, {
-                        albumList = ["<NO ALBUMS>"];
+                        albumList = ["..."];
                     });
                 };
             });
             // Always clear and update album menu
-            ~albumMenu.items_(albumList.collect { |item| ~displayCase.value(item) });
+            ~albumMenu.items_(albumList);
             // Temporarily disable action to prevent interference
             oldAction = ~albumMenu.action;
             ~albumMenu.action_(nil);
@@ -4335,5 +4277,3 @@ if(Platform.case(\linux, { true }, { false })) {
         });
     };
 };
-
-}.value; // Execute the main function block
