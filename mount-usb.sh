@@ -41,8 +41,14 @@ while IFS= read -r device_info; do
     
     echo "Attempting to mount $device_path..."
     
-    # Create mount point
-    mount_point="/media/$USER_NAME/$device_name"
+    # Prefer volume label for mount point; fall back to device name
+    LABEL=$(sudo blkid -o value -s LABEL "$device_path" 2>/dev/null | head -n1)
+    if [ -n "$LABEL" ]; then
+        mount_dir="$LABEL"
+    else
+        mount_dir="$device_name"
+    fi
+    mount_point="/media/$USER_NAME/$mount_dir"
     sudo mkdir -p "$mount_point"
     
     # Detect filesystem type and mount with appropriate options
@@ -66,6 +72,11 @@ while IFS= read -r device_info; do
         sudo chown $USER_NAME:$USER_NAME "$mount_point"
         echo "✓ Set ownership to $USER_NAME"
         
+        # Allow udev/fs to settle so new directories appear consistently
+        sudo udevadm settle 2>/dev/null || true
+        sync
+        sleep 0.3
+        
         # List contents to verify
         echo "Contents:"
         ls -la "$mount_point" | head -5
@@ -82,6 +93,9 @@ while IFS= read -r device_info; do
             if sudo mount "$device_path" "$mount_point" 2>/dev/null; then
                 echo "✓ Successfully mounted $device_path at $mount_point (default options)"
                 sudo chown $USER_NAME:$USER_NAME "$mount_point"
+                sudo udevadm settle 2>/dev/null || true
+                sync
+                sleep 0.3
                 mounted_count=$((mounted_count + 1))
             else
                 echo "❌ Failed to mount $device_path even with default options"
