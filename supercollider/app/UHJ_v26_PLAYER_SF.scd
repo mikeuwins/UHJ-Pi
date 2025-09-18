@@ -794,18 +794,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     
     
     if(usbBase == "/tmp/", {
-        // No USB drive detected - try to mount USB drives
-        "No USB drive detected. Attempting to mount USB drives...".postln;
-        ("/usr/local/bin/mount-usb").unixCmd({ |result|
-            "Mount USB script completed with result: ".post; result.postln;
-            // Re-detect USB drives after mounting attempt
-            usbBase = ~detectUSBDir.value;
-            if(usbBase != "/tmp/", {
-                "USB drive mounted successfully!".postln;
-            }, {
-                "No USB drives found after mount attempt.".postln;
-            });
-        });
+        // No USB drive detected – do not attempt to mount here; app stays read-only
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - look inside it for artist folders (ignore drive name)
@@ -2188,44 +2177,12 @@ win.front;
         
         // Update artist menu based on source
         if(isUSB, {
-            // USB mode - check if mount script exists, if not just refresh directly
-            if(File.exists("/usr/local/bin/mount-usb"), {
-                "USB button pressed - running mount script...".postln;
-                ("/usr/local/bin/mount-usb").unixCmd({ |result|
-                    "Mount USB script completed with result: ".post; result.postln;
-                    "DEBUG: Mount script result: ".post; result.postln;
-                    // Wait a moment for filesystem to settle, then refresh
-                    1.wait;
-                    {
-                        "DEBUG: About to call getUSBFolderOptions".postln;
-                        usbOptions = ~getUSBFolderOptions.value;
-                        "DEBUG: getUSBFolderOptions returned: ".post; usbOptions.postln;
-                        "Refreshing USB folder list...".postln;
-                        ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
-                        if(usbOptions != ["<NO DRIVE>"], {
-                            "USB drive mounted successfully! Please select from the artist menu.".postln;
-                        }, {
-                            "No USB drives found after mount attempt.".postln;
-                        });
-                    }.defer;
-                });
-            }, {
-                // Mount script doesn't exist (e.g., on dev machine), just refresh directly
-                "USB button pressed - refreshing folder list...".postln;
-                "DEBUG: Mount script not found, calling getUSBFolderOptions directly".postln;
-                {
-                    "DEBUG: About to call getUSBFolderOptions".postln;
-                    usbOptions = ~getUSBFolderOptions.value;
-                    "DEBUG: getUSBFolderOptions returned: ".post; usbOptions.postln;
-                    "Refreshing USB folder list...".postln;
-                    ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
-                    if(usbOptions != ["<NO DRIVE>"], {
-                        "USB folders loaded successfully! Please select from the artist menu.".postln;
-                    }, {
-                        "No USB drives found.".postln;
-                    });
-                }.defer;
-            });
+            // USB mode - do not invoke mount here; just rescan after a short defer for FS settle
+            "USB button pressed - refreshing folder list...".postln;
+            {
+                usbOptions = ~getUSBFolderOptions.value;
+                ~artistMenu.items_(usbOptions.collect { |item| ~displayCase.value(item) });
+            }.defer(1.2); // allow Pi to settle
         }, {
             // ATK mode - use same discovery logic as USB
             ~artistMenu.items_(~getATKFolderOptions.value.collect { |item| ~displayCase.value(item) });
