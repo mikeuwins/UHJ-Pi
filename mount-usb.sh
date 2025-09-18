@@ -10,8 +10,8 @@ USER_NAME=$(whoami)
 USER_UID=$(id -u)
 USER_GID=$(id -g)
 
-# Find USB block devices
-USB_DEVICES=$(lsblk -no NAME,TYPE,MOUNTPOINT | grep -E "sd[a-z][0-9]*.*part" | grep -v "/")
+# Find USB block devices (raw output avoids unicode tree characters)
+USB_DEVICES=$(lsblk --raw -no NAME,TYPE,MOUNTPOINT | grep -E "sd[a-z][0-9]*.*part" | grep -v "/")
 
 if [ -z "$USB_DEVICES" ]; then
     echo "No unmounted USB drives found."
