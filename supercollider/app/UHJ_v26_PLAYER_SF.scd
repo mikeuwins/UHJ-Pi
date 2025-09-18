@@ -776,6 +776,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~getUSBFolderOptions = {
     var usbBase = ~detectUSBDir.value;
     var folders;
+    var contentDir, parts, usbEntries, entries;
     
     if(usbBase == "/tmp/", {
         // No USB drive detected
@@ -784,14 +785,14 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         // USB drive found - determine content directory
         folders = [];
         if(File.exists(usbBase), {
-            var contentDir = usbBase;
-            var parts = usbBase.split($/).reject { |s| s.isEmpty };
+            contentDir = usbBase;
+            parts = usbBase.split($/).reject { |s| s.isEmpty };
             // If usbBase is the parent mount root (/media/<user>/), dive into first mounted drive
             if(parts.size == 2, {
-                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+                usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
                 if(usbEntries.size > 0, { contentDir = usbEntries[0].fullPath; });
             });
-            var entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
+            entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
             entries.do { |entry|
                 folders = folders.add(entry.folderName.asString.toUpper);
             };
