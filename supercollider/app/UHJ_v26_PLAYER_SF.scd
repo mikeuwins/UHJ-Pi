@@ -1869,10 +1869,13 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         
         // Check if pairing is already in progress
         if (~pairingInProgress) { 
+            ("echo 'Pairing already in progress' >> /tmp/bt-debug.log").unixCmd;
             ^this 
         };
         
         // Check actual device status to determine action
+        ("echo '=== BLUETOOTH PAIR BUTTON PRESSED ===' >> /tmp/bt-debug.log").unixCmd;
+        ("echo 'Timestamp: '$(date) >> /tmp/bt-debug.log").unixCmd;
         ~pairingInProgress = true;
         ~headtrackPairBtn.value_(1); // Show working
         
@@ -1882,7 +1885,9 @@ StaticText(mainView, Rect(618, 10, 140, 28))
             // Use the MAC address detected at startup
             if (~headtrackerMac.notEmpty) {
                 // Check the ACTUAL device status using startup MAC
+                ("echo 'Checking device info for MAC: " ++ ~headtrackerMac ++ "' >> /tmp/bt-debug.log").unixCmd;
                 deviceInfo = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+                ("echo 'Device info result: " ++ deviceInfo.replace("\n", " ") ++ "' >> /tmp/bt-debug.log").unixCmd;
                 isPaired = deviceInfo.contains("Paired: yes");
                 isConnected = deviceInfo.contains("Connected: yes");
             } {
