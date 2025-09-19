@@ -7,12 +7,16 @@ echo "=== Simple Headtracker Pairing ==="
 echo "Looking for headtracker '$DEVICE_NAME'..."
 
 # Simple scan to find devices
+echo "Starting Bluetooth scan..."
 {
     echo "scan on"
     sleep 5
     echo "scan off"
     echo "exit"
-} | bluetoothctl > /dev/null
+} | bluetoothctl > /tmp/bt-scan-process.log 2>&1
+
+echo "Scan process output:"
+cat /tmp/bt-scan-process.log
  
 # Find the HT device MAC address
 echo "Scanning for devices..."
