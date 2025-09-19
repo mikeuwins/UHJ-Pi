@@ -1949,7 +1949,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 // First attempt
                 ("echo 'Running pairing script: " ++ scriptPath ++ "' >> /tmp/bt-debug.log").unixCmd;
                 try {
-                    result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                    result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                     ("echo 'Script result: " ++ result.replace("\n", " ") ++ "' >> /tmp/bt-debug.log").unixCmd;
                     success = result.contains("PAIRED_AND_CONNECTED");
                     ("echo 'Success: " ++ success ++ "' >> /tmp/bt-debug.log").unixCmd;
@@ -1965,7 +1965,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                     1.wait; // Brief pause between attempts
                     
                     try {
-                        result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                        result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                         success = result.contains("PAIRED_AND_CONNECTED");
                         if (success) {
                             ("Second attempt succeeded!").postln;
