@@ -555,6 +555,10 @@ export INPUT_SOURCE
 export INPUT_CONTROL
 export INPUT_PAIR
 
+# Mount USB drives before starting the application
+echo "Mounting USB drives..."
+/usr/local/bin/mount-usb
+
 # Launch SuperCollider application
 echo "Starting Player application..."
 cd /home/$USER/UHJ-Pi
