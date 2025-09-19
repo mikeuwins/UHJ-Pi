@@ -2140,7 +2140,8 @@ win.front;
         
         // Update artist menu based on source
         if(isUSB, {
-            // USB mode - show actual folders found on USB drive
+            // USB mode - first mount any drives, then show folders
+            ("/usr/local/bin/mount-usb").unixCmdGetStdOut.postln;
             var usbOptions = ~getUSBFolderOptions.value;
             ~artistMenu.items_(usbOptions);
             
