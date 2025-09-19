@@ -2121,7 +2121,7 @@ win.front;
     .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |view|
-        var isUSB;
+        var isUSB, usbOptions;
         isUSB = view.value == 1;
         "Source switched to: ".post; (isUSB ? "USB" : "ATK").postln;
         
@@ -2140,30 +2140,10 @@ win.front;
         
         // Update artist menu based on source
         if(isUSB, {
-            // USB mode - first mount any drives, then show folders
+            // USB mode - mount drives first, then show folders
             ("/usr/local/bin/mount-usb").unixCmdGetStdOut.postln;
-            var usbOptions = ~getUSBFolderOptions.value;
+            usbOptions = ~getUSBFolderOptions.value;
             ~artistMenu.items_(usbOptions);
-            
-            // If no USB drive detected, try to mount and refresh after delay
-            if(usbOptions == ["<NO DRIVE>"], {
-                "No USB drive detected. Attempting to mount USB drives...".postln;
-                ("/usr/local/bin/mount-usb").unixCmd({ |result|
-                    "Mount USB script completed with result: ".post; result.postln;
-                    // Wait a moment for filesystem to settle, then refresh
-                    1.wait;
-                    {
-                        var newUsbOptions = ~getUSBFolderOptions.value;
-                        "Refreshing USB folder list...".postln;
-                        ~artistMenu.items_(newUsbOptions);
-                        if(newUsbOptions != ["<NO DRIVE>"], {
-                            "USB drive mounted successfully! Please select from the artist menu.".postln;
-                        }, {
-                            "No USB drives found after mount attempt.".postln;
-                        });
-                    }.defer;
-                });
-            });
         }, {
             // ATK mode - use same discovery logic as USB
             ~artistMenu.items_(~getATKFolderOptions.value);
