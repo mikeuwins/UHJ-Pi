@@ -699,11 +699,11 @@ chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "Bluetooth pairing script installed to /usr/local/bin/"
 
-# Configure passwordless sudo for reboot
-echo "Configuring passwordless sudo for reboot..."
-echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot" >> /etc/sudoers.d/uhj-pi-reboot
+# Configure passwordless sudo for reboot and USB mounting
+echo "Configuring passwordless sudo for reboot and USB mounting..."
+echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /bin/mount, /bin/umount, /bin/mkdir, /sbin/blkid, /bin/chown" >> /etc/sudoers.d/uhj-pi-reboot
 chmod 440 /etc/sudoers.d/uhj-pi-reboot
-echo "✓ Passwordless reboot configured"
+echo "✓ Passwordless reboot and USB mounting configured"
 
 # Configure automatic login
 echo "Configuring automatic login..."
