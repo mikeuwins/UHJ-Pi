@@ -15,10 +15,17 @@ echo "Looking for headtracker '$DEVICE_NAME'..."
 } | bluetoothctl > /dev/null
  
 # Find the HT device MAC address
+echo "Scanning for devices..."
+bluetoothctl devices > /tmp/bt-scan.log 2>&1
+echo "Available devices:" >> /tmp/bt-scan.log
+cat /tmp/bt-scan.log
+
 DEVICE_MAC=$(bluetoothctl devices | grep "$DEVICE_NAME" | awk '{print $2}')
 
 if [ -z "$DEVICE_MAC" ]; then
     echo "Headtracker '$DEVICE_NAME' not found"
+    echo "Available devices:"
+    bluetoothctl devices
     echo "PAIRING_FAILED"
     exit 1
 fi
