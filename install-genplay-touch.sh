@@ -701,7 +701,7 @@ echo "Bluetooth pairing script installed to /usr/local/bin/"
 
 # Configure passwordless sudo for reboot and USB mounting
 echo "Configuring passwordless sudo for reboot and USB mounting..."
-echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /bin/mount, /bin/umount, /bin/mkdir, /sbin/blkid, /bin/chown" >> /etc/sudoers.d/uhj-pi-reboot
+echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /usr/bin/mount, /usr/bin/umount, /bin/mkdir, /sbin/blkid, /bin/chown" >> /etc/sudoers.d/uhj-pi-reboot
 chmod 440 /etc/sudoers.d/uhj-pi-reboot
 echo "✓ Passwordless reboot and USB mounting configured"
 
