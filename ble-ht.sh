@@ -7,19 +7,9 @@ echo "=== Simple Headtracker Pairing ==="
 echo "Looking for headtracker '$DEVICE_NAME'..."
 
 # Ensure Bluetooth controller is ready
-echo "Preparing Bluetooth controller..."
-echo "Checking controller status:"
-bluetoothctl show
-
-echo "Powering on controller:"
-bluetoothctl power on
-
-echo "Checking controller status after power on:"
-bluetoothctl show
-
-echo "Enabling discoverable and pairable:"
-bluetoothctl discoverable on
-bluetoothctl pairable on
+bluetoothctl power on > /dev/null 2>&1
+bluetoothctl discoverable on > /dev/null 2>&1
+bluetoothctl pairable on > /dev/null 2>&1
 
 # Simple scan to find devices
 echo "Starting Bluetooth scan..."
@@ -30,14 +20,7 @@ echo "Starting Bluetooth scan..."
     echo "exit"
 } | bluetoothctl > /tmp/bt-scan-process.log 2>&1
 
-echo "Scan process output:"
-cat /tmp/bt-scan-process.log
-
 # Find the HT device MAC address
-echo "Scanning for devices..."
-bluetoothctl devices
-echo "Available devices:"
-
 DEVICE_MAC=$(bluetoothctl devices | grep "$DEVICE_NAME" | awk '{print $2}')
 
 if [ -z "$DEVICE_MAC" ]; then
