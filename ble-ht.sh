@@ -6,6 +6,14 @@ DEVICE_NAME="HT"
 echo "=== Simple Headtracker Pairing ==="
 echo "Looking for headtracker '$DEVICE_NAME'..."
 
+# Ensure Bluetooth controller is ready
+echo "Preparing Bluetooth controller..."
+bluetoothctl power on > /tmp/bt-prep.log 2>&1
+bluetoothctl discoverable on >> /tmp/bt-prep.log 2>&1
+bluetoothctl pairable on >> /tmp/bt-prep.log 2>&1
+echo "Controller preparation output:"
+cat /tmp/bt-prep.log
+
 # Simple scan to find devices
 echo "Starting Bluetooth scan..."
 {
