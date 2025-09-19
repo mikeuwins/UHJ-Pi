@@ -61,7 +61,7 @@ var win, mainView,
     if(artists.isEmpty, {
         // No artists found
         foundArtist = nil;
-        foundAlbum = "..."
+        foundAlbum = "<NO ARTISTS>"
     }, {
         // Look for preferred album first
         foundArtist = nil;
@@ -95,7 +95,7 @@ var win, mainView,
                         if(looseFiles.size > 0, {
                             foundAlbum = "<NO ALBUMS>";
                         }, {
-                            foundAlbum = "...";
+                            foundAlbum = "<NO ARTISTS>";
                         });
                     });
                 });
