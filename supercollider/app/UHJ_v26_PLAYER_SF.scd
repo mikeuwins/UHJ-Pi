@@ -2142,7 +2142,9 @@ win.front;
         if(isUSB, {
             // USB mode - mount drives first, then show folders
             "Attempting to mount USB drives...".postln;
+            ("echo 'USB button pressed at: '$(date) >> /tmp/uhj-debug.log").unixCmd;
             mountResult = ("/usr/local/bin/mount-usb").unixCmdGetStdOut;
+            ("echo 'Mount result: " ++ mountResult.replace("\n", " ") ++ "' >> /tmp/uhj-debug.log").unixCmd;
             "Mount result: ".post; mountResult.postln;
             usbOptions = ~getUSBFolderOptions.value;
             ~artistMenu.items_(usbOptions);
