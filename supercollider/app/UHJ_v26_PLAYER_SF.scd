@@ -2121,7 +2121,7 @@ win.front;
     .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |view|
-        var isUSB, usbOptions;
+        var isUSB, usbOptions, mountResult;
         isUSB = view.value == 1;
         "Source switched to: ".post; (isUSB ? "USB" : "ATK").postln;
         
@@ -2141,7 +2141,9 @@ win.front;
         // Update artist menu based on source
         if(isUSB, {
             // USB mode - mount drives first, then show folders
-            ("/usr/local/bin/mount-usb").unixCmdGetStdOut.postln;
+            "Attempting to mount USB drives...".postln;
+            mountResult = ("/usr/local/bin/mount-usb").unixCmdGetStdOut;
+            "Mount result: ".post; mountResult.postln;
             usbOptions = ~getUSBFolderOptions.value;
             ~artistMenu.items_(usbOptions);
         }, {
