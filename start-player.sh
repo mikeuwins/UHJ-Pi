@@ -32,7 +32,7 @@ create_title_box() {
     printf "\n"
     
     # Title line
-    printf "*%*s%s%*s*\n" $padding "" "$title" $((padding + (width - title_len - 4) % 2)) ""
+    printf "*%*s%s%*s*\n" $padding "" "$title" $padding ""
     
     # Bottom border
     printf "%*s" $width | tr ' ' '*'
@@ -156,7 +156,6 @@ detect_generic_devices() {
                 break
             fi
         done
-        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -281,7 +280,6 @@ detect_generic_devices() {
                     fi
                 fi
             done
-            echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
             else
@@ -323,6 +321,7 @@ detect_generic_devices() {
         fi
     fi
 
+    echo ""
     echo -e "${YELLOW}=== Output Device Setup ===${RESET}"
     echo ""
     
@@ -334,7 +333,6 @@ detect_generic_devices() {
             break
         fi
     done
-    echo ""
     echo "Detecting Audio Output Device..."
     sleep 1
 
@@ -442,7 +440,6 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
 echo "Scanning for USB drives..."
 echo ""
 # Capture mount output to check for success
@@ -523,7 +520,6 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
 
 clear
 
