@@ -11,7 +11,7 @@ WHITE='\033[1;37m'      # Bright white
 RESET='\033[0m'         # Reset to default
 
 # Magic wand: uncomment the line below to make ALL text UPPERCASE
-# echo() { command echo "$@" | tr '[:lower:]' '[:upper:]'; }
+echo() { command echo "$@" | tr '[:lower:]' '[:upper:]'; }
 
 clear
 
@@ -156,7 +156,6 @@ detect_generic_devices() {
                 break
             fi
         done
-        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -268,7 +267,6 @@ detect_generic_devices() {
                     echo "$((i+1)). ${input_options[$i]}"
                 fi
             done
-            echo ""
             for i in {10..1}; do
                 echo -ne "\rSelect option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
@@ -282,7 +280,6 @@ detect_generic_devices() {
                     fi
                 fi
             done
-            echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
             else
@@ -335,7 +332,6 @@ detect_generic_devices() {
             break
         fi
     done
-    echo ""
     echo "Detecting Audio Output Device..."
     sleep 1
 
@@ -443,7 +439,6 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
 echo "Scanning for USB drives..."
 echo ""
 # Capture mount output to check for success
@@ -467,7 +462,6 @@ for i in {5..1}; do
         break
     fi
 done
-echo ""
 
 # Initialize Bluetooth headtracker (if available)
 clear
@@ -480,7 +474,6 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
@@ -525,7 +518,6 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
 
 clear
 
@@ -575,6 +567,5 @@ if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
             break
         fi
     done
-    echo ""
     exit 1
 fi
