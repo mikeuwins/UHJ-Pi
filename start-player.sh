@@ -244,9 +244,17 @@ detect_generic_devices() {
                 fi
             done
             echo ""
-            echo "Press number to select (auto-continuing in 10 seconds):"
+            echo "Select option:"
             echo ""
-            read -t 10 -n 1 choice
+            for i in {10..1}; do
+                echo -ne "\rContinuing in $i... (Press number to select) "
+                read -t 1 -n 1 choice
+                if [ $? -eq 0 ] && [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
+                    echo ""
+                    break
+                fi
+            done
+            echo ""
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
@@ -408,6 +416,7 @@ export INPUT_CONTROL
 export INPUT_PAIR
 
 # Mount USB drives before starting the application
+clear
 echo "=== USB Drive Setup ==="
 echo ""
 echo "Insert a USB drive containing your music files."
@@ -472,19 +481,20 @@ for i in {10..1}; do
     fi
 done
 echo ""
-echo "Scanning for headtracker..."
+echo ""
+echo -n "Scanning for headtracker..."
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
 {
     while true; do
-        echo -ne "\rScanning... | "
+        echo -ne "\rScanning for headtracker... | "
         sleep 0.1
-        echo -ne "\rScanning... / "
+        echo -ne "\rScanning for headtracker... / "
         sleep 0.1
-        echo -ne "\rScanning... - "
+        echo -ne "\rScanning for headtracker... - "
         sleep 0.1
-        echo -ne "\rScanning... \\ "
+        echo -ne "\rScanning for headtracker... \\ "
         sleep 0.1
     done
 } &
@@ -492,7 +502,7 @@ spinner_pid=$!
 
 ht_output=$(/usr/local/bin/ble-ht.sh 2>&1)
 kill $spinner_pid 2>/dev/null
-echo -e "\rScanning complete.    "
+echo -e "\rScanning for headtracker... complete."
 ht_exit_code=$?
 
 echo ""
