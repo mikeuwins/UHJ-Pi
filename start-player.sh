@@ -10,15 +10,13 @@ show_device_info() {
     
     echo "✓ Selected: $card_name"
     
-    # Show only relevant channel count for the device type
+    # Show channel count - useful info for users
     if [ "$device_type" = "input" ]; then
-        # Get input channel count from stream info (most reliable)
         local input_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$input_channels" ] && [ "$input_channels" -gt 0 ]; then
             echo "  Inputs: $input_channels channels"
         fi
     elif [ "$device_type" = "output" ]; then
-        # Get output channel count from stream info (most reliable)
         local output_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Playback:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$output_channels" ] && [ "$output_channels" -gt 0 ]; then
             echo "  Outputs: $output_channels channels"
@@ -83,7 +81,7 @@ detect_flac_devices() {
     echo "=== Audio Device Setup ==="
     echo ""
     echo "Step 1: Connect your USB audio output device"
-    read -p "Press Enter when your output device is connected..." _
+    read -t 10 -p "Press Enter when your output device is connected (auto-continuing in 10 seconds)..." _
     echo "Scanning for output devices..."
     sleep 2
 
@@ -101,9 +99,13 @@ detect_flac_devices() {
     # Check if any output device was found
     if [ -z "$output_card" ]; then
         echo "❌ No output audio device found!"
-        echo "Please connect a USB audio output device and try again."
         echo ""
-        read -p "Press Enter to retry..." _
+        echo "Please check:"
+        echo "  • USB audio device is connected"
+        echo "  • Device is powered on"
+        echo "  • USB cable is working"
+        echo ""
+        read -t 10 -p "Press Enter to retry (auto-continuing in 10 seconds)..." _
         detect_flac_devices  # Recursive call to retry
         return
     fi
@@ -111,7 +113,7 @@ detect_flac_devices() {
 
     echo ""
     echo "Step 2: Optional - Connect an input device (or press Enter to skip)"
-    read -p "Press Enter when your input device is connected (or Enter to skip)..." _
+    read -t 10 -p "Press Enter when your input device is connected (auto-continuing in 10 seconds to skip)..." _
     
     # Check if user wants to configure input
     if [ -n "$_" ]; then
@@ -196,11 +198,14 @@ detect_flac_devices() {
                         echo "  $((i+1)). ${input_options[$i]}"
                     done
                     echo ""
-                    read -p "Choose input source (1-${#input_options[@]}) or Enter for first: " choice
+                    echo "Defaulting to first option: ${input_options[0]}"
+                    read -t 15 -p "Press Enter to continue (or type a number 1-${#input_options[@]} to choose, auto-continuing in 15 seconds): " choice
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                         input_source="${input_options[$((choice-1))]}"
+                        echo "✓ Selected input: ${input_source}"
                     else
                         input_source="${input_options[0]}"
+                        echo "✓ Using default input: ${input_source}"
                     fi
                 elif [ ${#input_options[@]} -eq 1 ]; then
                     input_source="${input_options[0]}"
@@ -272,6 +277,8 @@ detect_flac_devices() {
         echo "• No input mute control"
     fi
     echo ""
+    read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
+    clear
 }
 
 CONFIG_FILE="$HOME/.uhj-generic-audio.conf"
@@ -283,15 +290,13 @@ show_device_info() {
     
     echo "✓ Selected: $card_name"
     
-    # Show only relevant channel count for the device type
+    # Show channel count - useful info for users
     if [ "$device_type" = "input" ]; then
-        # Get input channel count from stream info (most reliable)
         local input_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$input_channels" ] && [ "$input_channels" -gt 0 ]; then
             echo "  Inputs: $input_channels channels"
         fi
     elif [ "$device_type" = "output" ]; then
-        # Get output channel count from stream info (most reliable)
         local output_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Playback:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$output_channels" ] && [ "$output_channels" -gt 0 ]; then
             echo "  Outputs: $output_channels channels"
@@ -305,33 +310,55 @@ detect_generic_devices() {
     input_name=""
     output_card=""
     output_name=""
+    
+    # Retry counter for input device
+    input_attempts=0
+    max_attempts=3
 
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Step 1: Connect the USB audio device you want to use for input"
-    read -p "Press Enter when your input device is connected..." _
-    echo "Scanning for audio devices..."
-    sleep 2
-
-    # Prefer a device that has capture capability
-    while IFS= read -r line; do
-        if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\]: ]]; then
-            local card_num="${BASH_REMATCH[1]}"
-            local card_name="${BASH_REMATCH[2]}"
-            if arecord -l | grep -q "card $card_num:"; then
-                input_card="$card_num"; input_name="$card_name"; break
-            fi
+    echo "Connect your audio input device."
+    
+    while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
+        input_attempts=$((input_attempts + 1))
+        
+        if [ $input_attempts -gt 1 ]; then
+            echo "No device found. Retrying... (attempt $input_attempts/$max_attempts)"
         fi
-    done < /proc/asound/cards
+        
+        # Countdown
+        for i in {10..1}; do
+            echo -ne "\rContinuing in $i... "
+            sleep 1
+        done
+        echo -e "\rScanning for audio devices...    "
+        sleep 2
 
-    # Check if any input device was found
+        # Prefer a device that has capture capability
+        while IFS= read -r line; do
+            if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\]: ]]; then
+                local card_num="${BASH_REMATCH[1]}"
+                local card_name="${BASH_REMATCH[2]}"
+                if arecord -l | grep -q "card $card_num:"; then
+                    input_card="$card_num"; input_name="$card_name"; break
+                fi
+            fi
+        done < /proc/asound/cards
+    done
+
+    # Check if max attempts reached without finding device
     if [ -z "$input_card" ]; then
-        echo "❌ No input audio device found!"
-        echo "Please connect a USB audio device and try again."
         echo ""
-        read -p "Press Enter to retry..." _
-        detect_generic_devices  # Recursive call to retry
-        return
+        echo "❌ Failed to find audio input device after $max_attempts attempts."
+        echo ""
+        echo "Please check:"
+        echo "  • USB audio device is connected"
+        echo "  • Device is powered on"
+        echo "  • USB cable is working"
+        echo ""
+        echo "Try connecting the device and running the script again."
+        echo "Exiting..."
+        exit 1
     fi
     echo "✓ Using input: hw:$input_card ($input_name)"; show_device_info "$input_card" "$input_name" "input"
 
@@ -400,18 +427,21 @@ detect_generic_devices() {
             fi
         done <<< "$control_info"
         
-        # Always ask user to choose if multiple options available
+        # Default to first option unless user specifically chooses
         if [ ${#input_options[@]} -gt 1 ]; then
             echo "Multiple input options detected:"
             for i in "${!input_options[@]}"; do
                 echo "  $((i+1)). ${input_options[$i]}"
             done
             echo ""
-            read -p "Choose input source (1-${#input_options[@]}): " choice
+            echo "Defaulting to first option: ${input_options[0]}"
+            read -t 15 -p "Press Enter to continue (or type a number 1-${#input_options[@]} to choose, auto-continuing in 15 seconds): " choice
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
+                echo "✓ Selected input: ${input_source}"
             else
                 input_source="${input_options[0]}"
+                echo "✓ Using default input: ${input_source}"
             fi
         elif [ ${#input_options[@]} -eq 1 ]; then
             input_source="${input_options[0]}"
@@ -469,13 +499,17 @@ detect_generic_devices() {
     echo ""
     echo "=== Output Device Setup ==="
     echo ""
-    echo "Step 2: Connect the USB audio device you want to use for output"
-    echo "(or just press Enter if using the same device for input and output)"
-    read -p "Press Enter when your output device is connected..." _
-    echo "Scanning for output interface..."; sleep 2
-    echo "Available devices:"; cat /proc/asound/cards; echo ""; sleep 1
+    echo "Checking for separate output device..."
+    
+    # Countdown
+    for i in {5..1}; do
+        echo -ne "\rContinuing in $i... "
+        sleep 1
+    done
+    echo -e "\rScanning for output interface...    "
+    sleep 1
 
-    # Prefer a device that has playback capability and is not the chosen input
+    # Look for a separate output device first
     while IFS= read -r line; do
         if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]*\[([^]]+)\]: ]]; then
             local card_num="${BASH_REMATCH[1]}"
@@ -486,10 +520,12 @@ detect_generic_devices() {
         fi
     done < /proc/asound/cards
 
-    # If none found, use the same card for both
+    # If no separate output found, use the same card for both
     if [ -z "$output_card" ]; then
         output_card="$input_card"; output_name="$input_name"
-        echo "No separate output found; using same card for input and output"
+        echo "Using same device for input and output"
+    else
+        echo "Found separate output device"
     fi
 
     echo "✓ Using output: hw:$output_card ($output_name)"; show_device_info "$output_card" "$output_name" "output"
@@ -531,7 +567,9 @@ sleep 2
 detect_generic_devices
 source "$CONFIG_FILE"
 
-echo "Starting audio system..."
+clear
+echo "=== Starting Audio System ==="
+echo ""
 
 jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 2048 -n 3 -S >/dev/null 2>&1 &
 sleep 3
@@ -540,6 +578,9 @@ if ! pgrep jackd > /dev/null; then
     exit 1
 fi
 echo "✓ Audio system ready"
+echo ""
+read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
+clear
 
 # Set and export capability flags and input details to the app environment
 HAS_INPUT_GAIN=$has_input_gain
@@ -556,10 +597,56 @@ export INPUT_CONTROL
 export INPUT_PAIR
 
 # Mount USB drives before starting the application
+echo "=== USB Drive Setup ==="
+echo ""
+    echo "If you have a USB drive with music, connect it now."
+    read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo "Mounting USB drives..."
 /usr/local/bin/mount-usb
+echo "✓ USB mounting complete"
+echo ""
+read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
+clear
+
+# Initialize Bluetooth headtracker (if available)
+echo "=== Headtracker Setup ==="
+echo ""
+    echo "If you have a Bluetooth headtracker, connect it now and put it in pairing mode."
+    read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+echo "Scanning for headtracker..."
+/usr/local/bin/ble-ht >/dev/null 2>&1 &
+echo "✓ Headtracker scan complete"
+echo ""
+read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
+clear
 
 # Launch SuperCollider application
+echo "=== Launching Player Application ==="
+echo ""
 echo "Starting Player application..."
 cd /home/$USER/UHJ-Pi
-exec sclang supercollider/app/UHJ_v26_PLAYER_SF.scd
+
+# Launch SuperCollider and capture any errors
+if ! sclang -d supercollider/app/UHJ_v26_PLAYER_SF.scd >/dev/null 2>&1; then
+    clear
+    echo "=== APPLICATION LAUNCH FAILED ==="
+    echo ""
+    echo "❌ The Player application failed to start."
+    echo ""
+    echo "Possible causes:"
+    echo "  • Audio system not ready"
+    echo "  • Missing audio device"
+    echo "  • SuperCollider configuration issue"
+    echo "  • File permission problem"
+    echo ""
+    echo "Try these steps:"
+    echo "  1. Check your USB audio device is connected"
+    echo "  2. Make sure no other audio applications are running"
+    echo "  3. Try running the startup script again"
+    echo ""
+    echo "If the problem persists, check the audio device"
+    echo "connections and restart the Raspberry Pi."
+    echo ""
+    read -t 10 -p "Press Enter to exit (auto-exiting in 10 seconds)..." _
+    exit 1
+fi
