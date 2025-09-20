@@ -270,7 +270,7 @@ detect_generic_devices() {
             input_control="$input_source"
             input_pair="$input_source"
             has_input_gain=1
-            echo "✓ Selected input: $input_source"
+            echo "Selected input: $input_source"
             
             # Find the capture source control name dynamically
             capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
@@ -309,7 +309,6 @@ detect_generic_devices() {
     done
     echo ""
     echo "Detecting Audio Output Device..."
-    echo ""
     sleep 1
 
     # Look for a separate output device first
@@ -326,12 +325,12 @@ detect_generic_devices() {
     # If no separate output found, use the same card for both
     if [ -z "$output_card" ]; then
         output_card="$input_card"; output_name="$input_name"
-        echo "Using same device for input and output"
+        echo "• Using same device for input and output"
     else
-        echo "Found separate output device"
+        echo "• Found separate output device"
     fi
-
-    echo "Found $output_name"
+    
+    echo "Selected output: $output_name"
     show_device_info "$output_card" "$output_name" "output"
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
@@ -346,7 +345,7 @@ detect_generic_devices() {
     echo ""
     echo "=== Configuration Complete ==="
     echo ""
-    echo "✓ Input: $input_name"
+    echo "Input: $input_name"
     # Get input channel count
     input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
     if [ -n "$input_channels" ] && [ "$input_channels" -gt 0 ]; then
@@ -356,7 +355,7 @@ detect_generic_devices() {
         echo "  Source: $input_source"
     fi
     echo ""
-    echo "✓ Output: $output_name"
+    echo "Output: $output_name"
     # Get output channel count
     output_channels=$(cat "/proc/asound/card$output_card/stream0" 2>/dev/null | grep -A 20 "Playback:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
     if [ -n "$output_channels" ] && [ "$output_channels" -gt 0 ]; then
@@ -431,7 +430,7 @@ if echo "$mount_output" | grep -q "Successfully mounted"; then
     usb_name=$(echo "$mount_output" | grep "Successfully mounted" | sed 's/.*at \/media\/[^\/]*\///' | sed 's/.*✓ Successfully mounted.*at.*\/media\/[^\/]*\///')
     echo "Found USB volume '$usb_name'"
 elif [ $mount_exit_code -eq 0 ]; then
-    echo "✓ USB drive mounted"
+    echo "USB drive mounted"
 else
     echo "• No USB drives found"
 fi
@@ -482,7 +481,7 @@ ht_exit_code=$?
 
 echo ""
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
-    echo "✓ Headtracker [HT] found and connected"
+    echo "Headtracker [HT] found and connected"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     if echo "$ht_output" | grep -q "not found"; then
         echo "• No compatible headtracker [HT] found"
