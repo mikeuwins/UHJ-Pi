@@ -111,7 +111,6 @@ detect_generic_devices() {
     echo "=== Input Device Setup ==="
     echo ""
     echo "Connect your USB audio input device."
-    echo ""
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
         input_attempts=$((input_attempts + 1))
@@ -122,13 +121,12 @@ detect_generic_devices() {
         
         # Countdown (interruptible)
         for i in {10..1}; do
-            echo -ne "\rContinuing in $i... (press Enter to skip) "
+            echo -ne "\rConnect USB Audio Input Device... ($i) [Enter to continue] "
             read -t 1 -n 1 key 2>/dev/null
             if [ $? -eq 0 ]; then
                 break
             fi
         done
-        echo ""
         echo ""
         echo "Detecting Audio Input Device..."
         echo ""
@@ -165,7 +163,6 @@ detect_generic_devices() {
     # Get input channel count
     input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
     echo "Found $input_name - $input_channels inputs"
-    echo ""
 
     # Detect available input pairs and their controls FIRST
     input_source=""
@@ -175,7 +172,6 @@ detect_generic_devices() {
     
     if command -v amixer >/dev/null 2>&1; then
         echo "Detecting input options on $input_name..."
-        echo ""
         
         # Parse amixer output to find input pairs with capture volume
         input_options=()
@@ -248,7 +244,7 @@ detect_generic_devices() {
             echo "Select option:"
             echo ""
             for i in {10..1}; do
-                echo -ne "\rContinuing in $i... (Press number to select) "
+                echo -ne "\rContinuing in $i... (Select option) "
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ] && [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                     echo ""
@@ -306,10 +302,9 @@ detect_generic_devices() {
     
     # Countdown (interruptible)
     for i in {10..1}; do
-        echo -ne "\rContinuing in $i... (Press Enter to skip) "
+        echo -ne "\rConnect USB Audio Output Device... ($i) [Enter to continue] "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
-            echo -e "\rSkipping countdown...                    "
             break
         fi
     done
@@ -333,14 +328,11 @@ detect_generic_devices() {
     if [ -z "$output_card" ]; then
         output_card="$input_card"; output_name="$input_name"
         echo "Using same device for input and output"
-        echo ""
     else
         echo "Found separate output device"
-        echo ""
     fi
 
     echo "Found $output_name"
-    echo ""
     show_device_info "$output_card" "$output_name" "output"
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
@@ -392,7 +384,7 @@ if ! pgrep jackd > /dev/null; then
     exit 1
 fi
 for i in {10..1}; do
-    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    echo -ne "\rConnect USB Audio Output Device... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
@@ -432,7 +424,7 @@ echo ""
 echo "Note: Embedded .flac artwork and track ordering will be detected automatically"
 echo ""
 for i in {10..1}; do
-    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    echo -ne "\rInsert USB drive containing music... ($i) [Enter to skip] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
@@ -458,7 +450,7 @@ else
 fi
 echo ""
 for i in {5..1}; do
-    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    echo -ne "\rUSB setup complete... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
@@ -474,7 +466,7 @@ echo ""
 echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
 for i in {10..1}; do
-    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    echo -ne "\rTurn on Bluetooth headtracker... ($i) [Enter to skip] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
@@ -514,16 +506,6 @@ elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
 else
     echo "• Headtracker scan completed (no device found)"
 fi
-echo ""
-
-for i in {10..1}; do
-    echo -ne "\rContinuing in $i... (Press Enter to skip) "
-    read -t 1 -n 1 key 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo ""
-        break
-    fi
-done
 echo ""
 
 clear
