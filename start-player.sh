@@ -352,27 +352,21 @@ detect_generic_devices() {
     echo ""
     echo "=== Configuration Complete ==="
     echo ""
-    echo "✓ Input:  hw:$input_card ($input_name)"
-    echo ""
+    echo "✓ Input: $input_name"
+    # Get input channel count
+    input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
+    if [ -n "$input_channels" ] && [ "$input_channels" -gt 0 ]; then
+        echo "  Inputs: $input_channels channels"
+    fi
     if [ -n "$input_source" ]; then
         echo "  Source: $input_source"
-        echo ""
     fi
-    echo "✓ Output: hw:$output_card ($output_name)"
     echo ""
-    if [ "$has_input_gain" -eq 1 ]; then
-        echo "✓ Input gain control: $input_control"
-        echo ""
-    else
-        echo "• Input ready"
-        echo ""
-    fi
-    if [ "$has_input_mute" -eq 1 ]; then
-        echo "✓ Input mute control: $input_control"
-        echo ""
-    else
-        echo "• Input ready"
-        echo ""
+    echo "✓ Output: $output_name"
+    # Get output channel count
+    output_channels=$(cat "/proc/asound/card$output_card/stream0" 2>/dev/null | grep -A 20 "Playback:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
+    if [ -n "$output_channels" ] && [ "$output_channels" -gt 0 ]; then
+        echo "  Outputs: $output_channels channels"
     fi
     echo ""
 }
@@ -395,7 +389,14 @@ if ! pgrep jackd > /dev/null; then
     echo ""
     exit 1
 fi
-echo "✓ Audio system ready"
+for i in {10..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo ""
+        break
+    fi
+done
 echo ""
 
 # Set and export capability flags and input details to the app environment
