@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
 clear
-echo "=== UHJ-PI AMBISONIC PLAYER SYSTEM ==="
-echo ""
+echo "=== UHJ-Pi AMBISONIC PLAYER SYSTEM ==="
 
 show_device_info() {
     local card_num=$1
@@ -112,6 +111,7 @@ detect_generic_devices() {
     echo "=== Input Device Setup ==="
     echo ""
     echo "Connect your USB audio input device."
+    echo ""
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
         input_attempts=$((input_attempts + 1))
@@ -128,6 +128,7 @@ detect_generic_devices() {
                 break
             fi
         done
+        echo ""
         echo ""
         echo "Scanning for Audio Input Device..."
         echo ""
@@ -161,9 +162,11 @@ detect_generic_devices() {
         echo ""
         exit 1
     fi
-    echo "Found $input_name"
+    # Get input channel count
+    input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
+    echo "Found $input_name - $input_channels inputs"
     echo ""
-    show_device_info "$input_card" "$input_name" "input"
+    echo "Detecting input options..."
     echo ""
 
     # Detect available input pairs and their controls FIRST
@@ -239,14 +242,12 @@ detect_generic_devices() {
             for i in "${!input_options[@]}"; do
                 if [ $i -eq 0 ]; then
                     echo "$((i+1)). ${input_options[$i]} (Default)"
-                    echo ""
                 else
                     echo "$((i+1)). ${input_options[$i]}"
-                    echo ""
                 fi
             done
             echo ""
-            echo "Press number to select or Enter for default:"
+            echo "Press number to select (auto-continuing in 10 seconds):"
             echo ""
             read -t 10 -n 1 choice
             echo ""
@@ -268,32 +269,16 @@ detect_generic_devices() {
             input_pair="$input_source"
             has_input_gain=1
             echo "✓ Selected input: $input_source"
-            echo ""
-            
-            # Check if the input control (PCM or fallback) has a mute/capture switch
-            has_input_mute=0
-            if echo "$control_info" | grep -A 20 "Simple mixer control '$input_control'" | grep -q "cswitch"; then
-                has_input_mute=1
-                echo "✓ Input mute control detected on $input_control"
-            else
-                echo "• No input mute control detected on $input_control"
-            fi
-            
-            # Actually switch ALSA to use the selected input source
-            echo "Switching to $input_source input..."
             
             # Find the capture source control name dynamically
             capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
             if [ -n "$capture_source_control" ]; then
-                echo "Setting $capture_source_control to: $input_source"
                 amixer -c "$input_card" sset "$capture_source_control" "$input_source" >/dev/null 2>&1 || true
             fi
             
             # Then enable capture on that input
-            echo "Enabling capture on: $input_source"
             amixer -c "$input_card" sset "$input_source" cap >/dev/null 2>&1 || true
             amixer -c "$input_card" sset "$input_source" 80% >/dev/null 2>&1 || true
-            echo "✓ Input switched to $input_source"
         else
             echo "• Input device ready"
             has_input_gain=0
