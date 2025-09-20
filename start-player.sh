@@ -518,41 +518,41 @@ detect_generic_devices() {
             input_pair="$input_source"
             has_input_gain=1
             echo "✓ Selected input: $input_source"
-echo ""
+            echo ""
             
             # Check if the input control (PCM or fallback) has a mute/capture switch
             has_input_mute=0
             if echo "$control_info" | grep -A 20 "Simple mixer control '$input_control'" | grep -q "cswitch"; then
                 has_input_mute=1
                 echo "✓ Input mute control detected on $input_control"
-echo ""
+                echo ""
             else
                 echo "• No input mute control detected on $input_control"
-echo ""
+                echo ""
             fi
             
             # Actually switch ALSA to use the selected input source
             echo "Switching to $input_source input..."
-echo ""
+            echo ""
             
             # Find the capture source control name dynamically
             capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
             if [ -n "$capture_source_control" ]; then
                 echo "Setting $capture_source_control to: $input_source"
-echo ""
+                echo ""
                 amixer -c "$input_card" sset "$capture_source_control" "$input_source" >/dev/null 2>&1 || true
             fi
             
             # Then enable capture on that input
             echo "Enabling capture on: $input_source"
-echo ""
+            echo ""
             amixer -c "$input_card" sset "$input_source" cap >/dev/null 2>&1 || true
             amixer -c "$input_card" sset "$input_source" 80% >/dev/null 2>&1 || true
             echo "✓ Input switched to $input_source"
-echo ""
+            echo ""
         else
             echo "• No input volume controls detected"
-echo ""
+            echo ""
             has_input_gain=0
             has_input_mute=0
         fi
