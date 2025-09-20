@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 clear
-echo "=== UHJ-Pi AMBISONIC PLAYER SYSTEM ==="
+echo "*** UHJ-Pi AMBISONIC PLAYER ***"
 
 show_device_info() {
     local card_num=$1
@@ -130,7 +130,7 @@ detect_generic_devices() {
         done
         echo ""
         echo ""
-        echo "Scanning for Audio Input Device..."
+        echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
 
@@ -245,9 +245,14 @@ detect_generic_devices() {
                 fi
             done
             echo ""
-            echo "Press number to select (auto-continuing in 10 seconds):"
-            echo ""
-            read -t 10 -n 1 choice
+            for i in {10..1}; do
+                echo -ne "\rContinuing in $i... (Press number to select) "
+                read -t 1 -n 1 choice
+                if [ $? -eq 0 ] && [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
+                    echo ""
+                    break
+                fi
+            done
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
@@ -294,12 +299,10 @@ detect_generic_devices() {
     echo ""
     echo "=== Output Device Setup ==="
     echo ""
-    echo "Checking for separate output device (or using same as input)..."
-    echo ""
     
     # Countdown (interruptible)
-    for i in {5..1}; do
-        echo -ne "\rContinuing in $i... (press Enter to skip) "
+    for i in {10..1}; do
+        echo -ne "\rContinuing in $i... (Press Enter to skip) "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
             echo -e "\rSkipping countdown...                    "
@@ -307,7 +310,7 @@ detect_generic_devices() {
         fi
     done
     echo ""
-    echo "Scanning for Audio Output Device..."
+    echo "Detecting Audio Output Device..."
     echo ""
     sleep 1
 
@@ -411,14 +414,26 @@ export INPUT_PAIR
 # Mount USB drives before starting the application
 echo "=== USB Drive Setup ==="
 echo ""
-echo "Insert a USB drive with your music files."
-echo "Organize your music like this:"
-echo "  📁 Artist Name"
-echo "    📁 Album Name"
-echo "      🎵 track01.wav"
-echo "      🎵 track02.flac"
+echo "Insert a USB drive containing your music files."
+echo "Organise your music like this:"
+echo "Parent Folder"
+echo "  +-- Artist Name/"
+echo "      +-- Album Name/"
+echo "          |-- track01.wav (or .flac)"
+echo "          |-- track02.wav (or .flac)"
+echo "          |-- cover.jpg or artwork.jpg (optional)"
 echo ""
-read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+echo "Note: Embedded .flac artwork and track ordering will be detected automatically"
+echo ""
+for i in {10..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo ""
+        break
+    fi
+done
+echo ""
 echo "Scanning for USB drives..."
 # Capture mount output to check for success
 mount_output=$(/usr/local/bin/mount-usb 2>&1)
@@ -434,14 +449,31 @@ else
     echo "• No USB drives found"
 fi
 echo ""
-read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
+for i in {5..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo ""
+        break
+    fi
+done
+echo ""
 
 # Initialize Bluetooth headtracker (if available)
+clear
 echo "=== Headtracker Setup ==="
 echo ""
 echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
-read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+for i in {10..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo ""
+        break
+    fi
+done
+echo ""
 echo "Scanning for headtracker..."
 sleep 2  # Give Bluetooth controller time to initialize
 ht_output=$(/usr/local/bin/ble-ht.sh 2>&1)
@@ -456,6 +488,18 @@ else
     echo "• Headtracker scan completed (no device found)"
 fi
 echo ""
+
+for i in {10..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to skip) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo ""
+        break
+    fi
+done
+echo ""
+
+clear
 
 # Launch SuperCollider application
 echo "=== Launching Player Application ==="
@@ -497,6 +541,14 @@ if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     echo ""
     echo "connections and restart the Raspberry Pi."
     echo ""
-    read -t 10 -p "Press Enter to exit (auto-exiting in 10 seconds)..." _
+    for i in {10..1}; do
+        echo -ne "\rExiting in $i... (Press Enter to skip) "
+        read -t 1 -n 1 key 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo ""
+            break
+        fi
+    done
+    echo ""
     exit 1
 fi
