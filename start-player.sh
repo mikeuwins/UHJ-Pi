@@ -322,7 +322,7 @@ detect_generic_devices() {
 
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Connect your USB audio interface or input device."
+    echo "Connect your USB audio input device."
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
         input_attempts=$((input_attempts + 1))
@@ -336,11 +336,11 @@ detect_generic_devices() {
             echo -ne "\rContinuing in $i... (press Enter to skip) "
             read -t 1 -n 1 key 2>/dev/null
             if [ $? -eq 0 ]; then
-                echo -e "\rContinuing...                           "
                 break
             fi
         done
-        echo -e "\rScanning for audio devices...    "
+        echo ""
+        echo "Scanning for Audio Input Device..."
         sleep 2
 
         # Prefer a device that has capture capability
@@ -369,7 +369,9 @@ detect_generic_devices() {
         echo "Exiting..."
         exit 1
     fi
-    echo "✓ Using input: hw:$input_card ($input_name)"; show_device_info "$input_card" "$input_name" "input"
+    echo "Found $input_name"
+    show_device_info "$input_card" "$input_name" "input"
+    echo ""
 
     # Detect available input pairs and their controls FIRST
     input_source=""
@@ -516,7 +518,8 @@ detect_generic_devices() {
             break
         fi
     done
-    echo -e "\rScanning for output interface...    "
+    echo ""
+    echo "Scanning for Audio Output Device..."
     sleep 1
 
     # Look for a separate output device first
@@ -538,7 +541,8 @@ detect_generic_devices() {
         echo "Found separate output device"
     fi
 
-    echo "✓ Using output: hw:$output_card ($output_name)"; show_device_info "$output_card" "$output_name" "output"
+    echo "Found $output_name"
+    show_device_info "$output_card" "$output_name" "output"
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
     echo "INPUT_NAME=$input_name" >> "$CONFIG_FILE"
@@ -569,7 +573,8 @@ detect_generic_devices() {
     echo ""
 }
 
-echo "Preparing audio system..."
+echo "Configuring Audio System"
+echo ""
 killall jackd >/dev/null 2>&1 || true
 killall sclang >/dev/null 2>&1 || true
 sleep 2
@@ -578,9 +583,6 @@ detect_generic_devices
 source "$CONFIG_FILE"
 
 clear
-echo "=== Starting Audio System ==="
-echo ""
-
 jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 2048 -n 3 -S >/dev/null 2>&1 &
 sleep 3
 if ! pgrep jackd > /dev/null; then
@@ -607,21 +609,26 @@ export INPUT_PAIR
 # Mount USB drives before starting the application
 echo "=== USB Drive Setup ==="
 echo ""
-echo "If you have a USB drive with music, connect it now."
+echo "Insert a USB drive with music files."
+echo "Supported formats: WAV, FLAC"
+echo "Required structure: Artist folders containing Album folders"
+echo "Example: /Artist Name/Album Name/track01.wav"
 echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo ""
-echo "Mounting USB drives..."
+echo "Scanning for USB drives..."
 # Capture mount output to check for success
 mount_output=$(/usr/local/bin/mount-usb 2>&1)
 mount_exit_code=$?
 
-if [ $mount_exit_code -eq 0 ]; then
-    echo "✓ USB mounting complete"
-elif echo "$mount_output" | grep -q "mounted successfully"; then
+# Extract USB volume name from mount output
+if echo "$mount_output" | grep -q "Successfully mounted"; then
+    usb_name=$(echo "$mount_output" | grep "Successfully mounted" | sed 's/.*at \/media\/[^\/]*\///' | sed 's/.*✓ Successfully mounted.*at.*\/media\/[^\/]*\///')
+    echo "Found USB volume '$usb_name'"
+elif [ $mount_exit_code -eq 0 ]; then
     echo "✓ USB drive mounted"
 else
-    echo "• No USB drives found or mounted"
+    echo "• No USB drives found"
 fi
 echo ""
 read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
