@@ -156,7 +156,7 @@ detect_generic_devices() {
                 break
             fi
         done
-        echo ""
+        echo
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -479,7 +479,7 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
+echo
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
