@@ -32,7 +32,7 @@ create_title_box() {
     printf "\n"
     
     # Title line
-    printf "*%*s%s%*s*\n" $padding "" "$title" $padding ""
+    printf "*%*s%s%s%*s*\n" $padding "" "  $title" $padding ""
     
     # Bottom border
     printf "%*s" $width | tr ' ' '*'
@@ -190,7 +190,7 @@ detect_generic_devices() {
     fi
     # Get input channel count
     input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
-    echo -e "${GREEN}Found $input_name $input_channels inputs${RESET}"
+    echo -e "${GREEN}Found${RESET} ${input_name%-*} - $input_channels inputs"
 
     # Detect available input pairs and their controls FIRST
     input_source=""
