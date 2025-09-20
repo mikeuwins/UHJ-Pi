@@ -263,24 +263,14 @@ detect_flac_devices() {
     echo "=== Configuration Complete ==="
     echo ""
     if [ -n "$input_card" ]; then
-        echo "✓ Input:  hw:$input_card ($input_name)"
+        echo "✓ Input: $input_name"
         if [ -n "$input_source" ]; then
-            echo "  Source: $input_source"
+            echo "✓ Source: $input_source"
         fi
     else
-        echo "• Input:  Not configured (output-only mode)"
+        echo "• Output-only mode"
     fi
-    echo "✓ Output: hw:$output_card ($output_name)"
-    if [ "$has_input_gain" -eq 1 ]; then
-        echo "✓ Input gain control: $input_control"
-    else
-        echo "• Input ready"
-    fi
-    if [ "$has_input_mute" -eq 1 ]; then
-        echo "✓ Input mute control: $input_control"
-    else
-        echo "• Input ready"
-    fi
+    echo "✓ Output: $output_name"
     echo ""
     read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
     clear
@@ -490,34 +480,27 @@ detect_generic_devices() {
             if echo "$control_info" | grep -A 20 "Simple mixer control '$input_control'" | grep -q "cswitch"; then
                 has_input_mute=1
                 echo "✓ Input mute control detected on $input_control"
-                echo ""
             else
                 echo "• No input mute control detected on $input_control"
-                echo ""
             fi
             
             # Actually switch ALSA to use the selected input source
             echo "Switching to $input_source input..."
-            echo ""
             
             # Find the capture source control name dynamically
             capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
             if [ -n "$capture_source_control" ]; then
                 echo "Setting $capture_source_control to: $input_source"
-                echo ""
                 amixer -c "$input_card" sset "$capture_source_control" "$input_source" >/dev/null 2>&1 || true
             fi
             
             # Then enable capture on that input
             echo "Enabling capture on: $input_source"
-            echo ""
             amixer -c "$input_card" sset "$input_source" cap >/dev/null 2>&1 || true
             amixer -c "$input_card" sset "$input_source" 80% >/dev/null 2>&1 || true
             echo "✓ Input switched to $input_source"
-            echo ""
         else
             echo "• Input device ready"
-            echo ""
             has_input_gain=0
             has_input_mute=0
         fi
@@ -527,7 +510,6 @@ detect_generic_devices() {
         if [ "$has_input_gain" -eq 0 ]; then
             has_input_mute=0
             echo "• Input ready"
-            echo ""
         fi
     fi
 
@@ -673,7 +655,6 @@ else
 fi
 echo ""
 read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
-clear
 
 # Initialize Bluetooth headtracker (if available)
 echo "=== Headtracker Setup ==="
@@ -693,7 +674,6 @@ else
     echo "• Headtracker scan complete"
 fi
 echo ""
-clear
 
 # Launch SuperCollider application
 echo "=== Launching Player Application ==="
