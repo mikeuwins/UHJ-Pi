@@ -156,6 +156,7 @@ detect_generic_devices() {
                 break
             fi
         done
+        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
