@@ -2,7 +2,7 @@
 
 # Color definitions for terminal output
 RED='\033[1;31m'        # Bright red
-GREEN='\033[0;32m'      # Green
+GREEN='\033[1;32m'      # Bright green
 YELLOW='\033[1;33m'     # Bright yellow
 BLUE='\033[0;34m'       # Blue
 CYAN='\033[0;36m'       # Cyan
@@ -321,7 +321,6 @@ detect_generic_devices() {
         fi
     fi
 
-    echo ""
     echo -e "${YELLOW}=== Output Device Setup ===${RESET}"
     echo ""
     
