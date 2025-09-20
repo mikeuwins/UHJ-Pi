@@ -191,7 +191,7 @@ detect_generic_devices() {
     fi
     # Get input channel count
     input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
-    echo "Found $input_name - $input_channels inputs"
+    echo -e "${GREEN}Found $input_name $input_channels inputs${RESET}"
 
     # Detect available input pairs and their controls FIRST
     input_source=""
@@ -260,7 +260,7 @@ detect_generic_devices() {
         # Default to first option unless user specifically chooses
         if [ ${#input_options[@]} -gt 1 ]; then
             echo ""
-            echo "Select Input:"
+            echo -e "${YELLOW}Select Input:${RESET}"
             for i in "${!input_options[@]}"; do
                 if [ $i -eq 0 ]; then
                     echo "$((i+1)). ${input_options[$i]} (Default)"
@@ -478,7 +478,6 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
