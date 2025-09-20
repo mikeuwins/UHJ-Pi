@@ -1,7 +1,42 @@
 #!/usr/bin/env bash
 
+# Color definitions for terminal output
+RED='\033[1;31m'        # Bright red
+GREEN='\033[0;32m'      # Green
+YELLOW='\033[1;33m'     # Bright yellow
+BLUE='\033[0;34m'       # Blue
+CYAN='\033[0;36m'       # Cyan
+MAGENTA='\033[1;35m'    # Bright magenta
+WHITE='\033[1;37m'      # Bright white
+RESET='\033[0m'         # Reset to default
+
 clear
-echo "*** UHJ-Pi AMBISONIC PLAYER ***"
+
+# Create centered title box
+get_terminal_width() {
+    echo $(tput cols 2>/dev/null || echo 80)
+}
+
+create_title_box() {
+    local width=$(get_terminal_width)
+    local title="UHJ-Pi AMBISONIC PLAYER"
+    local title_len=${#title}
+    local padding=$(( (width - title_len - 4) / 2 ))
+    
+    # Simple clean box with asterisks
+    printf "${CYAN}"
+    printf "%*s" $width | tr ' ' '*'
+    printf "\n"
+    
+    # Title line
+    printf "*%*s%s%*s*\n" $padding "" "$title" $((padding + (width - title_len - 4) % 2)) ""
+    
+    # Bottom border
+    printf "%*s" $width | tr ' ' '*'
+    printf "${RESET}\n"
+}
+
+create_title_box
 
 show_device_info() {
     local card_num=$1
@@ -100,7 +135,7 @@ detect_generic_devices() {
     input_attempts=0
     max_attempts=3
 
-    echo "=== Input Device Setup ==="
+    echo -e "${CYAN}=== Input Device Setup ===${RESET}"
     echo ""
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
@@ -262,7 +297,6 @@ detect_generic_devices() {
             input_control="$input_source"
             input_pair="$input_source"
             has_input_gain=1
-            echo "Selected input: $input_source"
             
             # Find the capture source control name dynamically
             capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
@@ -288,7 +322,7 @@ detect_generic_devices() {
     fi
 
     echo ""
-    echo "=== Output Device Setup ==="
+    echo -e "${CYAN}=== Output Device Setup ===${RESET}"
     echo ""
     
     # Countdown (interruptible)
@@ -323,8 +357,6 @@ detect_generic_devices() {
     fi
     
     echo ""
-    echo "Selected output: $output_name"
-    show_device_info "$output_card" "$output_name" "output"
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
     echo "INPUT_NAME=$input_name" >> "$CONFIG_FILE"
@@ -336,7 +368,7 @@ detect_generic_devices() {
     echo "HAS_INPUT_GAIN=$has_input_gain" >> "$CONFIG_FILE"
     echo "HAS_INPUT_MUTE=$has_input_mute" >> "$CONFIG_FILE"
     echo ""
-    echo "=== Configuration Complete ==="
+    echo -e "${GREEN}=== Configuration Complete ===${RESET}"
     echo ""
     echo "Input: $input_name"
     # Get input channel count
@@ -389,7 +421,7 @@ export INPUT_PAIR
 
 # Mount USB drives before starting the application
 clear
-echo "=== USB Drive Setup ==="
+echo -e "${CYAN}=== USB Drive Setup ===${RESET}"
 echo ""
 echo "Insert a USB drive containing your music files."
 echo ""
@@ -439,7 +471,7 @@ echo ""
 
 # Initialize Bluetooth headtracker (if available)
 clear
-echo "=== Headtracker Setup ==="
+echo -e "${CYAN}=== Headtracker Setup ===${RESET}"
 echo ""
 for i in {10..1}; do
     echo -ne "\rConnect compatible Bluetooth Headtracker... ($i) [Enter to continue] "
@@ -498,7 +530,7 @@ echo ""
 clear
 
 # Launch SuperCollider application
-echo "=== Launching Player Application ==="
+echo -e "${CYAN}=== Launching Player Application ===${RESET}"
 cd /home/$USER/UHJ-Pi
 
 # Give user a moment to see the message
