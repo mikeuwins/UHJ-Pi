@@ -240,8 +240,6 @@ detect_generic_devices() {
                 fi
             done
             echo ""
-            echo "Select option:"
-            echo ""
             for i in {10..1}; do
                 echo -ne "\rSelect option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
@@ -269,7 +267,6 @@ detect_generic_devices() {
             input_control="$input_source"
             input_pair="$input_source"
             has_input_gain=1
-            echo ""
             echo "✓ Selected input: $input_source"
             
             # Find the capture source control name dynamically
@@ -451,10 +448,8 @@ echo ""
 clear
 echo "=== Headtracker Setup ==="
 echo ""
-echo "If you have a Bluetooth headtracker, turn it on now."
-echo ""
 for i in {10..1}; do
-    echo -ne "\rTurn on Bluetooth headtracker... ($i) [Enter to continue] "
+    echo -ne "\rConnect compatible Bluetooth Headtracker... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
