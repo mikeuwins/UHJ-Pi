@@ -11,7 +11,7 @@ WHITE='\033[1;37m'      # Bright white
 RESET='\033[0m'         # Reset to default
 
 # Magic wand: uncomment the line below to make ALL text UPPERCASE
-echo() { command echo "$@" | tr '[:lower:]' '[:upper:]'; }
+# echo() { command echo "$@" | tr '[:lower:]' '[:upper:]'; }
 
 clear
 
