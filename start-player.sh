@@ -562,18 +562,15 @@ detect_generic_devices() {
         if [ "$has_input_gain" -eq 0 ]; then
             has_input_mute=0
             echo "• Using synth mute (no software input controls detected)"
-echo ""
+            echo ""
         fi
     fi
 
     echo ""
-echo ""
     echo "=== Output Device Setup ==="
-echo ""
     echo ""
-echo ""
     echo "Checking for separate output device (or using same as input)..."
-echo ""
+    echo ""
     
     # Countdown (interruptible)
     for i in {5..1}; do
@@ -585,9 +582,8 @@ echo ""
         fi
     done
     echo ""
-echo ""
     echo "Scanning for Audio Output Device..."
-echo ""
+    echo ""
     sleep 1
 
     # Look for a separate output device first
@@ -605,14 +601,14 @@ echo ""
     if [ -z "$output_card" ]; then
         output_card="$input_card"; output_name="$input_name"
         echo "Using same device for input and output"
-echo ""
+        echo ""
     else
         echo "Found separate output device"
-echo ""
+        echo ""
     fi
 
     echo "Found $output_name"
-echo ""
+    echo ""
     show_device_info "$output_card" "$output_name" "output"
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
@@ -625,40 +621,35 @@ echo ""
     echo "HAS_INPUT_GAIN=$has_input_gain" >> "$CONFIG_FILE"
     echo "HAS_INPUT_MUTE=$has_input_mute" >> "$CONFIG_FILE"
     echo ""
-echo ""
     echo "=== Configuration Complete ==="
-echo ""
+    echo ""
     echo "✓ Input:  hw:$input_card ($input_name)"
-echo ""
+    echo ""
     if [ -n "$input_source" ]; then
         echo "  Source: $input_source"
-echo ""
+        echo ""
     fi
     echo "✓ Output: hw:$output_card ($output_name)"
-echo ""
+    echo ""
     if [ "$has_input_gain" -eq 1 ]; then
         echo "✓ Input gain control: $input_control"
-echo ""
+        echo ""
     else
         echo "• No input gain control detected"
-echo ""
+        echo ""
     fi
     if [ "$has_input_mute" -eq 1 ]; then
         echo "✓ Input mute control: $input_control"
-echo ""
+        echo ""
     else
         echo "• No input mute control detected"
-echo ""
+        echo ""
     fi
     echo ""
-echo ""
 }
 
 echo ""
-echo ""
 echo "=== CONFIGURING AUDIO SYSTEM ==="
-echo ""
-echo ""
 echo ""
 killall jackd >/dev/null 2>&1 || true
 killall sclang >/dev/null 2>&1 || true
@@ -672,12 +663,10 @@ jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 2048 -n 3 -S
 sleep 3
 if ! pgrep jackd > /dev/null; then
     echo "ERROR: Audio system failed to start."
-echo ""
+    echo ""
     exit 1
 fi
 echo "✓ Audio system ready"
-echo ""
-echo ""
 echo ""
 
 # Set and export capability flags and input details to the app environment
@@ -697,8 +686,6 @@ export INPUT_PAIR
 # Mount USB drives before starting the application
 echo "=== USB Drive Setup ==="
 echo ""
-echo ""
-echo ""
 echo "Insert a USB drive with music files."
 echo ""
 echo "Supported formats: WAV, FLAC"
@@ -707,10 +694,7 @@ echo "Required structure: Artist folders containing Album folders"
 echo ""
 echo "Example: /Artist Name/Album Name/track01.wav"
 echo ""
-echo ""
-echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
-echo ""
 echo ""
 echo "Scanning for USB drives..."
 echo ""
@@ -722,15 +706,14 @@ mount_exit_code=$?
 if echo "$mount_output" | grep -q "Successfully mounted"; then
     usb_name=$(echo "$mount_output" | grep "Successfully mounted" | sed 's/.*at \/media\/[^\/]*\///' | sed 's/.*✓ Successfully mounted.*at.*\/media\/[^\/]*\///')
     echo "Found USB volume '$usb_name'"
-echo ""
+    echo ""
 elif [ $mount_exit_code -eq 0 ]; then
     echo "✓ USB drive mounted"
-echo ""
+    echo ""
 else
     echo "• No USB drives found"
-echo ""
+    echo ""
 fi
-echo ""
 echo ""
 read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
 clear
@@ -738,14 +721,9 @@ clear
 # Initialize Bluetooth headtracker (if available)
 echo "=== Headtracker Setup ==="
 echo ""
-echo ""
-echo ""
 echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
-echo ""
-echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
-echo ""
 echo ""
 echo "Scanning for headtracker..."
 echo ""
@@ -754,22 +732,19 @@ ht_exit_code=$?
 
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
     echo "✓ Headtracker detected and connected"
-echo ""
+    echo ""
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     echo "• No headtracker found"
-echo ""
+    echo ""
 else
     echo "• Headtracker scan complete"
-echo ""
+    echo ""
 fi
-echo ""
 echo ""
 clear
 
 # Launch SuperCollider application
 echo "=== Launching Player Application ==="
-echo ""
-echo ""
 echo ""
 echo "Starting Player application..."
 echo ""
@@ -784,41 +759,32 @@ echo ""
 if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     clear
     echo "=== APPLICATION LAUNCH FAILED ==="
-echo ""
     echo ""
-echo ""
     echo "❌ The Player application failed to start."
-echo ""
     echo ""
-echo ""
     echo "Possible causes:"
-echo ""
+    echo ""
     echo "  • Audio system not ready"
-echo ""
+    echo ""
     echo "  • Missing audio device"
-echo ""
+    echo ""
     echo "  • SuperCollider configuration issue"
-echo ""
+    echo ""
     echo "  • File permission problem"
-echo ""
     echo ""
-echo ""
+    echo ""
     echo "Try these steps:"
-echo ""
+    echo ""
     echo "  1. Check your USB audio device is connected"
-echo ""
+    echo ""
     echo "  2. Make sure no other audio applications are running"
-echo ""
+    echo ""
     echo "  3. Try running the startup script again"
-echo ""
     echo ""
-echo ""
     echo "If the problem persists, check the audio device"
-echo ""
-    echo "connections and restart the Raspberry Pi."
-echo ""
     echo ""
-echo ""
+    echo "connections and restart the Raspberry Pi."
+    echo ""
     read -t 10 -p "Press Enter to exit (auto-exiting in 10 seconds)..." _
     exit 1
 fi
