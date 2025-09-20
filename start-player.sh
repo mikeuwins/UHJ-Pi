@@ -280,6 +280,7 @@ detect_generic_devices() {
                     fi
                 fi
             done
+            echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
             else
@@ -332,6 +333,7 @@ detect_generic_devices() {
             break
         fi
     done
+    echo ""
     echo "Detecting Audio Output Device..."
     sleep 1
 
@@ -439,6 +441,7 @@ for i in {10..1}; do
         break
     fi
 done
+echo ""
 echo "Scanning for USB drives..."
 echo ""
 # Capture mount output to check for success
@@ -474,6 +477,7 @@ for i in {10..1}; do
         break
     fi
 done
+echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
@@ -518,6 +522,7 @@ for i in {10..1}; do
         break
     fi
 done
+echo ""
 
 clear
 
