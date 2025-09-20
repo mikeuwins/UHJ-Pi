@@ -32,7 +32,7 @@ create_title_box() {
     printf "\n"
     
     # Title line
-    printf "*%*s  %s%*s*\n" $padding "" "$title" $padding
+    printf "*%*s   %s%*s*\n" $padding "" "$title" $padding
     
     # Bottom border
     printf "%*s" $width | tr ' ' '*'
@@ -334,6 +334,7 @@ detect_generic_devices() {
             break
         fi
     done
+    echo ""
     echo "Detecting Audio Output Device..."
     sleep 1
 
@@ -441,6 +442,7 @@ for i in {10..1}; do
         break
     fi
 done
+echo ""
 echo "Scanning for USB drives..."
 echo ""
 # Capture mount output to check for success
@@ -476,10 +478,10 @@ for i in {10..1}; do
         break
     fi
 done
+echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
-echo ""
 {
     while true; do
         echo -ne "\rScanning for headtracker... | "
