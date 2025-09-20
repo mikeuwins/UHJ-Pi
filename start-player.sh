@@ -322,6 +322,7 @@ detect_generic_devices() {
         echo "• Found separate output device"
     fi
     
+    echo ""
     echo "Selected output: $output_name"
     show_device_info "$output_card" "$output_name" "output"
 
