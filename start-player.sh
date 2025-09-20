@@ -193,23 +193,28 @@ detect_flac_devices() {
                 
                 # Configure input if options available
                 if [ ${#input_options[@]} -gt 1 ]; then
-                    echo "Multiple input options detected:"
+                    echo "Select Input:"
                     for i in "${!input_options[@]}"; do
-                        echo "  $((i+1)). ${input_options[$i]}"
+                        if [ $i -eq 0 ]; then
+                            echo "$((i+1)). ${input_options[$i]} (Default)"
+                        else
+                            echo "$((i+1)). ${input_options[$i]}"
+                        fi
                     done
                     echo ""
-                    echo "Defaulting to first option: ${input_options[0]}"
-                    read -t 15 -p "Press Enter to continue (or type a number 1-${#input_options[@]} to choose, auto-continuing in 15 seconds): " choice
+                    echo "Auto-continuing with default in 10 seconds..."
+                    read -t 10 -n 1 choice
+                    echo ""
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                         input_source="${input_options[$((choice-1))]}"
-                        echo "✓ Selected input: ${input_source}"
+                        echo "✓ Selected: ${input_source}"
                     else
                         input_source="${input_options[0]}"
-                        echo "✓ Using default input: ${input_source}"
+                        echo "✓ Using default: ${input_options[0]}"
                     fi
                 elif [ ${#input_options[@]} -eq 1 ]; then
                     input_source="${input_options[0]}"
-                    echo "✓ Selected input: ${input_source}"
+                    echo "✓ Selected: ${input_source}"
                 fi
                 
                 if [ -n "$input_source" ]; then
@@ -317,7 +322,7 @@ detect_generic_devices() {
 
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Connect your audio input device."
+    echo "Connect your USB audio interface or input device."
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
         input_attempts=$((input_attempts + 1))
@@ -331,7 +336,7 @@ detect_generic_devices() {
             echo -ne "\rContinuing in $i... (press Enter to skip) "
             read -t 1 -n 1 key 2>/dev/null
             if [ $? -eq 0 ]; then
-                echo -e "\rSkipping countdown...                    "
+                echo -e "\rContinuing...                           "
                 break
             fi
         done
@@ -433,23 +438,20 @@ detect_generic_devices() {
         
         # Default to first option unless user specifically chooses
         if [ ${#input_options[@]} -gt 1 ]; then
-            echo "Multiple input options detected:"
-            for i in "${!input_options[@]}"; do
-                echo "  $((i+1)). ${input_options[$i]}"
-            done
+            echo "Multiple inputs available. Using first option: ${input_options[0]}"
+            echo "Press Enter to continue or type a number 1-${#input_options[@]} to choose:"
+            read -t 10 -n 1 choice
             echo ""
-            echo "Defaulting to first option: ${input_options[0]}"
-            read -t 15 -p "Press Enter to continue (or type a number 1-${#input_options[@]} to choose, auto-continuing in 15 seconds): " choice
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
-                echo "✓ Selected input: ${input_source}"
+                echo "✓ Selected: ${input_source}"
             else
                 input_source="${input_options[0]}"
-                echo "✓ Using default input: ${input_source}"
+                echo "✓ Using: ${input_source}"
             fi
         elif [ ${#input_options[@]} -eq 1 ]; then
             input_source="${input_options[0]}"
-            echo "✓ Selected input: ${input_source}"
+            echo "✓ Selected: ${input_source}"
         fi
         
         # Use the selected input source directly
@@ -503,7 +505,7 @@ detect_generic_devices() {
     echo ""
     echo "=== Output Device Setup ==="
     echo ""
-    echo "Checking for separate output device..."
+    echo "Checking for separate output device (or using same as input)..."
     
     # Countdown (interruptible)
     for i in {5..1}; do
@@ -587,8 +589,6 @@ if ! pgrep jackd > /dev/null; then
 fi
 echo "✓ Audio system ready"
 echo ""
-read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
-clear
 
 # Set and export capability flags and input details to the app environment
 HAS_INPUT_GAIN=$has_input_gain
@@ -612,8 +612,17 @@ echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo ""
 echo "Mounting USB drives..."
-/usr/local/bin/mount-usb
-echo "✓ USB mounting complete"
+# Capture mount output to check for success
+mount_output=$(/usr/local/bin/mount-usb 2>&1)
+mount_exit_code=$?
+
+if [ $mount_exit_code -eq 0 ]; then
+    echo "✓ USB mounting complete"
+elif echo "$mount_output" | grep -q "mounted successfully"; then
+    echo "✓ USB drive mounted"
+else
+    echo "• No USB drives found or mounted"
+fi
 echo ""
 read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
 clear
@@ -621,7 +630,7 @@ clear
 # Initialize Bluetooth headtracker (if available)
 echo "=== Headtracker Setup ==="
 echo ""
-echo "If you have a Bluetooth headtracker, connect it now and put it in pairing mode."
+echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo ""
@@ -629,7 +638,6 @@ echo "Scanning for headtracker..."
 /usr/local/bin/ble-ht >/dev/null 2>&1 &
 echo "✓ Headtracker scan complete"
 echo ""
-read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
 clear
 
 # Launch SuperCollider application
