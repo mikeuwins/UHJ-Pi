@@ -32,7 +32,7 @@ create_title_box() {
     printf "\n"
     
     # Title line
-    printf "*%*s%s%s%*s*\n" $padding "" "  $title" $padding ""
+    printf "*%*s  %s%*s*\n" $padding "" "$title" $padding
     
     # Bottom border
     printf "%*s" $width | tr ' ' '*'
