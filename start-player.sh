@@ -271,6 +271,7 @@ detect_generic_devices() {
             input_control="$input_source"
             input_pair="$input_source"
             has_input_gain=1
+            echo ""
             echo "✓ Selected input: $input_source"
             
             # Find the capture source control name dynamically
@@ -434,7 +435,9 @@ for i in {10..1}; do
     fi
 done
 echo ""
+echo ""
 echo "Scanning for USB drives..."
+echo ""
 # Capture mount output to check for success
 mount_output=$(/usr/local/bin/mount-usb 2>&1)
 mount_exit_code=$?
