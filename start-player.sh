@@ -411,10 +411,12 @@ export INPUT_PAIR
 # Mount USB drives before starting the application
 echo "=== USB Drive Setup ==="
 echo ""
-echo "Insert a USB drive with music files."
-echo "Supported formats: WAV, FLAC"
-echo "Required structure: Artist folders containing Album folders"
-echo "Example: /Artist Name/Album Name/track01.wav"
+echo "Insert a USB drive with your music files."
+echo "Organize your music like this:"
+echo "  📁 Artist Name"
+echo "    📁 Album Name"
+echo "      🎵 track01.wav"
+echo "      🎵 track02.flac"
 echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo "Scanning for USB drives..."
@@ -444,12 +446,13 @@ echo "Scanning for headtracker..."
 ht_output=$(/usr/local/bin/ble-ht 2>&1)
 ht_exit_code=$?
 
+echo ""
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
     echo "✓ Headtracker detected and connected"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
-    echo "• No headtracker found"
+    echo "• No headtracker found or pairing failed"
 else
-    echo "• Headtracker scan complete"
+    echo "• Headtracker scan completed (no device found)"
 fi
 echo ""
 
