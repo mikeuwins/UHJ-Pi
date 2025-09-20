@@ -229,6 +229,7 @@ detect_generic_devices() {
         
         # Default to first option unless user specifically chooses
         if [ ${#input_options[@]} -gt 1 ]; then
+            echo ""
             echo "Select Input:"
             echo ""
             for i in "${!input_options[@]}"; do
