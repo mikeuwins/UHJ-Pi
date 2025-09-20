@@ -443,7 +443,8 @@ echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo "Scanning for headtracker..."
-ht_output=$(/usr/local/bin/ble-ht 2>&1)
+sleep 2  # Give Bluetooth controller time to initialize
+ht_output=$(/usr/local/bin/ble-ht.sh 2>&1)
 ht_exit_code=$?
 
 echo ""
