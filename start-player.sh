@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 
 clear
-echo "Starting UHJ-Pi Player Mode..."
+echo "=== UHJ-PI AMBISONIC PLAYER SYSTEM ==="
 
 show_device_info() {
     local card_num=$1
     local card_name=$2
     local device_type=$3  # "input" or "output"
-    
-    echo "✓ Selected: $card_name"
     
     # Show channel count - useful info for users
     if [ "$device_type" = "input" ]; then
@@ -194,6 +192,7 @@ detect_flac_devices() {
                 # Configure input if options available
                 if [ ${#input_options[@]} -gt 1 ]; then
                     echo "Select Input:"
+                    echo ""
                     for i in "${!input_options[@]}"; do
                         if [ $i -eq 0 ]; then
                             echo "$((i+1)). ${input_options[$i]} (Default)"
@@ -202,19 +201,15 @@ detect_flac_devices() {
                         fi
                     done
                     echo ""
-                    echo "Auto-continuing with default in 10 seconds..."
                     read -t 10 -n 1 choice
                     echo ""
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                         input_source="${input_options[$((choice-1))]}"
-                        echo "✓ Selected: ${input_source}"
                     else
                         input_source="${input_options[0]}"
-                        echo "✓ Using default: ${input_options[0]}"
                     fi
                 elif [ ${#input_options[@]} -eq 1 ]; then
                     input_source="${input_options[0]}"
-                    echo "✓ Selected: ${input_source}"
                 fi
                 
                 if [ -n "$input_source" ]; then
@@ -292,8 +287,6 @@ show_device_info() {
     local card_num=$1
     local card_name=$2
     local device_type=$3  # "input" or "output"
-    
-    echo "✓ Selected: $card_name"
     
     # Show channel count - useful info for users
     if [ "$device_type" = "input" ]; then
@@ -642,8 +635,16 @@ echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
 echo ""
 echo "Scanning for headtracker..."
-/usr/local/bin/ble-ht >/dev/null 2>&1 &
-echo "✓ Headtracker scan complete"
+ht_output=$(/usr/local/bin/ble-ht 2>&1)
+ht_exit_code=$?
+
+if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
+    echo "✓ Headtracker detected and connected"
+elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
+    echo "• No headtracker found"
+else
+    echo "• Headtracker scan complete"
+fi
 echo ""
 clear
 
