@@ -5,10 +5,13 @@ RED='\033[1;31m'        # Bright red
 GREEN='\033[1;32m'      # Bright green
 YELLOW='\033[1;33m'     # Bright yellow
 BLUE='\033[0;34m'       # Blue
-CYAN='\033[0;36m'       # Cyan
+CYAN='\033[1;36m'       # Bright cyan
 MAGENTA='\033[1;35m'    # Bright magenta
 WHITE='\033[1;37m'      # Bright white
 RESET='\033[0m'         # Reset to default
+
+# Magic wand: uncomment the line below to make ALL text UPPERCASE
+# echo() { command echo "$@" | tr '[:lower:]' '[:upper:]'; }
 
 clear
 
@@ -479,8 +482,6 @@ for i in {10..1}; do
 done
 echo ""
 sleep 2  # Give Bluetooth controller time to initialize
-
-echo ""
 
 # Show spinner while scanning
 {
