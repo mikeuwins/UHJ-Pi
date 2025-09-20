@@ -166,8 +166,6 @@ detect_generic_devices() {
     input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
     echo "Found $input_name - $input_channels inputs"
     echo ""
-    echo "Detecting input options..."
-    echo ""
 
     # Detect available input pairs and their controls FIRST
     input_source=""
