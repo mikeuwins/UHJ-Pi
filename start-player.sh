@@ -110,7 +110,6 @@ detect_generic_devices() {
 
     echo "=== Input Device Setup ==="
     echo ""
-    echo "Connect your USB audio input device."
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
         input_attempts=$((input_attempts + 1))
@@ -367,8 +366,6 @@ detect_generic_devices() {
 }
 
 echo ""
-echo "=== CONFIGURING AUDIO SYSTEM ==="
-echo ""
 killall jackd >/dev/null 2>&1 || true
 killall sclang >/dev/null 2>&1 || true
 sleep 2
@@ -383,15 +380,6 @@ if ! pgrep jackd > /dev/null; then
     echo ""
     exit 1
 fi
-for i in {10..1}; do
-    echo -ne "\rConnect USB Audio Output Device... ($i) [Enter to continue] "
-    read -t 1 -n 1 key 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo ""
-        break
-    fi
-done
-echo ""
 
 # Set and export capability flags and input details to the app environment
 HAS_INPUT_GAIN=$has_input_gain
@@ -424,7 +412,7 @@ echo ""
 echo "Note: Embedded .flac artwork and track ordering will be detected automatically"
 echo ""
 for i in {10..1}; do
-    echo -ne "\rInsert USB drive containing music... ($i) [Enter to skip] "
+    echo -ne "\rInsert USB drive containing music... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
@@ -466,7 +454,7 @@ echo ""
 echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
 for i in {10..1}; do
-    echo -ne "\rTurn on Bluetooth headtracker... ($i) [Enter to skip] "
+    echo -ne "\rTurn on Bluetooth headtracker... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
         echo ""
@@ -500,12 +488,27 @@ ht_exit_code=$?
 
 echo ""
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
-    echo "✓ Headtracker detected and connected"
+    echo "✓ Headtracker [HT] found and connected"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
-    echo "• No headtracker found or pairing failed"
+    if echo "$ht_output" | grep -q "not found"; then
+        echo "• No compatible headtracker [HT] found"
+    else
+        echo "• Headtracker [HT] found but pairing failed"
+    fi
 else
     echo "• Headtracker scan completed (no device found)"
 fi
+echo ""
+
+# Pause to show headtracker result
+for i in {10..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to continue) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo ""
+        break
+    fi
+done
 echo ""
 
 clear
@@ -549,7 +552,7 @@ if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     echo "connections and restart the Raspberry Pi."
     echo ""
     for i in {10..1}; do
-        echo -ne "\rExiting in $i... (Press Enter to skip) "
+        echo -ne "\rExiting in $i... (Press Enter to continue) "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
             echo ""
