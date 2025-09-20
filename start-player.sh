@@ -326,10 +326,14 @@ detect_generic_devices() {
             echo "No device found. Retrying... (attempt $input_attempts/$max_attempts)"
         fi
         
-        # Countdown
+        # Countdown (interruptible)
         for i in {10..1}; do
-            echo -ne "\rContinuing in $i... "
-            sleep 1
+            echo -ne "\rContinuing in $i... (press Enter to skip) "
+            read -t 1 -n 1 key 2>/dev/null
+            if [ $? -eq 0 ]; then
+                echo -e "\rSkipping countdown...                    "
+                break
+            fi
         done
         echo -e "\rScanning for audio devices...    "
         sleep 2
@@ -501,10 +505,14 @@ detect_generic_devices() {
     echo ""
     echo "Checking for separate output device..."
     
-    # Countdown
+    # Countdown (interruptible)
     for i in {5..1}; do
-        echo -ne "\rContinuing in $i... "
-        sleep 1
+        echo -ne "\rContinuing in $i... (press Enter to skip) "
+        read -t 1 -n 1 key 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "\rSkipping countdown...                    "
+            break
+        fi
     done
     echo -e "\rScanning for output interface...    "
     sleep 1
@@ -599,8 +607,10 @@ export INPUT_PAIR
 # Mount USB drives before starting the application
 echo "=== USB Drive Setup ==="
 echo ""
-    echo "If you have a USB drive with music, connect it now."
-    read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+echo "If you have a USB drive with music, connect it now."
+echo ""
+read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+echo ""
 echo "Mounting USB drives..."
 /usr/local/bin/mount-usb
 echo "✓ USB mounting complete"
@@ -611,8 +621,10 @@ clear
 # Initialize Bluetooth headtracker (if available)
 echo "=== Headtracker Setup ==="
 echo ""
-    echo "If you have a Bluetooth headtracker, connect it now and put it in pairing mode."
-    read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+echo "If you have a Bluetooth headtracker, connect it now and put it in pairing mode."
+echo ""
+read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
+echo ""
 echo "Scanning for headtracker..."
 /usr/local/bin/ble-ht >/dev/null 2>&1 &
 echo "✓ Headtracker scan complete"
@@ -626,8 +638,12 @@ echo ""
 echo "Starting Player application..."
 cd /home/$USER/UHJ-Pi
 
+# Give user a moment to see the message
+sleep 2
+
 # Launch SuperCollider and capture any errors
-if ! sclang -d supercollider/app/UHJ_v26_PLAYER_SF.scd >/dev/null 2>&1; then
+echo "Launching SuperCollider..."
+if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     clear
     echo "=== APPLICATION LAUNCH FAILED ==="
     echo ""
