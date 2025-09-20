@@ -13,17 +13,13 @@ show_device_info() {
         local input_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$input_channels" ] && [ "$input_channels" -gt 0 ]; then
             echo "  Inputs: $input_channels channels"
-            echo ""
         fi
     elif [ "$device_type" = "output" ]; then
         local output_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Playback:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$output_channels" ] && [ "$output_channels" -gt 0 ]; then
             echo "  Outputs: $output_channels channels"
-            echo ""
         fi
     fi
-    echo ""
-echo ""
 }
 
 show_input_options() {
@@ -85,17 +81,13 @@ show_device_info() {
         local input_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$input_channels" ] && [ "$input_channels" -gt 0 ]; then
             echo "  Inputs: $input_channels channels"
-            echo ""
         fi
     elif [ "$device_type" = "output" ]; then
         local output_channels=$(cat "/proc/asound/card$card_num/stream0" 2>/dev/null | grep -A 20 "Playback:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
         if [ -n "$output_channels" ] && [ "$output_channels" -gt 0 ]; then
             echo "  Outputs: $output_channels channels"
-            echo ""
         fi
     fi
-    echo ""
-echo ""
 }
 
 detect_generic_devices() {
