@@ -201,6 +201,7 @@ detect_flac_devices() {
                         fi
                     done
                     echo ""
+                    echo "Press number to select (auto-continuing in 10 seconds):"
                     read -t 10 -n 1 choice
                     echo ""
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
@@ -433,20 +434,26 @@ detect_generic_devices() {
         
         # Default to first option unless user specifically chooses
         if [ ${#input_options[@]} -gt 1 ]; then
-            echo "Multiple inputs available. Using first option: ${input_options[0]}"
-            echo "Press Enter to continue or type a number 1-${#input_options[@]} to choose:"
+            echo "Select Input:"
+            echo ""
+            for i in "${!input_options[@]}"; do
+                if [ $i -eq 0 ]; then
+                    echo "$((i+1)). ${input_options[$i]} (Default)"
+                else
+                    echo "$((i+1)). ${input_options[$i]}"
+                fi
+            done
+            echo ""
+            echo "Press number to select or Enter for default:"
             read -t 10 -n 1 choice
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
-                echo "✓ Selected: ${input_source}"
             else
                 input_source="${input_options[0]}"
-                echo "✓ Using: ${input_source}"
             fi
         elif [ ${#input_options[@]} -eq 1 ]; then
             input_source="${input_options[0]}"
-            echo "✓ Selected: ${input_source}"
         fi
         
         # Use the selected input source directly
@@ -566,7 +573,8 @@ detect_generic_devices() {
     echo ""
 }
 
-echo "Configuring Audio System"
+echo ""
+echo "=== CONFIGURING AUDIO SYSTEM ==="
 echo ""
 killall jackd >/dev/null 2>&1 || true
 killall sclang >/dev/null 2>&1 || true
