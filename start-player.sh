@@ -243,7 +243,7 @@ detect_generic_devices() {
             echo "Select option:"
             echo ""
             for i in {10..1}; do
-                echo -ne "\rContinuing in $i... (Select option) "
+                echo -ne "\rSelect option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ] && [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                     echo ""
@@ -521,6 +521,7 @@ cd /home/$USER/UHJ-Pi
 sleep 2
 
 # Launch SuperCollider and capture any errors
+echo ""
 echo "Launching SuperCollider..."
 if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     clear
