@@ -244,14 +244,9 @@ detect_generic_devices() {
                 fi
             done
             echo ""
-            for i in {10..1}; do
-                echo -ne "\rContinuing in $i... (Press number to select) "
-                read -t 1 -n 1 choice
-                if [ $? -eq 0 ] && [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
-                    echo ""
-                    break
-                fi
-            done
+            echo "Press number to select (auto-continuing in 10 seconds):"
+            echo ""
+            read -t 10 -n 1 choice
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
