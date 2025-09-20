@@ -123,6 +123,7 @@ detect_generic_devices() {
             echo -ne "\rConnect USB Audio Input Device... ($i) [Enter to continue] "
             read -t 1 -n 1 key 2>/dev/null
             if [ $? -eq 0 ]; then
+                echo ""
                 break
             fi
         done
@@ -231,7 +232,6 @@ detect_generic_devices() {
         if [ ${#input_options[@]} -gt 1 ]; then
             echo ""
             echo "Select Input:"
-            echo ""
             for i in "${!input_options[@]}"; do
                 if [ $i -eq 0 ]; then
                     echo "$((i+1)). ${input_options[$i]} (Default)"
@@ -243,11 +243,19 @@ detect_generic_devices() {
             for i in {10..1}; do
                 echo -ne "\rSelect option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
-                if [ $? -eq 0 ] && [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
-                    echo ""
-                    break
+                if [ $? -eq 0 ]; then
+                    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
+                        echo ""
+                        break
+                    elif [ -z "$choice" ]; then
+                        # Enter pressed, use default
+                        choice=1
+                        echo ""
+                        break
+                    fi
                 fi
             done
+            echo ""
             echo ""
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
@@ -301,6 +309,7 @@ detect_generic_devices() {
         echo -ne "\rConnect USB Audio Output Device... ($i) [Enter to continue] "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
+            echo ""
             break
         fi
     done
