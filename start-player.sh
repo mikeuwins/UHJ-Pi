@@ -376,9 +376,8 @@ detect_generic_devices() {
             fi
         done
         echo ""
-echo ""
         echo "Scanning for Audio Input Device..."
-echo ""
+        echo ""
         sleep 2
 
         # Prefer a device that has capture capability
@@ -396,32 +395,26 @@ echo ""
     # Check if max attempts reached without finding device
     if [ -z "$input_card" ]; then
         echo ""
-echo ""
         echo "❌ Failed to find audio input device after $max_attempts attempts."
-echo ""
         echo ""
-echo ""
         echo "Please check:"
-echo ""
-        echo "  • USB audio device is connected"
-echo ""
-        echo "  • Device is powered on"
-echo ""
-        echo "  • USB cable is working"
-echo ""
         echo ""
-echo ""
+        echo "  • USB audio device is connected"
+        echo ""
+        echo "  • Device is powered on"
+        echo ""
+        echo "  • USB cable is working"
+        echo ""
         echo "Try connecting the device and running the script again."
-echo ""
+        echo ""
         echo "Exiting..."
-echo ""
+        echo ""
         exit 1
     fi
     echo "Found $input_name"
-echo ""
+    echo ""
     show_device_info "$input_card" "$input_name" "input"
     echo ""
-echo ""
 
     # Detect available input pairs and their controls FIRST
     input_source=""
@@ -431,7 +424,7 @@ echo ""
     
     if command -v amixer >/dev/null 2>&1; then
         echo "Detecting input options on $input_name..."
-echo ""
+        echo ""
         
         # Parse amixer output to find input pairs with capture volume
         input_options=()
@@ -492,25 +485,21 @@ echo ""
         # Default to first option unless user specifically chooses
         if [ ${#input_options[@]} -gt 1 ]; then
             echo "Select Input:"
-echo ""
             echo ""
-echo ""
             for i in "${!input_options[@]}"; do
                 if [ $i -eq 0 ]; then
                     echo "$((i+1)). ${input_options[$i]} (Default)"
-echo ""
+                    echo ""
                 else
                     echo "$((i+1)). ${input_options[$i]}"
-echo ""
+                    echo ""
                 fi
             done
             echo ""
-echo ""
             echo "Press number to select or Enter for default:"
-echo ""
+            echo ""
             read -t 10 -n 1 choice
             echo ""
-echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
             else
