@@ -129,6 +129,7 @@ detect_generic_devices() {
             fi
         done
         echo ""
+        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -383,7 +384,6 @@ sleep 2
 detect_generic_devices
 source "$CONFIG_FILE"
 
-clear
 jackd -P75 -d alsa -C hw:$INPUT_CARD -P hw:$OUTPUT_CARD -r 44100 -p 2048 -n 3 -S >/dev/null 2>&1 &
 sleep 3
 if ! pgrep jackd > /dev/null; then
@@ -420,6 +420,7 @@ clear
 echo "=== USB Drive Setup ==="
 echo ""
 echo "Insert a USB drive containing your music files."
+echo ""
 echo "Organise your music like this:"
 echo "Parent Folder"
 echo "  +-- Artist Name/"
@@ -529,8 +530,6 @@ clear
 
 # Launch SuperCollider application
 echo "=== Launching Player Application ==="
-echo ""
-echo "Starting Player application..."
 cd /home/$USER/UHJ-Pi
 
 # Give user a moment to see the message
