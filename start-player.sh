@@ -129,7 +129,6 @@ detect_generic_devices() {
             fi
         done
         echo ""
-        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -480,7 +479,25 @@ done
 echo ""
 echo "Scanning for headtracker..."
 sleep 2  # Give Bluetooth controller time to initialize
+
+# Show spinner while scanning
+{
+    while true; do
+        echo -ne "\rScanning... | "
+        sleep 0.1
+        echo -ne "\rScanning... / "
+        sleep 0.1
+        echo -ne "\rScanning... - "
+        sleep 0.1
+        echo -ne "\rScanning... \\ "
+        sleep 0.1
+    done
+} &
+spinner_pid=$!
+
 ht_output=$(/usr/local/bin/ble-ht.sh 2>&1)
+kill $spinner_pid 2>/dev/null
+echo -e "\rScanning complete.    "
 ht_exit_code=$?
 
 echo ""
