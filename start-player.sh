@@ -54,7 +54,7 @@ show_input_options() {
             echo "    • $option"
         done
     else
-        echo "    • No software-controllable inputs detected"
+        echo "    • Single input detected"
     fi
 }
 
@@ -240,7 +240,7 @@ detect_flac_devices() {
                 else
                     has_input_gain=0
                     has_input_mute=0
-                    echo "• No input volume controls detected"
+                    echo "• Input device ready"
                 fi
             fi
         fi
@@ -274,12 +274,12 @@ detect_flac_devices() {
     if [ "$has_input_gain" -eq 1 ]; then
         echo "✓ Input gain control: $input_control"
     else
-        echo "• No input gain control"
+        echo "• Input ready"
     fi
     if [ "$has_input_mute" -eq 1 ]; then
         echo "✓ Input mute control: $input_control"
     else
-        echo "• No input mute control"
+        echo "• Input ready"
     fi
     echo ""
     read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
@@ -516,7 +516,7 @@ detect_generic_devices() {
             echo "✓ Input switched to $input_source"
             echo ""
         else
-            echo "• No input volume controls detected"
+            echo "• Input device ready"
             echo ""
             has_input_gain=0
             has_input_mute=0
@@ -526,7 +526,7 @@ detect_generic_devices() {
         # Let the synth handle mute instead
         if [ "$has_input_gain" -eq 0 ]; then
             has_input_mute=0
-            echo "• Using synth mute (no software input controls detected)"
+            echo "• Input ready"
             echo ""
         fi
     fi
@@ -600,14 +600,14 @@ detect_generic_devices() {
         echo "✓ Input gain control: $input_control"
         echo ""
     else
-        echo "• No input gain control detected"
+        echo "• Input ready"
         echo ""
     fi
     if [ "$has_input_mute" -eq 1 ]; then
         echo "✓ Input mute control: $input_control"
         echo ""
     else
-        echo "• No input mute control detected"
+        echo "• Input ready"
         echo ""
     fi
     echo ""
