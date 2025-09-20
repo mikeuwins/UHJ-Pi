@@ -449,7 +449,6 @@ for i in {10..1}; do
     fi
 done
 echo ""
-echo "Scanning for headtracker..."
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
