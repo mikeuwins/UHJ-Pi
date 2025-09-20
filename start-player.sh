@@ -135,7 +135,7 @@ detect_generic_devices() {
     input_attempts=0
     max_attempts=3
 
-    echo -e "${CYAN}=== Input Device Setup ===${RESET}"
+    echo -e "${YELLOW}=== Input Device Setup ===${RESET}"
     echo ""
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
@@ -322,7 +322,7 @@ detect_generic_devices() {
     fi
 
     echo ""
-    echo -e "${CYAN}=== Output Device Setup ===${RESET}"
+    echo -e "${YELLOW}=== Output Device Setup ===${RESET}"
     echo ""
     
     # Countdown (interruptible)
@@ -355,8 +355,6 @@ detect_generic_devices() {
     else
         echo "• Found separate output device"
     fi
-    
-    echo ""
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
     echo "INPUT_NAME=$input_name" >> "$CONFIG_FILE"
@@ -421,7 +419,7 @@ export INPUT_PAIR
 
 # Mount USB drives before starting the application
 clear
-echo -e "${CYAN}=== USB Drive Setup ===${RESET}"
+echo -e "${YELLOW}=== USB Drive Setup ===${RESET}"
 echo ""
 echo "Insert a USB drive containing your music files."
 echo ""
@@ -453,9 +451,9 @@ mount_exit_code=$?
 # Extract USB volume name from mount output
 if echo "$mount_output" | grep -q "Successfully mounted"; then
     usb_name=$(echo "$mount_output" | grep "Successfully mounted" | sed 's/.*at \/media\/[^\/]*\///' | sed 's/.*✓ Successfully mounted.*at.*\/media\/[^\/]*\///')
-    echo "Found USB volume '$usb_name'"
+    echo -e "${GREEN}Found USB volume '$usb_name'${RESET}"
 elif [ $mount_exit_code -eq 0 ]; then
-    echo "USB drive mounted"
+    echo -e "${GREEN}USB drive mounted${RESET}"
 else
     echo "• No USB drives found"
 fi
@@ -471,7 +469,7 @@ echo ""
 
 # Initialize Bluetooth headtracker (if available)
 clear
-echo -e "${CYAN}=== Headtracker Setup ===${RESET}"
+echo -e "${YELLOW}=== Headtracker Setup ===${RESET}"
 echo ""
 for i in {10..1}; do
     echo -ne "\rConnect compatible Bluetooth Headtracker... ($i) [Enter to continue] "
@@ -482,6 +480,8 @@ for i in {10..1}; do
 done
 echo ""
 sleep 2  # Give Bluetooth controller time to initialize
+
+echo ""
 
 # Show spinner while scanning
 {
@@ -505,7 +505,7 @@ ht_exit_code=$?
 
 echo ""
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
-    echo "Headtracker [HT] found and connected"
+    echo -e "${GREEN}Headtracker [HT] found and connected${RESET}"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     if echo "$ht_output" | grep -q "not found"; then
         echo "• No compatible headtracker [HT] found"
@@ -530,7 +530,7 @@ echo ""
 clear
 
 # Launch SuperCollider application
-echo -e "${CYAN}=== Launching Player Application ===${RESET}"
+echo -e "${YELLOW}=== Launching Player Application ===${RESET}"
 cd /home/$USER/UHJ-Pi
 
 # Give user a moment to see the message
