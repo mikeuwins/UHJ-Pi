@@ -267,6 +267,7 @@ detect_generic_devices() {
                     echo "$((i+1)). ${input_options[$i]}"
                 fi
             done
+            echo ""
             for i in {10..1}; do
                 echo -ne "\rSelect option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
