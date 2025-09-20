@@ -123,7 +123,6 @@ detect_generic_devices() {
             echo -ne "\rConnect USB Audio Input Device... ($i) [Enter to continue] "
             read -t 1 -n 1 key 2>/dev/null
             if [ $? -eq 0 ]; then
-                echo ""
                 break
             fi
         done
@@ -245,12 +244,10 @@ detect_generic_devices() {
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ]; then
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
-                        echo ""
                         break
                     elif [ -z "$choice" ]; then
                         # Enter pressed, use default
                         choice=1
-                        echo ""
                         break
                     fi
                 fi
@@ -307,7 +304,6 @@ detect_generic_devices() {
         echo -ne "\rConnect USB Audio Output Device... ($i) [Enter to continue] "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
-            echo ""
             break
         fi
     done
@@ -420,7 +416,6 @@ for i in {10..1}; do
     echo -ne "\rInsert USB drive containing music... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
-        echo ""
         break
     fi
 done
@@ -445,7 +440,6 @@ for i in {5..1}; do
     echo -ne "\rUSB setup complete... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
-        echo ""
         break
     fi
 done
@@ -459,7 +453,6 @@ for i in {10..1}; do
     echo -ne "\rConnect compatible Bluetooth Headtracker... ($i) [Enter to continue] "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
-        echo ""
         break
     fi
 done
@@ -506,7 +499,6 @@ for i in {10..1}; do
     echo -ne "\rContinuing in $i... (Press Enter to continue) "
     read -t 1 -n 1 key 2>/dev/null
     if [ $? -eq 0 ]; then
-        echo ""
         break
     fi
 done
@@ -557,7 +549,6 @@ if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
         echo -ne "\rExiting in $i... (Press Enter to continue) "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
-            echo ""
             break
         fi
     done
