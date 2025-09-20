@@ -31,7 +31,6 @@ show_input_options() {
     local card_num=$1
     local card_name=$2
     echo "  Available inputs:"
-    echo ""
     
     # Get input options from amixer
     local input_options=()
@@ -53,11 +52,9 @@ show_input_options() {
     if [ ${#input_options[@]} -gt 0 ]; then
         for option in "${input_options[@]}"; do
             echo "    • $option"
-            echo ""
         done
     else
         echo "    • No software-controllable inputs detected"
-        echo ""
     fi
 }
 
@@ -65,18 +62,15 @@ show_output_options() {
     local card_num=$1
     local card_name=$2
     echo "  Available outputs:"
-    echo ""
     
     # Get output options from aplay
     output_devices=$(aplay -l | grep "card $card_num:" | sed 's/.*card [0-9]*: \([^,]*\).*/\1/')
     if [ -n "$output_devices" ]; then
         echo "$output_devices" | while read -r device; do
             echo "    • $device"
-            echo ""
         done
     else
         echo "    • No output devices detected"
-        echo ""
     fi
 }
 
@@ -89,10 +83,8 @@ detect_flac_devices() {
     echo "=== Audio Device Setup ==="
     echo ""
     echo "Step 1: Connect your USB audio output device"
-    echo ""
     read -t 10 -p "Press Enter when your output device is connected (auto-continuing in 10 seconds)..." _
     echo "Scanning for output devices..."
-    echo ""
     sleep 2
 
     # Find output device first (required)
@@ -111,11 +103,8 @@ detect_flac_devices() {
         echo "❌ No output audio device found!"
         echo ""
         echo "Please check:"
-        echo ""
         echo "  • USB audio device is connected"
-        echo ""
         echo "  • Device is powered on"
-        echo ""
         echo "  • USB cable is working"
         echo ""
         read -t 10 -p "Press Enter to retry (auto-continuing in 10 seconds)..." _
@@ -126,13 +115,11 @@ detect_flac_devices() {
 
     echo ""
     echo "Step 2: Optional - Connect an input device (or press Enter to skip)"
-    echo ""
     read -t 10 -p "Press Enter when your input device is connected (auto-continuing in 10 seconds to skip)..." _
     
     # Check if user wants to configure input
     if [ -n "$_" ]; then
         echo "Scanning for input devices..."
-        echo ""
         sleep 2
         
         # Find input device (optional)
@@ -151,10 +138,8 @@ detect_flac_devices() {
             if arecord -l | grep -q "card $output_card:"; then
                 input_card="$output_card"; input_name="$output_name"
                 echo "Using same card for input and output"
-                echo ""
             else
                 echo "No input capability found on output device"
-                echo ""
             fi
         fi
 
@@ -164,7 +149,6 @@ detect_flac_devices() {
             # Configure input controls if available
             if command -v amixer >/dev/null 2>&1; then
                 echo "Detecting input options on $input_name..."
-                echo ""
                 
                 # Parse amixer output to find input pairs with capture volume
                 input_options=()
@@ -216,17 +200,13 @@ detect_flac_devices() {
                     for i in "${!input_options[@]}"; do
                         if [ $i -eq 0 ]; then
                             echo "$((i+1)). ${input_options[$i]} (Default)"
-                            echo ""
                         else
                             echo "$((i+1)). ${input_options[$i]}"
-                            echo ""
                         fi
                     done
                     echo ""
                     echo "Press number to select (auto-continuing in 10 seconds):"
-                    echo ""
                     read -t 10 -n 1 choice
-                    echo ""
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                         input_source="${input_options[$((choice-1))]}"
                     else
@@ -246,12 +226,10 @@ detect_flac_devices() {
                     if echo "$control_info" | grep -A 20 "Simple mixer control '$input_control'" | grep -q "cswitch"; then
                         has_input_mute=1
                         echo "✓ Input mute control detected on $input_control"
-                        echo ""
                     fi
                     
                     # Configure the input
                     echo "Configuring input: $input_source"
-                    echo ""
                     capture_source_control=$(amixer -c "$input_card" scontents 2>/dev/null | grep -i "capture source" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
                     if [ -n "$capture_source_control" ]; then
                         amixer -c "$input_card" sset "$capture_source_control" "$input_source" >/dev/null 2>&1 || true
@@ -259,18 +237,15 @@ detect_flac_devices() {
                     amixer -c "$input_card" sset "$input_source" cap >/dev/null 2>&1 || true
                     amixer -c "$input_card" sset "$input_source" 80% >/dev/null 2>&1 || true
                     echo "✓ Input configured"
-                    echo ""
                 else
                     has_input_gain=0
                     has_input_mute=0
                     echo "• No input volume controls detected"
-                    echo ""
                 fi
             fi
         fi
     else
         echo "Skipping input device configuration"
-        echo ""
         has_input_gain=0
         has_input_mute=0
     fi
@@ -289,30 +264,22 @@ detect_flac_devices() {
     echo ""
     if [ -n "$input_card" ]; then
         echo "✓ Input:  hw:$input_card ($input_name)"
-        echo ""
         if [ -n "$input_source" ]; then
             echo "  Source: $input_source"
-            echo ""
         fi
     else
         echo "• Input:  Not configured (output-only mode)"
-        echo ""
     fi
     echo "✓ Output: hw:$output_card ($output_name)"
-    echo ""
     if [ "$has_input_gain" -eq 1 ]; then
         echo "✓ Input gain control: $input_control"
-        echo ""
     else
         echo "• No input gain control"
-        echo ""
     fi
     if [ "$has_input_mute" -eq 1 ]; then
         echo "✓ Input mute control: $input_control"
-        echo ""
     else
         echo "• No input mute control"
-        echo ""
     fi
     echo ""
     read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
@@ -357,14 +324,12 @@ detect_generic_devices() {
     echo "=== Input Device Setup ==="
     echo ""
     echo "Connect your USB audio input device."
-    echo ""
     
     while [ -z "$input_card" ] && [ $input_attempts -lt $max_attempts ]; do
         input_attempts=$((input_attempts + 1))
         
         if [ $input_attempts -gt 1 ]; then
             echo "No device found. Retrying... (attempt $input_attempts/$max_attempts)"
-            echo ""
         fi
         
         # Countdown (interruptible)
