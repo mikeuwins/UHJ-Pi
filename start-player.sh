@@ -170,7 +170,6 @@ detect_generic_devices() {
     has_input_gain=0
     
     if command -v amixer >/dev/null 2>&1; then
-        echo "Detecting input options on $input_name..."
         
         # Parse amixer output to find input pairs with capture volume
         input_options=()
@@ -399,6 +398,7 @@ echo ""
 echo "Insert a USB drive containing your music files."
 echo ""
 echo "Organise your music like this:"
+echo ""
 echo "Parent Folder"
 echo "  +-- Artist Name/"
 echo "      +-- Album Name/"
