@@ -652,17 +652,12 @@ export INPUT_PAIR
 echo "=== USB Drive Setup ==="
 echo ""
 echo "Insert a USB drive with music files."
-echo ""
 echo "Supported formats: WAV, FLAC"
-echo ""
 echo "Required structure: Artist folders containing Album folders"
-echo ""
 echo "Example: /Artist Name/Album Name/track01.wav"
 echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
-echo ""
 echo "Scanning for USB drives..."
-echo ""
 # Capture mount output to check for success
 mount_output=$(/usr/local/bin/mount-usb 2>&1)
 mount_exit_code=$?
@@ -671,13 +666,10 @@ mount_exit_code=$?
 if echo "$mount_output" | grep -q "Successfully mounted"; then
     usb_name=$(echo "$mount_output" | grep "Successfully mounted" | sed 's/.*at \/media\/[^\/]*\///' | sed 's/.*✓ Successfully mounted.*at.*\/media\/[^\/]*\///')
     echo "Found USB volume '$usb_name'"
-    echo ""
 elif [ $mount_exit_code -eq 0 ]; then
     echo "✓ USB drive mounted"
-    echo ""
 else
     echo "• No USB drives found"
-    echo ""
 fi
 echo ""
 read -t 5 -p "Press Enter to continue (auto-continuing in 5 seconds)..." _
@@ -689,21 +681,16 @@ echo ""
 echo "If you have a Bluetooth headtracker, turn it on now."
 echo ""
 read -t 10 -p "Press Enter when ready (auto-continuing in 10 seconds to skip)..." _
-echo ""
 echo "Scanning for headtracker..."
-echo ""
 ht_output=$(/usr/local/bin/ble-ht 2>&1)
 ht_exit_code=$?
 
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
     echo "✓ Headtracker detected and connected"
-    echo ""
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     echo "• No headtracker found"
-    echo ""
 else
     echo "• Headtracker scan complete"
-    echo ""
 fi
 echo ""
 clear
@@ -712,7 +699,6 @@ clear
 echo "=== Launching Player Application ==="
 echo ""
 echo "Starting Player application..."
-echo ""
 cd /home/$USER/UHJ-Pi
 
 # Give user a moment to see the message
@@ -720,7 +706,6 @@ sleep 2
 
 # Launch SuperCollider and capture any errors
 echo "Launching SuperCollider..."
-echo ""
 if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     clear
     echo "=== APPLICATION LAUNCH FAILED ==="
