@@ -156,6 +156,7 @@ detect_generic_devices() {
                 break
             fi
         done
+        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -481,6 +482,7 @@ echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
 # Show spinner while scanning
+echo ""
 {
     while true; do
         echo -ne "\rScanning for headtracker... | "
