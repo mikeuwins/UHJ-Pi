@@ -269,7 +269,7 @@ detect_generic_devices() {
             done
             echo ""
             for i in {10..1}; do
-                echo -ne "\rSelect option... ($i) [Enter to continue] "
+                echo -ne "\rChoose option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ]; then
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
