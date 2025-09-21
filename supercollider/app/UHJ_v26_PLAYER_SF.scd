@@ -1949,7 +1949,6 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 
                 // First attempt
                 ("echo 'Running pairing script: " ++ scriptPath ++ "' >> /tmp/bt-debug.log").unixCmd;
-                var success, pairedNotConnected, result;
                 try {
                     result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                     ("echo 'Script result: " ++ result.replace("\n", " ") ++ "' >> /tmp/bt-debug.log").unixCmd;
