@@ -1874,11 +1874,21 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         ~pairingInProgress = true;
         ~headtrackPairBtn.value_(1); // Show working (...)
         
+        // Safety timeout - reset button after 20 seconds if script hangs
+        AppClock.sched(20, { 
+            if (~pairingInProgress) {
+                ~pairingInProgress = false;
+                ~headtrackPairBtn.value_(3); // Show failed
+                AppClock.sched(3, { ~headtrackPairBtn.value_(0); nil });
+            };
+            nil 
+        });
+        
         Task({
             var result, success = false, pairedNotConnected = false;
             
             // Simply call the ble-ht.sh script
-            result = ("timeout 30 /usr/local/bin/ble-ht.sh").unixCmdGetStdOut;
+            result = ("timeout 15 /usr/local/bin/ble-ht.sh").unixCmdGetStdOut;
             
             // Check result and update MAC if needed
             if (result.contains("PAIRED_AND_CONNECTED")) {
