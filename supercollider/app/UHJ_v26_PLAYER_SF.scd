@@ -1878,14 +1878,13 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         ("echo '=== BLUETOOTH PAIR BUTTON PRESSED ===' >> /tmp/bt-debug.log").unixCmd;
         ("echo 'Timestamp: '$(date) >> /tmp/bt-debug.log").unixCmd;
         
-        // Check if device is already connected - if so, disconnect/unpair
+        // If we have a known MAC and it's connected, disconnect it
         if (~headtrackerMac.notEmpty) {
             var checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
             var isConnected = checkResult.contains("Connected: yes");
-            var isPaired = checkResult.contains("Paired: yes");
             
             if (isConnected) {
-                ("echo 'Device is connected - disconnecting' >> /tmp/bt-debug.log").unixCmd;
+                ("echo 'Known device is connected - disconnecting' >> /tmp/bt-debug.log").unixCmd;
                 ~pairingInProgress = true;
                 ~headtrackPairBtn.value_(1); // Show working
                 
@@ -1904,6 +1903,9 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 ^this;
             };
         };
+        
+        // Otherwise, run ble-ht.sh to pair/connect
+        ("echo 'Running ble-ht.sh to pair/connect' >> /tmp/bt-debug.log").unixCmd;
         
         ~pairingInProgress = true;
         ~headtrackPairBtn.value_(1); // Show working
