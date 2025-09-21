@@ -192,7 +192,7 @@ detect_generic_devices() {
     fi
     # Get input channel count
     input_channels=$(cat "/proc/asound/card$input_card/stream0" 2>/dev/null | grep -A 20 "Capture:" | grep "Channels:" | head -1 | grep -o "[0-9]*" || echo "2")
-    echo -e "${GREEN}Found${RESET} ${input_name%-*} - $input_channels inputs"
+    echo -e "${GREEN}Found${RESET} $(echo ${input_name%-*} | xargs) - $input_channels inputs"
 
     # Detect available input pairs and their controls FIRST
     input_source=""
@@ -327,6 +327,7 @@ detect_generic_devices() {
     fi
 
     echo -e "${YELLOW}=== Output Device Setup ===${RESET}"
+    echo "test"
     
     # Countdown (interruptible)
     for i in {10..1}; do
@@ -337,6 +338,7 @@ detect_generic_devices() {
         fi
     done
     echo
+    echo ""
     echo "Detecting Audio Output Device..."
     sleep 1
 
