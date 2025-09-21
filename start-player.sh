@@ -145,7 +145,7 @@ detect_generic_devices() {
         input_attempts=$((input_attempts + 1))
         
         if [ $input_attempts -gt 1 ]; then
-            echo "No device found. Retrying... (attempt $input_attempts/$max_attempts)"
+            echo -e "${RED}No device found. Retrying... (attempt $input_attempts/$max_attempts)${RESET}"
         fi
         
         # Countdown (interruptible)
@@ -327,7 +327,7 @@ detect_generic_devices() {
     fi
 
     echo -e "${YELLOW}=== Output Device Setup ===${RESET}"
-    echo "test"
+    echo ""
     
     # Countdown (interruptible)
     for i in {10..1}; do
@@ -358,7 +358,7 @@ detect_generic_devices() {
         output_card="$input_card"; output_name="$input_name"
         echo "• Using same device for input and output"
     else
-        echo "• Found separate output device"
+        echo -e "${GREEN}Found${RESET} separate output device"
     fi
 
     echo "INPUT_CARD=$input_card" > "$CONFIG_FILE"
@@ -457,11 +457,11 @@ mount_exit_code=$?
 # Extract USB volume name from mount output
 if echo "$mount_output" | grep -q "Successfully mounted"; then
     usb_name=$(echo "$mount_output" | grep "Successfully mounted" | sed 's/.*at \/media\/[^\/]*\///' | sed 's/.*✓ Successfully mounted.*at.*\/media\/[^\/]*\///')
-    echo -e "${GREEN}Found USB volume '$usb_name'${RESET}"
+    echo -e "${GREEN}Found${RESET} USB volume '$usb_name'"
 elif [ $mount_exit_code -eq 0 ]; then
     echo -e "${GREEN}USB drive mounted${RESET}"
 else
-    echo "• No USB drives found"
+    echo -e "${RED}• No USB drives found${RESET}"
 fi
 echo ""
 for i in {5..1}; do
@@ -510,12 +510,12 @@ ht_exit_code=$?
 
 echo ""
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
-    echo -e "${GREEN}Headtracker [HT] found and connected${RESET}"
+    echo -e "${GREEN}Found${RESET} headtracker [HT] - paired and connected"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     if echo "$ht_output" | grep -q "not found"; then
-        echo "• No compatible headtracker [HT] found"
+        echo -e "${RED}• No compatible headtracker [HT] found${RESET}"
     else
-        echo "• Headtracker [HT] found but pairing failed"
+        echo -e "${RED}• Headtracker [HT] found but pairing failed${RESET}"
     fi
 else
     echo "• Headtracker scan completed (no device found)"
