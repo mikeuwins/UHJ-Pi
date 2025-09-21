@@ -157,7 +157,7 @@ detect_generic_devices() {
                 break
             fi
         done
-        echo ""
+        echo
         echo ""
         echo "Detecting Audio Input Device..."
         echo ""
@@ -270,7 +270,6 @@ detect_generic_devices() {
                     echo "$((i+1)). ${input_options[$i]}"
                 fi
             done
-            echo ""
             for i in {10..1}; do
                 echo -ne "\rChoose option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
@@ -284,7 +283,7 @@ detect_generic_devices() {
                     fi
                 fi
             done
-            echo ""
+            echo
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
@@ -447,7 +446,7 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
+echo
 echo ""
 echo "Scanning for USB drives..."
 echo ""
@@ -485,7 +484,7 @@ for i in {10..1}; do
         break
     fi
 done
-echo ""
+echo
 echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
@@ -514,6 +513,7 @@ if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
     echo -e "${GREEN}Found${RESET} headtracker [HT] - paired and connected"
 elif echo "$ht_output" | grep -q "PAIRED_NOT_CONNECTED"; then
     echo -e "${YELLOW}• Headtracker [HT] paired but not connected${RESET}"
+    echo "• Press PAIR button in app to retry connection"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     if echo "$ht_output" | grep -q "not found"; then
         echo -e "${RED}• No compatible headtracker [HT] found${RESET}"

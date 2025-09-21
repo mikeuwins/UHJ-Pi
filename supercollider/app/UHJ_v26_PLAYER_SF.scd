@@ -1856,8 +1856,8 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 ~pairingInProgress = false;  // Flag to prevent multiple clicks
 ~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
     .states_([
-        ["PAIR", Color.black, Color.white],      // 0: Ready to pair (not paired)
-        ["...", Color.black, Color.white],       // 1: Pairing in progress  
+        ["PAIR", Color.cyan, Color.black],       // 0: Ready to pair (not paired)
+        ["...", Color.cyan, Color.black],        // 1: Pairing in progress  
         ["LINK", Color.black, Color.cyan],       // 2: Success - paired and connected
         ["FAIL", Color.black, Color.white],      // 3: Failed
         ["LINK", Color.black, Color.white]       // 4: Paired but not connected
