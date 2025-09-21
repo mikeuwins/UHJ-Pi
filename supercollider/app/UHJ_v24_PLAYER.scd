@@ -338,8 +338,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             "No current album path".postln;
             Pen.color = Color.cyan;
             Pen.stringAtPoint("ARTWORK", Point(10, 30));
+        });
     });
-});
 
 // Time display (elapsed/total) - centered under play button, much wider
 ~timeDisplay = StaticText(mainView, Rect(40, 450, 116, 20))
@@ -476,7 +476,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 ~rewindBtn = Button(mainView, Rect(28, 410, 44, 35))
     .states_([["⏮", Color.cyan, Color.black]])
     .font_(Font("Helvetica", 16).boldVariant)
-    .focusColor_(Color.clear)
+        .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({
         {

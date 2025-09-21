@@ -1146,8 +1146,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         ~restoreSynthParams.value();
 
                     // Create output meters only (no input meters)
-                    {
-                        ~meter.remove; // Remove any existing meter
+                        {
+                            ~meter.remove; // Remove any existing meter
                         ("Creating output meters only with outputs=" ++ outputs).postln;
                         ~meter = ServerMeter2View.new(s, ~meterContainer, 68@0, 0, outputs); // 0 inputs, outputs outputs, moved left by 2px
                         
