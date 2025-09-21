@@ -488,7 +488,22 @@ echo
 echo ""
 # Clean up any existing headtracker pairings for fresh start
 echo "=== Headtracker Cleanup ==="
-echo "Scanning for existing Bluetooth devices..."
+echo "Waiting for Bluetooth service to be ready..."
+
+# Wait for Bluetooth service to be available
+for i in {1..10}; do
+    if systemctl is-active --quiet bluetooth; then
+        echo "Bluetooth service is active"
+        break
+    else
+        echo "Waiting for Bluetooth service... ($i/10)"
+        sleep 1
+    fi
+done
+
+# Give bluetoothctl time to initialize
+echo "Initializing bluetoothctl..."
+sleep 3
 
 # Check if bluetoothctl is working
 echo "Testing bluetoothctl..."
