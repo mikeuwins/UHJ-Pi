@@ -157,7 +157,7 @@ detect_generic_devices() {
                 break
             fi
         done
-        echo
+        echo ""
         echo ""
         echo "Detecting Audio Input Device..."
         echo ""
@@ -272,7 +272,7 @@ detect_generic_devices() {
             done
             echo ""
             for i in {10..1}; do
-                echo -ne "\rChoose option... ($i) [Enter to continue]"
+                echo -ne "\rChoose option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ]; then
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
@@ -284,7 +284,7 @@ detect_generic_devices() {
                     fi
                 fi
             done
-            echo
+            echo ""
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
@@ -447,7 +447,7 @@ for i in {10..1}; do
         break
     fi
 done
-echo
+echo ""
 echo ""
 echo "Scanning for USB drives..."
 echo ""
@@ -485,61 +485,41 @@ for i in {10..1}; do
         break
     fi
 done
-echo
+echo ""
 echo ""
 sleep 2  # Give Bluetooth controller time to initialize
 
-# Countdown with option to skip
-echo -n "Scanning for headtracker in "
-for i in {5..1}; do
-    echo -n "$i... "
-    read -t 1 -n 1 -s key 2>/dev/null
-    if [[ $? -eq 0 ]]; then
-        echo ""
-        echo -e "${YELLOW}Skipping headtracker scan${RESET}"
-        ht_output="SKIPPED"
-        ht_exit_code=0
-        break
-    fi
-done
+# Show spinner while scanning
+{
+    while true; do
+        echo -ne "\rScanning for headtracker... | "
+        sleep 0.1
+        echo -ne "\rScanning for headtracker... / "
+        sleep 0.1
+        echo -ne "\rScanning for headtracker... - "
+        sleep 0.1
+        echo -ne "\rScanning for headtracker... \\ "
+        sleep 0.1
+    done
+} &
+spinner_pid=$!
 
-if [[ "$ht_output" != "SKIPPED" ]]; then
-    echo ""
-    # Show spinner while scanning
-    {
-        while true; do
-            echo -ne "\rScanning for headtracker... | "
-            sleep 0.1
-            echo -ne "\rScanning for headtracker... / "
-            sleep 0.1
-            echo -ne "\rScanning for headtracker... - "
-            sleep 0.1
-            echo -ne "\rScanning for headtracker... \\ "
-            sleep 0.1
-        done
-    } &
-    spinner_pid=$!
-
-    ht_output=$(timeout 15 /usr/local/bin/ble-ht.sh 2>&1)
-    kill $spinner_pid 2>/dev/null
-    echo -e "\rScanning for headtracker... complete."
-    ht_exit_code=$?
-fi
+ht_output=$(/usr/local/bin/ble-ht.sh 2>&1)
+kill $spinner_pid 2>/dev/null
+echo -e "\rScanning for headtracker... complete."
+ht_exit_code=$?
 
 echo ""
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
     echo -e "${GREEN}Found${RESET} headtracker [HT] - paired and connected"
 elif echo "$ht_output" | grep -q "PAIRED_NOT_CONNECTED"; then
     echo -e "${YELLOW}• Headtracker [HT] paired but not connected${RESET}"
-    echo "• Press PAIR button in app to retry connection"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     if echo "$ht_output" | grep -q "not found"; then
         echo -e "${RED}• No compatible headtracker [HT] found${RESET}"
     else
         echo -e "${RED}• Headtracker [HT] found but pairing failed${RESET}"
     fi
-elif echo "$ht_output" | grep -q "SKIPPED"; then
-    echo -e "${YELLOW}• Headtracker scan skipped${RESET}"
 else
     echo "• Headtracker scan completed (no device found)"
 fi
