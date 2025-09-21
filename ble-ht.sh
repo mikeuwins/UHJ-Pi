@@ -43,8 +43,8 @@ for attempt in 1 2; do
         echo "exit"
     } | bluetoothctl
     
-    # Check if pairing succeeded
-    if bluetoothctl info "$DEVICE_MAC" | grep -q "Paired: yes"; then
+    # Check if pairing and connection succeeded
+    if bluetoothctl info "$DEVICE_MAC" | grep -q "Paired: yes" && bluetoothctl info "$DEVICE_MAC" | grep -q "Connected: yes"; then
         echo "PAIRED_AND_CONNECTED"
         exit 0
     fi
