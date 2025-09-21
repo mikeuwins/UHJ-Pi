@@ -568,17 +568,28 @@ echo "$devices_output" | while read -r line; do
             echo "  MAC: $mac_address"
             echo "  Name: $device_name"
             
+            # Get detailed device info
+            echo "  Getting device info..."
+            device_info=$(bluetoothctl info "$mac_address" 2>&1)
+            echo "  Device info: $device_info"
+            
             # Check if this is a headtracker device (HT, headtracker, or common HT MAC prefix)
             if [[ "$device_name" =~ [Hh][Tt] ]] || [[ "$mac_address" =~ ^E4:E1:DE ]]; then
                 ht_device_count=$((ht_device_count + 1))
                 echo "  *** HEADTRACKER DETECTED ***"
-                echo "  Removing existing headtracker pairing: $device_name ($mac_address)"
+                echo "  Unpairing existing headtracker: $device_name ($mac_address)"
                 
-                # Show removal result
-                if bluetoothctl remove "$mac_address" 2>/dev/null; then
-                    echo "  ✓ Successfully removed $device_name"
+                # Try to unpair first (less aggressive than remove)
+                if bluetoothctl unpair "$mac_address" 2>/dev/null; then
+                    echo "  ✓ Successfully unpaired $device_name"
                 else
-                    echo "  ✗ Failed to remove $device_name (may not be paired)"
+                    echo "  ✗ Failed to unpair $device_name, trying remove..."
+                    # If unpair fails, try remove as fallback
+                    if bluetoothctl remove "$mac_address" 2>/dev/null; then
+                        echo "  ✓ Successfully removed $device_name"
+                    else
+                        echo "  ✗ Failed to remove $device_name"
+                    fi
                 fi
             else
                 echo "  Not a headtracker device"
