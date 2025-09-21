@@ -293,7 +293,6 @@ detect_generic_devices() {
         elif [ ${#input_options[@]} -eq 1 ]; then
             input_source="${input_options[0]}"
         fi
-        echo ""
         
         # Use the selected input source directly
         input_source="$input_source"
@@ -490,10 +489,26 @@ echo ""
 # Clean up any existing headtracker pairings for fresh start
 echo "=== Headtracker Cleanup ==="
 echo "Scanning for existing Bluetooth devices..."
+
+# Check if bluetoothctl is working
+echo "Testing bluetoothctl..."
+if ! bluetoothctl --version > /dev/null 2>&1; then
+    echo "ERROR: bluetoothctl not available"
+    echo ""
+    exit 1
+fi
+
+echo "bluetoothctl is working, scanning devices..."
 device_count=0
 ht_device_count=0
 
-bluetoothctl devices | while read -r line; do
+# Get devices and store in variable first
+devices_output=$(bluetoothctl devices 2>&1)
+echo "Raw bluetoothctl output:"
+echo "$devices_output"
+echo ""
+
+echo "$devices_output" | while read -r line; do
     if [ -n "$line" ]; then
         device_count=$((device_count + 1))
         echo "Found device: $line"
