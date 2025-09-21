@@ -4208,11 +4208,14 @@ Tdef( 'tryOpenHID' ).play;
 // Map HID usages to GUI knobs (always active, no gating)
 HIDdef.usage( \hidRotation, { |val|
     {
-        //("Headtracker raw rotation: " ++ val).postln;  // <-- Add this line
+        ("Headtracker raw rotation: " ++ val).postln;  // Debug output
         if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
+            ("Updating rotation knob").postln;
             ~rotateKnob.valueAction_(
                 1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
             );
+        } {
+            ("Rotation knob not enabled").postln;
         };
     }.defer;
 }, \Z );
