@@ -68,33 +68,33 @@ var win, mainView,
         foundAlbum = nil;
         
         artists.do { |artist|
-            var artistPath = artist.fullPath;
-            var albums = PathName(artistPath).entries.select { |entry| entry.isFolder };
-            var looseFiles = PathName(artistPath).entries.select { |entry| 
-                entry.isFile and: { 
-                    var ext = entry.extension.asString.toLower;
-                    (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                var artistPath = artist.fullPath;
+                var albums = PathName(artistPath).entries.select { |entry| entry.isFolder };
+                var looseFiles = PathName(artistPath).entries.select { |entry| 
+                    entry.isFile and: { 
+                        var ext = entry.extension.asString.toLower;
+                        (ext == "wav") or: (ext == "flac") or: (ext == "mp3") or: (ext == "aif") or: (ext == "aiff") or: (ext == "ogg") or: (ext == "m4a");
+                    };
                 };
-            };
-            
-            // Check if preferred album exists
-            var preferredAlbum = albums.detect { |album| 
-                album.folderName.asString.toUpper == ~preferredDefaultAlbum.toUpper 
-            };
-            
-            if(preferredAlbum.notNil, {
-                foundArtist = artist.folderName.asString.toUpper;
-                foundAlbum = preferredAlbum.folderName.asString.toUpper;
-            }, {
-                // No preferred album in this artist, use first available as fallback only if no preferred album found yet
-                if(foundArtist.isNil, {
+                
+                // Check if preferred album exists
+                var preferredAlbum = albums.detect { |album| 
+                    album.folderName.asString.toUpper == ~preferredDefaultAlbum.toUpper 
+                };
+                
+                if(preferredAlbum.notNil, {
                     foundArtist = artist.folderName.asString.toUpper;
-                    if(albums.size > 0, {
-                        foundAlbum = albums[0].folderName.asString.toUpper;
-                    }, {
-                        if(looseFiles.size > 0, {
-                            foundAlbum = "<NO ALBUMS>";
+                    foundAlbum = preferredAlbum.folderName.asString.toUpper;
+                }, {
+                // No preferred album in this artist, use first available as fallback only if no preferred album found yet
+                    if(foundArtist.isNil, {
+                        foundArtist = artist.folderName.asString.toUpper;
+                        if(albums.size > 0, {
+                            foundAlbum = albums[0].folderName.asString.toUpper;
                         }, {
+                            if(looseFiles.size > 0, {
+                                foundAlbum = "<NO ALBUMS>";
+                            }, {
                             foundAlbum = "<NO ARTISTS>";
                         });
                     });
@@ -788,9 +788,9 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
             contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
             entries = PathName(contentDir).entries.select { |entry| entry.isFolder };
-            entries.do { |entry|
-                folders = folders.add(entry.folderName.asString.toUpper);
-            };
+                entries.do { |entry|
+                    folders = folders.add(entry.folderName.asString.toUpper);
+                };
         });
     });
     
@@ -843,14 +843,14 @@ StaticText(mainView, Rect(38, 10, 120, 28))
             albumPath = "/tmp/"; // fallback path
         }, {
             // Resolve content directory the same way as ~getUSBFolderOptions
-            var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
-            var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
-            if(albumName == "<NO ALBUMS>", {
-                // No album folders, just files in artist folder
-                albumPath = contentDir +/+ artistName +/+ "/";
-            }, {
-                // Use both artist and album
-                albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
+                var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
+                var contentDir = if(usbEntries.size > 0) { usbEntries[0].fullPath } { usbBase };
+                if(albumName == "<NO ALBUMS>", {
+                    // No album folders, just files in artist folder
+                    albumPath = contentDir +/+ artistName +/+ "/";
+                }, {
+                    // Use both artist and album
+                    albumPath = contentDir +/+ artistName +/+ albumName +/+ "/";
             });
         });
     }, {
@@ -858,23 +858,23 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         var atkBase = Atk.userSoundsDir ++ "/uhj";
         if(artistName == "<NO DRIVE>", {
             albumPath = "/tmp/"; // fallback path
-        }, {
-            // Find actual artist folder by case-insensitive matching
-            var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                entry.folderName.asString.toUpper == artistName 
-            };
-            var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
-            
-            if(albumName == "<NO ALBUMS>", {
-                // No album folders, just files in artist folder
-                albumPath = actualArtistPath +/+ "/";
             }, {
-                // Find actual album folder by case-insensitive matching
-                var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
-                    entry.folderName.asString.toUpper == albumName 
+                // Find actual artist folder by case-insensitive matching
+                var actualArtistName = PathName(atkBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                    entry.folderName.asString.toUpper == artistName 
                 };
-                var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
-                albumPath = actualAlbumPath +/+ "/";
+                var actualArtistPath = if(actualArtistName.notNil) { actualArtistName.fullPath } { atkBase +/+ artistName };
+                
+                if(albumName == "<NO ALBUMS>", {
+                    // No album folders, just files in artist folder
+                    albumPath = actualArtistPath +/+ "/";
+                }, {
+                    // Find actual album folder by case-insensitive matching
+                    var actualAlbumName = PathName(actualArtistPath).entries.select { |entry| entry.isFolder }.detect { |entry| 
+                        entry.folderName.asString.toUpper == albumName 
+                    };
+                    var actualAlbumPath = if(actualAlbumName.notNil) { actualAlbumName.fullPath } { actualArtistPath +/+ albumName };
+                    albumPath = actualAlbumPath +/+ "/";
             });
         });
     });
@@ -1882,7 +1882,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
             
             // Check result and update MAC if needed
             if (result.contains("PAIRED_AND_CONNECTED")) {
-                success = true;
+                    success = true;
                 // Update the MAC address
                 ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
             } {
@@ -1894,9 +1894,9 @@ StaticText(mainView, Rect(618, 10, 140, 28))
             };
             
             // Update button state based on result
-            {
-                ~pairingInProgress = false;
-                if (success) {
+                {
+                    ~pairingInProgress = false;
+                    if (success) {
                     ~headtrackPairBtn.value_(2); // Success - connected (black on cyan)
                 } {
                     if (pairedNotConnected) {
@@ -1906,8 +1906,8 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                         // Reset to PAIR after 3 seconds
                         AppClock.sched(3, { 
                             ~headtrackPairBtn.value_(0); 
-                            nil 
-                        });
+                    nil 
+                });
                     };
                 };
             }.defer;
@@ -3208,7 +3208,7 @@ AppClock.sched(0.1, {
             
             // Create PLAYER overlay in central area (only if it doesn't exist)
             if(~playerOverlay.isNil, {
-                ~playerOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+            ~playerOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
             
             // Add border around player panel
             UserView(~playerOverlay, Rect(0, 0, 320, 275))
@@ -3288,9 +3288,9 @@ AppClock.sched(0.1, {
                                     
                                     fallbackImage.drawInRect(Rect(xOffset, yOffset, imageSize, imageSize), 
                                                            Rect(0, 0, fallbackImage.width, fallbackImage.height), 0);
-                                }, {
-                                    Pen.color = Color.cyan;
-                                    Pen.stringAtPoint("NO ART", Point(85, 100));
+                        }, {
+                            Pen.color = Color.cyan;
+                            Pen.stringAtPoint("NO ART", Point(85, 100));
                                 });
                             } { |error|
                                 Pen.color = Color.cyan;
@@ -3348,8 +3348,8 @@ AppClock.sched(0.1, {
                                 ~pausedTime = 0;
                             }, {
                                 // Start from beginning if no paused position
-                                ~playStartTime = SystemClock.seconds;
-                                ~pausedTime = 0;
+                            ~playStartTime = SystemClock.seconds;
+                            ~pausedTime = 0;
                             });
                         }, {
                             // Pause (cyan icon on black background)
@@ -3423,8 +3423,8 @@ AppClock.sched(0.1, {
                         // Update our timer to match the seek position
                         if(~isPlaying, {
                             // If playing, calculate playStartTime so elapsed time equals seekTime
-                            ~playStartTime = SystemClock.seconds - seekTime;
-                            ~pausedTime = 0;
+                        ~playStartTime = SystemClock.seconds - seekTime;
+                        ~pausedTime = 0;
                         }, {
                             // If paused, just set the paused time to the seek position
                             ~playStartTime = 0;
