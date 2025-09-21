@@ -1824,6 +1824,72 @@ dbValue = cliToDbMaster.(lastInL);
 
 // Value display labels already created above
 
+// --- Headtracker HID Integration (moved earlier for better timing) ---
+(
+Tdef( 'tryOpenHID' , {
+   var keepLooking = true;
+   while ( { keepLooking } ){
+      if ( ~myhid.notNil ){
+         if ( ~myhid.isOpen ){
+            keepLooking = false;
+         }
+      };
+      if ( keepLooking ){
+         HID.findAvailable;
+         if ( HID.findBy(0,0).size > 0 ){
+            ~myhid = HID.open(0,0);
+            if ( ~myhid.notNil ){
+               ~myhid.closeAction = {
+                    "device closed".postln;
+                    Tdef( \tryOpenHID ).reset.play;
+               };
+               keepLooking = false;
+            }{
+               1.0.wait;
+            };
+         }{
+            3.0.wait;
+         }
+      }
+   }
+} );
+);
+Tdef( 'tryOpenHID' ).play;
+
+// HID.debug = true;
+
+// Map HID usages to GUI knobs (always active, no gating)
+HIDdef.usage( \hidRotation, { |val|
+    {
+        //("Headtracker raw rotation: " ++ val).postln;  // <-- Add this line
+        if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
+            ~rotateKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \Z );
+
+HIDdef.usage( \hidTilt, { |val|
+    {
+        if(~tiltKnob.notNil and: { ~tiltKnob.enabled }) {
+            ~tiltKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \Y );
+
+HIDdef.usage( \hidTumble, { |val|
+    {
+        if(~tumbleKnob.notNil and: { ~tumbleKnob.enabled }) {
+            ~tumbleKnob.valueAction_(
+                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
+            );
+        };
+    }.defer;
+}, \X );
+
 ~xyPanner = Slider2D(mainView, Rect(629, 334, 110, 110))
     .x_(0.5).y_(0.5)
     .knobColor_(Color.cyan)
@@ -4171,74 +4237,6 @@ UserView(mainView, Rect(571, 70, 4, 300))
     });
 
 // ... existing code ...
-// --- Headtracker HID Integration (added as per MainApp2 model, always active) ---
-(
-Tdef( 'tryOpenHID' , {
-   var keepLooking = true;
-   while ( { keepLooking } ){
-      if ( ~myhid.notNil ){
-         if ( ~myhid.isOpen ){
-            keepLooking = false;
-         }
-      };
-      if ( keepLooking ){
-         HID.findAvailable;
-         if ( HID.findBy(0,0).size > 0 ){
-            ~myhid = HID.open(0,0);
-            if ( ~myhid.notNil ){
-               ~myhid.closeAction = {
-                    "device closed".postln;
-                    Tdef( \tryOpenHID ).reset.play;
-               };
-               keepLooking = false;
-            }{
-               1.0.wait;
-            };
-         }{
-            3.0.wait;
-         }
-      }
-   }
-} );
-);
-Tdef( 'tryOpenHID' ).play;
-
-// HID.debug = true;
-
-// Map HID usages to GUI knobs (always active, no gating)
-HIDdef.usage( \hidRotation, { |val|
-    {
-        ("Headtracker raw rotation: " ++ val).postln;  // Debug output
-        if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
-            ("Updating rotation knob").postln;
-            ~rotateKnob.valueAction_(
-                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
-            );
-        } {
-            ("Rotation knob not enabled").postln;
-        };
-    }.defer;
-}, \Z );
-
-HIDdef.usage( \hidTilt, { |val|
-    {
-        if(~tiltKnob.notNil and: { ~tiltKnob.enabled }) {
-            ~tiltKnob.valueAction_(
-                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
-            );
-        };
-    }.defer;
-}, \Y );
-
-HIDdef.usage( \hidTumble, { |val|
-    {
-        if(~tumbleKnob.notNil and: { ~tumbleKnob.enabled }) {
-            ~tumbleKnob.valueAction_(
-                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
-            );
-        };
-    }.defer;
-}, \X );
 // ... existing 
 
 // --- POWER BUTTON (bottom right corner) ---
