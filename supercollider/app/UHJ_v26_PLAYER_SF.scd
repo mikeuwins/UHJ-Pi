@@ -1855,13 +1855,13 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 // --- BLUETOOTH PAIR BUTTON ---
 ~pairingInProgress = false;  // Flag to prevent multiple clicks
 ~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
-    .states_([
-        ["PAIR", Color.cyan, Color.black],       // 0: Ready to pair (not paired)
-        ["...", Color.cyan, Color.black],        // 1: Pairing in progress  
-        ["LINK", Color.black, Color.cyan],       // 2: Success - paired and connected
-        ["FAIL", Color.black, Color.white],      // 3: Failed
-        ["LINK", Color.black, Color.white]       // 4: Paired but not connected
-    ])
+        .states_([
+            ["PAIR", Color.cyan, Color.black],       // 0: Ready to pair (not paired)
+            ["...", Color.cyan, Color.black],        // 1: Pairing in progress  
+            ["LINK", Color.black, Color.cyan],       // 2: Success - paired and connected
+            ["FAIL", Color.cyan, Color.black],       // 3: Failed
+            ["LINK", Color.cyan, Color.black]        // 4: Paired but not connected
+        ])
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
     .value_(0)  // Explicitly set to PAIR state

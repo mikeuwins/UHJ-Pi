@@ -271,7 +271,7 @@ detect_generic_devices() {
                 fi
             done
             for i in {10..1}; do
-                echo -ne "\rChoose option... ($i) [Enter to continue] "
+                echo -ne "\rChoose option... ($i) [Enter to continue]"
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ]; then
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
@@ -488,14 +488,44 @@ done
 echo
 echo ""
 # Clean up any existing headtracker pairings for fresh start
-echo "Cleaning up existing headtracker pairings..."
-bluetoothctl devices | grep -i "HT" | while read -r line; do
-    mac_address=$(echo "$line" | awk '{print $2}')
-    if [ -n "$mac_address" ]; then
-        echo "Removing existing headtracker pairing: $mac_address"
-        bluetoothctl remove "$mac_address" 2>/dev/null || true
+echo "=== Headtracker Cleanup ==="
+echo "Scanning for existing Bluetooth devices..."
+device_count=0
+ht_device_count=0
+
+bluetoothctl devices | while read -r line; do
+    if [ -n "$line" ]; then
+        device_count=$((device_count + 1))
+        echo "Found device: $line"
+        
+        mac_address=$(echo "$line" | awk '{print $2}')
+        device_name=$(echo "$line" | cut -d' ' -f3-)
+        
+        if [ -n "$mac_address" ]; then
+            echo "  MAC: $mac_address"
+            echo "  Name: $device_name"
+            
+            # Check if this is a headtracker device (HT, headtracker, or common HT MAC prefix)
+            if [[ "$device_name" =~ [Hh][Tt] ]] || [[ "$mac_address" =~ ^E4:E1:DE ]]; then
+                ht_device_count=$((ht_device_count + 1))
+                echo "  *** HEADTRACKER DETECTED ***"
+                echo "  Removing existing headtracker pairing: $device_name ($mac_address)"
+                
+                # Show removal result
+                if bluetoothctl remove "$mac_address" 2>/dev/null; then
+                    echo "  ✓ Successfully removed $device_name"
+                else
+                    echo "  ✗ Failed to remove $device_name (may not be paired)"
+                fi
+            else
+                echo "  Not a headtracker device"
+            fi
+        fi
+        echo ""
     fi
 done
+
+echo "Cleanup complete - found $device_count total devices, $ht_device_count headtracker devices"
 echo ""
 
 clear
