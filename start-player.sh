@@ -510,10 +510,10 @@ echo -e "\rScanning for headtracker... complete."
 ht_exit_code=$?
 
 echo ""
-echo "DEBUG: ht_output = '$ht_output'"
-echo "DEBUG: ht_exit_code = $ht_exit_code"
 if echo "$ht_output" | grep -q "PAIRED_AND_CONNECTED"; then
     echo -e "${GREEN}Found${RESET} headtracker [HT] - paired and connected"
+elif echo "$ht_output" | grep -q "PAIRED_NOT_CONNECTED"; then
+    echo -e "${YELLOW}• Headtracker [HT] paired but not connected${RESET}"
 elif echo "$ht_output" | grep -q "PAIRING_FAILED"; then
     if echo "$ht_output" | grep -q "not found"; then
         echo -e "${RED}• No compatible headtracker [HT] found${RESET}"

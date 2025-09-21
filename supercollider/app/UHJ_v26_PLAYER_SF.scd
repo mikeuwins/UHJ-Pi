@@ -1856,10 +1856,11 @@ StaticText(mainView, Rect(618, 10, 140, 28))
 ~pairingInProgress = false;  // Flag to prevent multiple clicks
 ~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
     .states_([
-        ["PAIR", Color.cyan, Color.black],      // 0: Ready to pair
-        ["...", Color.cyan, Color.black],       // 1: Pairing in progress  
-        ["PAIR", Color.black, Color.cyan],      // 2: Success - cyan background like line button
-        ["FAIL", Color.cyan, Color.black]       // 3: Failed
+        ["PAIR", Color.black, Color.white],      // 0: Ready to pair (not paired)
+        ["...", Color.black, Color.white],       // 1: Pairing in progress  
+        ["LINK", Color.black, Color.cyan],       // 2: Success - paired and connected
+        ["FAIL", Color.black, Color.white],      // 3: Failed
+        ["LINK", Color.black, Color.white]       // 4: Paired but not connected
     ])
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
@@ -2019,10 +2020,17 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     };
     
     if (isPaired && isConnected) {
-        // Device is already paired and connected - show paired state
+        // Device is already paired and connected - show connected state
         {
-            ~headtrackPairBtn.value_(2); // Show paired state
+            ~headtrackPairBtn.value_(2); // Show LINK with cyan background
         }.defer;
+    } {
+        if (isPaired && isConnected.not) {
+            // Device is paired but not connected - show paired state
+            {
+                ~headtrackPairBtn.value_(4); // Show LINK with white background
+            }.defer;
+        };
     };
     
     // Simple monitoring loop
@@ -2032,15 +2040,25 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Only check if button exists, shows paired status and not currently pairing
         // Use defer to access GUI elements from background thread
         {
-            if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
+            if ((~headtrackPairBtn.notNil) && ((~headtrackPairBtn.value == 2) || (~headtrackPairBtn.value == 4)) && (~pairingInProgress.not)) {
                 if (~headtrackerMac.notEmpty) {
                     checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
                     isConnected = checkResult.contains("Connected: yes");
                     isPaired = checkResult.contains("Paired: yes");
                     
-                    if (isPaired.not || isConnected.not) {
-                        // Device is disconnected/removed - reset button
+                    if (isPaired.not) {
+                        // Device is not paired - reset button
                         ~headtrackPairBtn.value_(0);
+                    } {
+                        if (isPaired && isConnected) {
+                            // Device is paired and connected - show connected state
+                            ~headtrackPairBtn.value_(2);
+                        } {
+                            if (isPaired && isConnected.not) {
+                                // Device is paired but not connected - show paired state
+                                ~headtrackPairBtn.value_(4);
+                            };
+                        };
                     };
                 } {
                     // No headtracker MAC - reset button
