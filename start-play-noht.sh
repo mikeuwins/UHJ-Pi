@@ -489,6 +489,11 @@ echo
 echo ""
 # Clean up any existing headtracker pairings for fresh start
 echo "=== Headtracker Cleanup ==="
+echo "Unblocking radio devices..."
+rfkill_output=$(rfkill unblock all 2>&1)
+echo "rfkill result: $rfkill_output"
+echo ""
+
 echo "Waiting for Bluetooth service to be ready..."
 
 # Wait for Bluetooth service to be available
@@ -505,19 +510,38 @@ done
 # Wait for bluetoothctl to be actually ready (not just the service)
 echo "Waiting for bluetoothctl to be ready..."
 for i in {1..15}; do
-    if bluetoothctl --version > /dev/null 2>&1 && bluetoothctl list > /dev/null 2>&1; then
-        echo "bluetoothctl is ready"
+    echo "Attempt $i/15:"
+    echo "  Testing bluetoothctl --version..."
+    version_output=$(bluetoothctl --version 2>&1)
+    echo "  Version result: $version_output"
+    
+    echo "  Testing bluetoothctl list..."
+    list_output=$(bluetoothctl list 2>&1)
+    echo "  List result: $list_output"
+    
+    if [[ "$list_output" == *"Controller"* ]] || [[ "$list_output" == *"No default controller"* ]]; then
+        echo "  ✓ bluetoothctl is ready"
+        echo "  Attempting to power on Bluetooth adapter..."
+        power_output=$(bluetoothctl power on 2>&1)
+        echo "  Power on result: $power_output"
         break
     else
-        echo "Waiting for bluetoothctl... ($i/15)"
-        sleep 2
+        echo "  ✗ bluetoothctl not ready yet"
+        if [ $i -lt 15 ]; then
+            echo "  Waiting 2 seconds..."
+            sleep 2
+        fi
     fi
 done
 
 # Final check
-if ! bluetoothctl list > /dev/null 2>&1; then
-    echo "ERROR: bluetoothctl not ready after 30 seconds"
-    echo "Skipping headtracker cleanup"
+echo "Final bluetoothctl test..."
+final_output=$(bluetoothctl list 2>&1)
+echo "Final result: $final_output"
+
+if [[ "$final_output" != *"Controller"* ]] && [[ "$final_output" != *"No default controller"* ]]; then
+    echo "ERROR: bluetoothctl still not ready"
+    echo "BlueZ may have issues. Skipping headtracker cleanup."
     echo ""
     exit 0
 fi
