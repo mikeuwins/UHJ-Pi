@@ -1866,175 +1866,52 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .focusColor_(Color.clear)
     .value_(0)  // Explicitly set to PAIR state
     .action_({
-        var scriptPath;
-        
         // Check if pairing is already in progress
-        if (~pairingInProgress) { 
-            ("echo 'Pairing already in progress' >> /tmp/bt-debug.log").unixCmd;
-            ^this 
-        };
-        
-        // Check actual device status to determine action
-        ("echo '=== BLUETOOTH PAIR BUTTON PRESSED ===' >> /tmp/bt-debug.log").unixCmd;
-        ("echo 'Timestamp: '$(date) >> /tmp/bt-debug.log").unixCmd;
-        
-        // If we have a known MAC and it's connected, disconnect it
-        if (~headtrackerMac.notEmpty) {
-            var checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-            var isConnected = checkResult.contains("Connected: yes");
-            
-            if (isConnected) {
-                ("echo 'Known device is connected - disconnecting' >> /tmp/bt-debug.log").unixCmd;
-                ~pairingInProgress = true;
-                ~headtrackPairBtn.value_(1); // Show working
-                
-                // Disconnect the device
-                {
-                    ("bluetoothctl power on").unixCmd;
-                    1.wait;
-                    ("bluetoothctl disconnect " ++ ~headtrackerMac).unixCmd;
-                    1.wait;
-                    
-                    {
-                        ~pairingInProgress = false;
-                        ~headtrackPairBtn.value_(4); // Show paired but not connected
-                    }.defer;
-                }.fork;
-                ^this;
-            };
-        };
-        
-        // Otherwise, run ble-ht.sh to pair/connect
-        ("echo 'Running ble-ht.sh to pair/connect' >> /tmp/bt-debug.log").unixCmd;
+        if (~pairingInProgress) { ^this };
         
         ~pairingInProgress = true;
         ~headtrackPairBtn.value_(1); // Show working
         
         Task({
-            var deviceInfo, isPaired, isConnected, result, success = false, pairedNotConnected;
+            var result, success = false, pairedNotConnected = false;
             
-            // Use the MAC address detected at startup
-            if (~headtrackerMac.notEmpty) {
-                // Check the ACTUAL device status using startup MAC
-                ("echo 'Checking device info for MAC: " ++ ~headtrackerMac ++ "' >> /tmp/bt-debug.log").unixCmd;
-                deviceInfo = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-                ("echo 'Device info result: " ++ deviceInfo.replace("\n", " ") ++ "' >> /tmp/bt-debug.log").unixCmd;
-                isPaired = deviceInfo.contains("Paired: yes");
-                isConnected = deviceInfo.contains("Connected: yes");
+            // Simply call the ble-ht.sh script
+            result = ("timeout 15 /usr/local/bin/ble-ht.sh").unixCmdGetStdOut;
+            
+            // Check result and update MAC if needed
+            if (result.contains("PAIRED_AND_CONNECTED")) {
+                success = true;
+                // Update the MAC address
+                ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
             } {
-                // No headtracker found - proceed to pair
-                isPaired = false;
-                isConnected = false;
+                if (result.contains("PAIRED_NOT_CONNECTED")) {
+                    pairedNotConnected = true;
+                    // Update the MAC address
+                    ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
+                };
             };
             
-            if (isPaired) {
-                // Device is paired - UNPAIR (remove device)
-                ("Device is paired - removing...").postln;
-                try {
-                    // Disconnect first, then remove
-                    ("Disconnecting headtracker...").postln;
-                    result = ("bluetoothctl disconnect " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    ("Disconnect result: " ++ result).postln;
-                    1.wait; // Wait for disconnect to complete
-                    
-                    ("Removing headtracker...").postln;
-                    result = ("bluetoothctl remove " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    ("Remove result: " ++ result).postln;
-                    1.wait; // Wait for removal to complete
-                    
-                    // Check if it's really gone
-                    result = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-                    ("Final status: " ++ result).postln;
-                    success = true;
-                } { |error|
-                    ("Unpair error: " ++ error).postln;
-                    success = false;
-                };
-                
-                {
-                    ~pairingInProgress = false;
-                    if (success) {
-                        ~headtrackPairBtn.value_(0); // Reset to PAIR only if unpair succeeded
+            // Update button state based on result
+            {
+                ~pairingInProgress = false;
+                if (success) {
+                    ~headtrackPairBtn.value_(2); // Success - connected (black on cyan)
+                } {
+                    if (pairedNotConnected) {
+                        ~headtrackPairBtn.value_(4); // Paired but not connected (cyan on black)
                     } {
-                        ~headtrackPairBtn.value_(2); // Keep paired state if unpair failed
-                    };
-                }.defer;
-                
-            } {
-                // Device is not paired - PAIR the device
-                ("Device not paired - pairing...").postln;
-                
-                // Run pairing script in background with timeout
-                scriptPath = "/usr/local/bin/ble-ht.sh";
-                
-                // Safety timeout - reset button after 15 seconds if script hangs
-                AppClock.sched(15, { 
-                    if (~pairingInProgress) {
-                        ~pairingInProgress = false;  // Reset flag
-                        ~headtrackPairBtn.value_(3); // Show failed if still in progress
-                        AppClock.sched(3, { ~headtrackPairBtn.value_(0); nil });
-                    };
-                    nil 
-                });
-                
-                // First attempt
-                ("echo 'Running pairing script: " ++ scriptPath ++ "' >> /tmp/bt-debug.log").unixCmd;
-                try {
-                    result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
-                    ("echo 'Script result: " ++ result.replace("\n", " ") ++ "' >> /tmp/bt-debug.log").unixCmd;
-                    success = result.contains("PAIRED_AND_CONNECTED");
-                    pairedNotConnected = result.contains("PAIRED_NOT_CONNECTED");
-                    ("echo 'Success: " ++ success ++ ", PairedNotConnected: " ++ pairedNotConnected ++ "' >> /tmp/bt-debug.log").unixCmd;
-                } { |error|
-                    ("echo 'Script error: " ++ error ++ "' >> /tmp/bt-debug.log").unixCmd;
-                    ("Pairing script error: " ++ error).postln;
-                    success = false;
-                };
-                
-                // If first attempt failed, automatically retry once
-                if (success.not) {
-                    ("First pairing attempt failed, retrying automatically...").postln;
-                    1.wait; // Brief pause between attempts
-                    
-                    try {
-                        result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
-                        success = result.contains("PAIRED_AND_CONNECTED");
-                        pairedNotConnected = result.contains("PAIRED_NOT_CONNECTED");
-                        if (success) {
-                            ("Second attempt succeeded!").postln;
-                        } {
-                            if (pairedNotConnected) {
-                                ("Second attempt paired but not connected").postln;
-                            } {
-                                ("Both pairing attempts failed").postln;
-                            };
-                        };
-                    } { |error|
-                        ("Retry script error: " ++ error).postln;
-                        success = false;
+                        ~headtrackPairBtn.value_(3); // Failed
+                        // Reset to PAIR after 3 seconds
+                        AppClock.sched(3, { 
+                            ~headtrackPairBtn.value_(0); 
+                            nil 
+                        });
                     };
                 };
-                
-                // Always update button, even if script failed
-                {
-                    ~pairingInProgress = false;  // Reset flag
-                    if (success) {
-                        ~headtrackPairBtn.value_(2); // Success - connected (black on cyan)
-                    } {
-                        if (pairedNotConnected) {
-                            ~headtrackPairBtn.value_(4); // Paired but not connected (cyan on black)
-                        } {
-                            ~headtrackPairBtn.value_(3); // Failed - red X
-                            // Reset to PAIR after 3 seconds only on failure
-                            AppClock.sched(3, { 
-                                ~headtrackPairBtn.value_(0); 
-                                nil 
-                            });
-                        };
-                    };
-                }.defer;
-            };
-        }).start;
+            }.defer;
+            
+            nil
+        }).play;
     });
 
 // Simple test button for headtracker
