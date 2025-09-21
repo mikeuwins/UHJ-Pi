@@ -2038,8 +2038,8 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     });
 
 // Simple test button for headtracker
-~testHtBtn = Button(mainView, Rect(790, 142, 40, 20))
-    .states_([["TEST", Color.black, Color.yellow]])
+~testHtBtn = Button(mainView, Rect(742, 165, 40, 20))
+    .states_([["TEST", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
     .action_({
         "Testing simple ble-ht.sh call...".postln;
