@@ -502,16 +502,24 @@ for i in {1..10}; do
     fi
 done
 
-# Give bluetoothctl time to initialize
-echo "Initializing bluetoothctl..."
-sleep 3
+# Wait for bluetoothctl to be actually ready (not just the service)
+echo "Waiting for bluetoothctl to be ready..."
+for i in {1..15}; do
+    if bluetoothctl --version > /dev/null 2>&1 && bluetoothctl list > /dev/null 2>&1; then
+        echo "bluetoothctl is ready"
+        break
+    else
+        echo "Waiting for bluetoothctl... ($i/15)"
+        sleep 2
+    fi
+done
 
-# Check if bluetoothctl is working
-echo "Testing bluetoothctl..."
-if ! bluetoothctl --version > /dev/null 2>&1; then
-    echo "ERROR: bluetoothctl not available"
+# Final check
+if ! bluetoothctl list > /dev/null 2>&1; then
+    echo "ERROR: bluetoothctl not ready after 30 seconds"
+    echo "Skipping headtracker cleanup"
     echo ""
-    exit 1
+    exit 0
 fi
 
 echo "bluetoothctl is working, scanning devices..."
