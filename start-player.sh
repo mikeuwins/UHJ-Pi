@@ -157,6 +157,7 @@ detect_generic_devices() {
             fi
         done
         echo ""
+        echo ""
         echo "Detecting Audio Input Device..."
         echo ""
         sleep 2
@@ -282,6 +283,7 @@ detect_generic_devices() {
                     fi
                 fi
             done
+            echo ""
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
@@ -442,6 +444,7 @@ for i in {10..1}; do
         break
     fi
 done
+echo ""
 echo ""
 echo "Scanning for USB drives..."
 echo ""
