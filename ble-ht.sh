@@ -46,8 +46,19 @@ if echo "$device_info" | grep -q "Paired: yes"; then
     bluetoothctl disconnect "$DEVICE_MAC" > /dev/null 2>&1
     sleep 1
     bluetoothctl remove "$DEVICE_MAC" > /dev/null 2>&1
-    sleep 1
+    sleep 2
     echo "Existing pairing removed"
+    echo "Waiting for device to become available again..."
+    sleep 3
+    
+    # Re-scan to make sure device is still discoverable
+    echo "Re-scanning for device..."
+    {
+        echo "scan on"
+        sleep 3
+        echo "scan off"
+        echo "exit"
+    } | bluetoothctl > /dev/null 2>&1
 fi
 
 # Try pairing (with automatic retry)
