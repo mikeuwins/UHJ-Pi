@@ -1858,9 +1858,9 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         .states_([
             ["PAIR", Color.cyan, Color.black],       // 0: Ready to pair (not paired)
             ["...", Color.cyan, Color.black],        // 1: Pairing in progress  
-            ["LINK", Color.black, Color.cyan],       // 2: Success - paired and connected
+            ["PAIR", Color.black, Color.cyan],       // 2: Paired and connected (active)
             ["FAIL", Color.cyan, Color.black],       // 3: Failed
-            ["LINK", Color.cyan, Color.black]        // 4: Paired but not connected
+            ["PAIR", Color.cyan, Color.black]        // 4: Paired but not connected (inactive)
         ])
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
@@ -1877,6 +1877,34 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Check actual device status to determine action
         ("echo '=== BLUETOOTH PAIR BUTTON PRESSED ===' >> /tmp/bt-debug.log").unixCmd;
         ("echo 'Timestamp: '$(date) >> /tmp/bt-debug.log").unixCmd;
+        
+        // Check if device is already connected - if so, disconnect/unpair
+        if (~headtrackerMac.notEmpty) {
+            var checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
+            var isConnected = checkResult.contains("Connected: yes");
+            var isPaired = checkResult.contains("Paired: yes");
+            
+            if (isConnected) {
+                ("echo 'Device is connected - disconnecting' >> /tmp/bt-debug.log").unixCmd;
+                ~pairingInProgress = true;
+                ~headtrackPairBtn.value_(1); // Show working
+                
+                // Disconnect the device
+                {
+                    ("bluetoothctl power on").unixCmd;
+                    1.wait;
+                    ("bluetoothctl disconnect " ++ ~headtrackerMac).unixCmd;
+                    1.wait;
+                    
+                    {
+                        ~pairingInProgress = false;
+                        ~headtrackPairBtn.value_(4); // Show paired but not connected
+                    }.defer;
+                }.fork;
+                ^this;
+            };
+        };
+        
         ~pairingInProgress = true;
         ~headtrackPairBtn.value_(1); // Show working
         

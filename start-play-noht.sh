@@ -487,130 +487,41 @@ for i in {10..1}; do
 done
 echo
 echo ""
-# Clean up any existing headtracker pairings for fresh start
-echo "=== Headtracker Cleanup ==="
-echo "Unblocking radio devices..."
-rfkill_output=$(rfkill unblock all 2>&1)
-echo "rfkill result: $rfkill_output"
-echo ""
+# Clean up any existing headtracker pairings silently
+rfkill unblock all > /dev/null 2>&1
 
-echo "Waiting for Bluetooth service to be ready..."
-
-# Wait for Bluetooth service to be available
+# Wait for Bluetooth service to be ready
 for i in {1..10}; do
     if systemctl is-active --quiet bluetooth; then
-        echo "Bluetooth service is active"
         break
-    else
-        echo "Waiting for Bluetooth service... ($i/10)"
-        sleep 1
     fi
+    sleep 1
 done
 
-# Wait for bluetoothctl to be actually ready (not just the service)
-echo "Waiting for bluetoothctl to be ready..."
+# Wait for bluetoothctl to be ready and power on
 for i in {1..15}; do
-    echo "Attempt $i/15:"
-    echo "  Testing bluetoothctl --version..."
-    version_output=$(bluetoothctl --version 2>&1)
-    echo "  Version result: $version_output"
-    
-    echo "  Testing bluetoothctl list..."
-    list_output=$(bluetoothctl list 2>&1)
-    echo "  List result: $list_output"
-    
-    if [[ "$list_output" == *"Controller"* ]] || [[ "$list_output" == *"No default controller"* ]]; then
-        echo "  ✓ bluetoothctl is ready"
-        echo "  Attempting to power on Bluetooth adapter..."
-        power_output=$(bluetoothctl power on 2>&1)
-        echo "  Power on result: $power_output"
+    if bluetoothctl list > /dev/null 2>&1; then
+        bluetoothctl power on > /dev/null 2>&1
         break
-    else
-        echo "  ✗ bluetoothctl not ready yet"
-        if [ $i -lt 15 ]; then
-            echo "  Waiting 2 seconds..."
-            sleep 2
-        fi
     fi
+    sleep 2
 done
 
-# Final check
-echo "Final bluetoothctl test..."
-final_output=$(bluetoothctl list 2>&1)
-echo "Final result: $final_output"
-
-if [[ "$final_output" != *"Controller"* ]] && [[ "$final_output" != *"No default controller"* ]]; then
-    echo "ERROR: bluetoothctl still not ready"
-    echo "BlueZ may have issues. Skipping headtracker cleanup."
-    echo ""
-    exit 0
-fi
-
-echo "bluetoothctl is working, scanning devices..."
-device_count=0
-ht_device_count=0
-
-# Get devices and store in variable first
-devices_output=$(bluetoothctl devices 2>&1)
-echo "Raw bluetoothctl output:"
-echo "$devices_output"
-echo ""
-
-echo "$devices_output" | while read -r line; do
+# Clean up headtracker devices silently
+bluetoothctl devices | while read -r line; do
     if [ -n "$line" ]; then
-        device_count=$((device_count + 1))
-        echo "Found device: $line"
-        
         mac_address=$(echo "$line" | awk '{print $2}')
         device_name=$(echo "$line" | cut -d' ' -f3-)
         
         if [ -n "$mac_address" ]; then
-            echo "  MAC: $mac_address"
-            echo "  Name: $device_name"
-            
-            # Get detailed device info
-            echo "  Getting device info..."
-            device_info=$(bluetoothctl info "$mac_address" 2>&1)
-            echo "  Device info: $device_info"
-            
-            # Check if this is a headtracker device (HT, headtracker, or common HT MAC prefix)
+            # Check if this is a headtracker device
             if [[ "$device_name" =~ [Hh][Tt] ]] || [[ "$mac_address" =~ ^E4:E1:DE ]]; then
-                ht_device_count=$((ht_device_count + 1))
-                echo "  *** HEADTRACKER DETECTED ***"
-                echo "  Unpairing existing headtracker: $device_name ($mac_address)"
-                
-                # Try to unpair first (less aggressive than remove)
-                if bluetoothctl unpair "$mac_address" 2>/dev/null; then
-                    echo "  ✓ Successfully unpaired $device_name"
-                else
-                    echo "  ✗ Failed to unpair $device_name, trying remove..."
-                    # If unpair fails, try remove as fallback
-                    if bluetoothctl remove "$mac_address" 2>/dev/null; then
-                        echo "  ✓ Successfully removed $device_name"
-                    else
-                        echo "  ✗ Failed to remove $device_name"
-                    fi
-                fi
-            else
-                echo "  Not a headtracker device"
+                # Unpair silently
+                bluetoothctl unpair "$mac_address" > /dev/null 2>&1 || bluetoothctl remove "$mac_address" > /dev/null 2>&1
             fi
         fi
-        echo ""
     fi
 done
-
-echo "Cleanup complete - found $device_count total devices, $ht_device_count headtracker devices"
-echo ""
-
-# Pause to show headtracker cleanup result
-for i in {10..1}; do
-    echo -ne "\rContinuing in $i... (Press Enter to continue) "
-    read -t 1 -n 1 key 2>/dev/null
-    if [ $? -eq 0 ]; then
-        break
-    fi
-done
-echo ""
 
 clear
 
