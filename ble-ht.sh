@@ -7,9 +7,14 @@ echo "=== Simple Headtracker Pairing ==="
 echo "Looking for headtracker '$DEVICE_NAME'..."
 
 # Ensure Bluetooth controller is ready
-bluetoothctl power on > /dev/null 2>&1
-bluetoothctl discoverable on > /dev/null 2>&1
-bluetoothctl pairable on > /dev/null 2>&1
+echo "Powering on Bluetooth adapter..."
+bluetoothctl power on
+sleep 2  # Give time for power on to complete
+
+echo "Setting discoverable and pairable..."
+bluetoothctl discoverable on
+bluetoothctl pairable on
+sleep 1
 
 # Simple scan to find devices
 echo "Starting Bluetooth scan..."

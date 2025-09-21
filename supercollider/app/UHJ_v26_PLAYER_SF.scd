@@ -1953,7 +1953,8 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                     result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                     ("echo 'Script result: " ++ result.replace("\n", " ") ++ "' >> /tmp/bt-debug.log").unixCmd;
                     success = result.contains("PAIRED_AND_CONNECTED");
-                    ("echo 'Success: " ++ success ++ "' >> /tmp/bt-debug.log").unixCmd;
+                    pairedNotConnected = result.contains("PAIRED_NOT_CONNECTED");
+                    ("echo 'Success: " ++ success ++ ", PairedNotConnected: " ++ pairedNotConnected ++ "' >> /tmp/bt-debug.log").unixCmd;
                 } { |error|
                     ("echo 'Script error: " ++ error ++ "' >> /tmp/bt-debug.log").unixCmd;
                     ("Pairing script error: " ++ error).postln;
@@ -1968,10 +1969,15 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                     try {
                         result = ("timeout 15 /bin/bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
                         success = result.contains("PAIRED_AND_CONNECTED");
+                        pairedNotConnected = result.contains("PAIRED_NOT_CONNECTED");
                         if (success) {
                             ("Second attempt succeeded!").postln;
                         } {
-                            ("Both pairing attempts failed").postln;
+                            if (pairedNotConnected) {
+                                ("Second attempt paired but not connected").postln;
+                            } {
+                                ("Both pairing attempts failed").postln;
+                            };
                         };
                     } { |error|
                         ("Retry script error: " ++ error).postln;
@@ -1983,14 +1989,18 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 {
                     ~pairingInProgress = false;  // Reset flag
                     if (success) {
-                        ~headtrackPairBtn.value_(2); // Success - stay cyan to show paired
+                        ~headtrackPairBtn.value_(2); // Success - connected (black on cyan)
                     } {
-                        ~headtrackPairBtn.value_(3); // Failed - red X
-                        // Reset to PAIR after 3 seconds only on failure
-                        AppClock.sched(3, { 
-                            ~headtrackPairBtn.value_(0); 
-                            nil 
-                        });
+                        if (pairedNotConnected) {
+                            ~headtrackPairBtn.value_(4); // Paired but not connected (cyan on black)
+                        } {
+                            ~headtrackPairBtn.value_(3); // Failed - red X
+                            // Reset to PAIR after 3 seconds only on failure
+                            AppClock.sched(3, { 
+                                ~headtrackPairBtn.value_(0); 
+                                nil 
+                            });
+                        };
                     };
                 }.defer;
             };
