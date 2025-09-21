@@ -270,6 +270,7 @@ detect_generic_devices() {
                     echo "$((i+1)). ${input_options[$i]}"
                 fi
             done
+            echo ""
             for i in {10..1}; do
                 echo -ne "\rChoose option... ($i) [Enter to continue]"
                 read -t 1 -n 1 choice
@@ -556,6 +557,16 @@ echo "$devices_output" | while read -r line; do
 done
 
 echo "Cleanup complete - found $device_count total devices, $ht_device_count headtracker devices"
+echo ""
+
+# Pause to show headtracker cleanup result
+for i in {10..1}; do
+    echo -ne "\rContinuing in $i... (Press Enter to continue) "
+    read -t 1 -n 1 key 2>/dev/null
+    if [ $? -eq 0 ]; then
+        break
+    fi
+done
 echo ""
 
 clear
