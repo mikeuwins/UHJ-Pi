@@ -157,7 +157,7 @@ detect_generic_devices() {
                 break
             fi
         done
-        echo
+        echo ""
         echo ""
         echo "Detecting Audio Input Device..."
         echo ""
@@ -272,7 +272,7 @@ detect_generic_devices() {
             done
             echo ""
             for i in {10..1}; do
-                echo -ne "\rChoose option... ($i) [Enter to continue]"
+                echo -ne "\rChoose option... ($i) [Enter to continue] "
                 read -t 1 -n 1 choice
                 if [ $? -eq 0 ]; then
                     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
@@ -284,7 +284,7 @@ detect_generic_devices() {
                     fi
                 fi
             done
-            echo
+            echo ""
             echo ""
             if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#input_options[@]} ]; then
                 input_source="${input_options[$((choice-1))]}"
@@ -447,7 +447,7 @@ for i in {10..1}; do
         break
     fi
 done
-echo
+echo ""
 echo ""
 echo "Scanning for USB drives..."
 echo ""
@@ -473,55 +473,6 @@ for i in {5..1}; do
     fi
 done
 echo ""
-
-# Initialize Bluetooth headtracker (if available)
-clear
-echo -e "${YELLOW}=== Headtracker Setup ===${RESET}"
-echo ""
-for i in {10..1}; do
-    echo -ne "\rConnect compatible Bluetooth Headtracker... ($i) [Enter to continue] "
-    read -t 1 -n 1 key 2>/dev/null
-    if [ $? -eq 0 ]; then
-        break
-    fi
-done
-echo
-echo ""
-# Clean up any existing headtracker pairings silently
-rfkill unblock all > /dev/null 2>&1
-
-# Wait for Bluetooth service to be ready
-for i in {1..10}; do
-    if systemctl is-active --quiet bluetooth; then
-        break
-    fi
-    sleep 1
-done
-
-# Wait for bluetoothctl to be ready and power on
-for i in {1..15}; do
-    if bluetoothctl list > /dev/null 2>&1; then
-        bluetoothctl power on > /dev/null 2>&1
-        break
-    fi
-    sleep 2
-done
-
-# Clean up headtracker devices silently
-bluetoothctl devices | while read -r line; do
-    if [ -n "$line" ]; then
-        mac_address=$(echo "$line" | awk '{print $2}')
-        device_name=$(echo "$line" | cut -d' ' -f3-)
-        
-        if [ -n "$mac_address" ]; then
-            # Check if this is a headtracker device
-            if [[ "$device_name" =~ [Hh][Tt] ]] || [[ "$mac_address" =~ ^E4:E1:DE ]]; then
-                # Unpair silently
-                bluetoothctl unpair "$mac_address" > /dev/null 2>&1 || bluetoothctl remove "$mac_address" > /dev/null 2>&1
-            fi
-        fi
-    fi
-done
 
 clear
 
@@ -565,7 +516,7 @@ if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
     echo "connections and restart the Raspberry Pi."
     echo ""
     for i in {10..1}; do
-        echo -ne "\rExiting in $i... (Press Enter to continue) "
+        echo -ne "\rPress Enter to exit... ($i) "
         read -t 1 -n 1 key 2>/dev/null
         if [ $? -eq 0 ]; then
             break
