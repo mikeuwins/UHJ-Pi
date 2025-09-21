@@ -293,6 +293,7 @@ detect_generic_devices() {
         elif [ ${#input_options[@]} -eq 1 ]; then
             input_source="${input_options[0]}"
         fi
+        echo ""
         
         # Use the selected input source directly
         input_source="$input_source"
