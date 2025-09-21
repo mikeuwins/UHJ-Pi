@@ -7,14 +7,9 @@ echo "=== Simple Headtracker Pairing ==="
 echo "Looking for headtracker '$DEVICE_NAME'..."
 
 # Ensure Bluetooth controller is ready
-echo "Powering on Bluetooth adapter..."
-bluetoothctl power on
-sleep 2  # Give time for power on to complete
-
-echo "Setting discoverable and pairable..."
-bluetoothctl discoverable on
-bluetoothctl pairable on
-sleep 1
+bluetoothctl power on > /dev/null 2>&1
+bluetoothctl discoverable on > /dev/null 2>&1
+bluetoothctl pairable on > /dev/null 2>&1
 
 # Simple scan to find devices
 echo "Starting Bluetooth scan..."
@@ -38,58 +33,25 @@ fi
 
 echo "Found headtracker at $DEVICE_MAC"
 
-# Check if device is already paired
-echo "Checking current device status..."
-device_info=$(bluetoothctl info "$DEVICE_MAC")
-is_paired=$(echo "$device_info" | grep "Paired: yes")
-is_connected=$(echo "$device_info" | grep "Connected: yes")
-
-if [ -n "$is_paired" ]; then
-    echo "Device is already paired"
-    if [ -n "$is_connected" ]; then
-        echo "Device is already connected"
-        echo "PAIRED_AND_CONNECTED"
-        exit 0
-    else
-        echo "Device is paired but not connected - attempting to connect..."
-        bluetoothctl connect "$DEVICE_MAC" > /dev/null 2>&1
-        sleep 2  # Give connection time to establish
-        
-        # Check connection result
-        device_info=$(bluetoothctl info "$DEVICE_MAC")
-        if echo "$device_info" | grep -q "Connected: yes"; then
-            echo "Successfully connected to paired device"
-            echo "PAIRED_AND_CONNECTED"
-            exit 0
-        else
-            echo "Failed to connect to paired device"
-            echo "PAIRED_NOT_CONNECTED"
-            exit 0
-        fi
+# Try pairing (with automatic retry)
+for attempt in 1 2; do
+    echo "Pairing attempt $attempt..."
+    
+    {
+        echo "pair $DEVICE_MAC"
+        sleep 3
+        echo "exit"
+    } | bluetoothctl
+    
+    if [ $attempt -eq 1 ]; then
+        echo "First attempt completed, checking status..."
+        sleep 1
     fi
-else
-    echo "Device is not paired - starting pairing process..."
-    
-    # Try pairing (with automatic retry)
-    for attempt in 1 2; do
-        echo "Pairing attempt $attempt..."
-        
-        {
-            echo "pair $DEVICE_MAC"
-            sleep 3
-            echo "exit"
-        } | bluetoothctl
-        
-        if [ $attempt -eq 1 ]; then
-            echo "First attempt completed, checking status..."
-            sleep 1
-        fi
-    done
-    
-    # Check device status after all pairing attempts
-    echo "Checking final device status..."
-    device_info=$(bluetoothctl info "$DEVICE_MAC")
-fi
+done
+
+# Check device status after all pairing attempts
+echo "Checking final device status..."
+device_info=$(bluetoothctl info "$DEVICE_MAC")
 if echo "$device_info" | grep -q "Paired: yes" && echo "$device_info" | grep -q "Connected: yes"; then
     echo "PAIRED_AND_CONNECTED"
     exit 0
