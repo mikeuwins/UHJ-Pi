@@ -324,9 +324,7 @@ detect_generic_devices() {
         fi
     fi
 
-    echo ""
     echo -e "${YELLOW}=== Output Device Setup ===${RESET}"
-    echo ""
     
     # Countdown (interruptible)
     for i in {10..1}; do
@@ -336,7 +334,7 @@ detect_generic_devices() {
             break
         fi
     done
-    echo ""
+    echo
     echo "Detecting Audio Output Device..."
     sleep 1
 
