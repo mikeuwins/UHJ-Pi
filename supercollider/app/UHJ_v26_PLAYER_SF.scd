@@ -1909,7 +1909,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         ~headtrackPairBtn.value_(1); // Show working
         
         Task({
-            var deviceInfo, isPaired, isConnected, result, success = false;
+            var deviceInfo, isPaired, isConnected, result, success = false, pairedNotConnected;
             
             // Use the MAC address detected at startup
             if (~headtrackerMac.notEmpty) {
