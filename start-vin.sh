@@ -2,7 +2,7 @@
 
 CONFIG_FILE="$HOME/.uhj-vin-audio.conf"
 clear
-echo "Starting UHJ-Pi audio setup..."
+echo "Starting UHJ-Pi audio setup...
 
 # Function to show device information
 show_device_info() {

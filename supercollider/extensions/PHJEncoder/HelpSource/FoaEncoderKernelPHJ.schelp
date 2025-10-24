@@ -1,0 +1,36 @@
+CLASS:: FoaEncoderKernel
+summary:: PHJ encoder extension for First Order Ambisonic (FOA) encoding
+categories:: Libraries>Ambisonic Toolkit>Matrix & Kernel>FOA
+related:: Classes/FoaEncoderKernel, Classes/FoaEncode
+
+DESCRIPTION::
+Extends FoaEncoderKernel with newPHJ method for kernel-based PHJ encoding.
+
+PHJ (Periphonic UHJ) encoding uses 4-channel input (L,R,T,Q) and produces 
+4-channel B-format output (W,X,Y,Z) with true height information.
+
+CLASSMETHODS::
+
+METHOD:: newPHJ
+Ambisonic PHJ encoder using kernel-based processing.
+
+argument:: kernelSize
+256, 512, 1024, 2048, 4096, 8192
+
+argument:: server
+link::Classes/Server:: on which to load kernel.
+
+argument:: sampleRate
+The sample rate defaults to code::nil:: and is usually supplied by the running server.
+
+argument:: score
+Default is code::nil:: for most real time usages.
+
+discussion:: 
+PHJ encoding uses kernel-based processing with impulse response files located 
+in ATK/kernels/FOA/encoders/phj/. This provides frequency-dependent encoding 
+from 4-channel input (L,R,T,Q) to B-format (W,X,Y,Z).
+
+note:: 
+PHJ requires 4-channel input files for proper operation. The kernel files 
+must be installed in the ATK kernels directory.::
