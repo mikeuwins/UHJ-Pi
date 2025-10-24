@@ -1,0 +1,35 @@
+{
+  "algo": "B-VHAP-remez-hilbert",
+  "version": "1.0",
+  "sr": 176400,
+  "prototype_taps": 351,
+  "stored_length": 256,
+  "designer": "scipy.signal.remez(type='hilbert') with guarded transitions",
+  "bands_hz": {
+    "mid": [
+      900.0,
+      4000.0
+    ],
+    "hi": [
+      4000.0,
+      12000.0
+    ]
+  },
+  "delays_ms": {
+    "mid": 4.5,
+    "hi": 5.5
+  },
+  "donor_gains": {
+    "mid": {
+      "W": 0.6,
+      "X": 0.2,
+      "Y": 0.2
+    },
+    "hi": {
+      "W": 0.65,
+      "X": 0.175,
+      "Y": 0.175
+    }
+  },
+  "notes": "Band-limited Hilbert (Type-III); zero-padded to N; delays clamped for small N."
+}

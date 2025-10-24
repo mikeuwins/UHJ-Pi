@@ -1,0 +1,90 @@
+/*
+ATK FOA Transform — BVHAP Minimal (Zero-Latency, clean syntax)
+
+FOA (W,X,Y,Z) → FOA (W,X,Y,Z')
+
+Z' = Z + Amount × BP(0.60·W + 0.20·X + 0.20·Y)
+
+- Zero latency (pure 1st-order IIR; no FFT/FIR/PDC)
+- Fixed height band ≈700–8000 Hz
+- Only two user controls
+*/
+
+desc:ATK FOA Transform — BVHAP Minimal (Zero-Latency, Clean)
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+out_pin:W
+out_pin:X
+out_pin:Y
+out_pin:Z
+
+slider1:50<0,100,1>Amount (%)
+slider2:0<0,1,1{Off,On}>Z-Solo
+
+@init
+tiny = 0.000000000000000001; // anti-denorm
+flo  = 700;
+fhi  = 8000;
+
+// compute one-pole coefficients
+function recompute_coeffs()
+(
+  lp_a = exp(-2*$pi*fhi/srate);
+  hp_a = exp(-2*$pi*flo/srate);
+);
+
+// filter states
+w_hp_x1 = w_hp_y1 = w_lp_y1 = 0;
+x_hp_x1 = x_hp_y1 = x_lp_y1 = 0;
+y_hp_x1 = y_hp_y1 = y_lp_y1 = 0;
+
+recent_sr = 0;
+recompute_coeffs();
+
+@block
+// recompute if samplerate changed
+(recent_sr != srate) ? (recent_sr = srate; recompute_coeffs(); ) : 0;
+
+@sample
+amt   = slider1 * 0.01;
+zsolo = slider2|0;
+
+// inputs
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// --- one-pole high-pass then low-pass for each donor ---
+w_hp = hp_a * (w_hp_y1 + W - w_hp_x1);
+w_hp_x1 = W; w_hp_y1 = w_hp;
+w_bp = (1 - lp_a) * w_hp + lp_a * w_lp_y1;
+w_lp_y1 = w_bp;
+
+x_hp = hp_a * (x_hp_y1 + X - x_hp_x1);
+x_hp_x1 = X; x_hp_y1 = x_hp;
+x_bp = (1 - lp_a) * x_hp + lp_a * x_lp_y1;
+x_lp_y1 = x_bp;
+
+y_hp = hp_a * (y_hp_y1 + Y - y_hp_x1);
+y_hp_x1 = Y; y_hp_y1 = y_hp;
+y_bp = (1 - lp_a) * y_hp + lp_a * y_lp_y1;
+y_lp_y1 = y_bp;
+
+// donor blend
+S = 0.60 * w_bp + 0.20 * x_bp + 0.20 * y_bp;
+
+// inject to Z
+Z_inj = S * amt;
+
+// NaN guard
+(Z_inj != Z_inj) ? (Z_inj = 0) : 0;
+
+// output
+zsolo ?
+(
+  spl0 = 0; spl1 = 0; spl2 = 0; spl3 = Z_inj;
+) :
+(
+  spl0 = W; spl1 = X; spl2 = Y; spl3 = Z + Z_inj;
+);

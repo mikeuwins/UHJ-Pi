@@ -1,0 +1,203 @@
+/*
+ATK FOA Encode PHJ (UHJ L/R/T/Q → FOA W/X/Y/Z)
+
+• Minimal, transparent encoder:
+  - No shelves, no mode switches
+  - Uses per-channel 4-lane interleaved kernels:
+      lanes per tap = [WX_r, WX_i, YZ_r, YZ_i]
+
+Kernel path (macOS):
+  ~/Library/Application Support/ATK/kernels/FOA/encoders/phj/<fs>/<N>/0000/UHJ_{L,R,T,Q}.wav
+
+Inputs : L R T Q
+Outputs: W X Y Z
+*/
+
+desc: ATK FOA Encode PHJ
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:L
+in_pin:R
+in_pin:T
+in_pin:Q
+
+out_pin:W
+out_pin:X
+out_pin:Y
+out_pin:Z
+
+slider1:3<0,5,1{256,512,1024,2048,4096,8192}>Kernel size
+slider2:5<0,10,1{8000 - Not supported, 11025 - Not supported, 16000 - Not supported, 22050 - Not supported, 24000 - Not supported, 44100, 48000, 88200, 96000, 176400, 192000}>Processing Sample Rate
+
+/************ Init & buffers ************/
+@init
+mFN_L=1; mFN_R=2; mFN_T=3; mFN_Q=4;
+
+mImpL=131072*1;  mImpR=131072*2;  mImpT=131072*3;  mImpQ=131072*4;
+
+mK_L_WX=131072*5;  mK_L_YZ=131072*6;
+mK_R_WX=131072*7;  mK_R_YZ=131072*8;
+mK_T_WX=131072*9;  mK_T_YZ=131072*10;
+mK_Q_WX=131072*11; mK_Q_YZ=131072*12;
+
+mCur_L_WX=131072*13; mNext_L_WX=131072*14;
+mCur_L_YZ=131072*15; mNext_L_YZ=131072*16;
+
+mCur_R_WX=131072*17; mNext_R_WX=131072*18;
+mCur_R_YZ=131072*19; mNext_R_YZ=131072*20;
+
+mCur_T_WX=131072*21; mNext_T_WX=131072*22;
+mCur_T_YZ=131072*23; mNext_T_YZ=131072*24;
+
+mCur_Q_WX=131072*25; mNext_Q_WX=131072*26;
+mCur_Q_YZ=131072*27; mNext_Q_YZ=131072*28;
+
+mPrevK=-1; mPrevSR=-1; mSampleRateSupported=0;
+mFftSize=-1; mKernelSize=-1; mFftNewRequired=1;
+
+/************ Helpers ************/
+// Pull one complex lane-pair out of a 4-lane interleaved impulse:
+// laneBase = 0 → WX (real,imag), laneBase = 2 → YZ (real,imag)
+function prepKernel4(anImp, aKernel, aKernelSize, anFftSize, laneBase) local(i2,i3,inv)
+(
+  i2=0; i3=0;
+  loop(aKernelSize,
+    aKernel[i2  ] = anImp[i3 + laneBase    ];
+    aKernel[i2+1] = anImp[i3 + laneBase + 1];
+    i2+=2; i3+=4;
+  );
+  memset(aKernel + (aKernelSize*2), 0, aKernelSize*2);
+  fft(aKernel, mFftSize);
+  inv = 1.0 / anFftSize;
+  i2=0; loop(anFftSize*2, aKernel[i2]*=inv; i2+=1;);
+);
+
+/************ Sliders ************/
+@slider
+((mPrevK != slider1) || (mPrevSR != srate)) ? (
+  mPrevK = slider1; mPrevSR = srate;
+
+  slider2 = sampleRateToSlider(); sliderchange(slider2);
+  mSampleRateSupported = isThisSampleRateSupported();
+
+  mKernelSize = 256; loop(slider1, mKernelSize *= 2;);
+
+  sprintf(mFN_L, "ATK/kernels/FOA/encoders/phj/%i/%i/0000/UHJ_L.wav", mPrevSR, mKernelSize);
+  sprintf(mFN_R, "ATK/kernels/FOA/encoders/phj/%i/%i/0000/UHJ_R.wav", mPrevSR, mKernelSize);
+  sprintf(mFN_T, "ATK/kernels/FOA/encoders/phj/%i/%i/0000/UHJ_T.wav", mPrevSR, mKernelSize);
+  sprintf(mFN_Q, "ATK/kernels/FOA/encoders/phj/%i/%i/0000/UHJ_Q.wav", mPrevSR, mKernelSize);
+
+  impCount = mKernelSize * 4;
+  memset(mImpL,0,impCount); readKernelImpulseFromFile(mFN_L, mImpL);
+  memset(mImpR,0,impCount); readKernelImpulseFromFile(mFN_R, mImpR);
+  memset(mImpT,0,impCount); readKernelImpulseFromFile(mFN_T, mImpT);
+  memset(mImpQ,0,impCount); readKernelImpulseFromFile(mFN_Q, mImpQ);
+
+  mFftNewRequired = 1;
+);
+
+/************ Block ************/
+@block
+(mFftNewRequired && mSampleRateSupported) ? (
+  mFftSize = 2*mKernelSize;
+  chunksize  = mFftSize - mKernelSize - 1;
+  chunksize2 = chunksize * 2;
+
+  prepKernel4(mImpL, mK_L_WX, mKernelSize, mFftSize, 0);
+  prepKernel4(mImpL, mK_L_YZ, mKernelSize, mFftSize, 2);
+
+  prepKernel4(mImpR, mK_R_WX, mKernelSize, mFftSize, 0);
+  prepKernel4(mImpR, mK_R_YZ, mKernelSize, mFftSize, 2);
+
+  prepKernel4(mImpT, mK_T_WX, mKernelSize, mFftSize, 0);
+  prepKernel4(mImpT, mK_T_YZ, mKernelSize, mFftSize, 2);
+
+  prepKernel4(mImpQ, mK_Q_WX, mKernelSize, mFftSize, 0);
+  prepKernel4(mImpQ, mK_Q_YZ, mKernelSize, mFftSize, 2);
+
+  mBufferPosition = 0;
+  mFftNewRequired = 0;
+);
+
+// keep SR label in sync with driver
+slider2 = sampleRateToSlider(); sliderchange(slider2);
+
+/************ Sample ************/
+@sample
+mSampleRateSupported ? (
+
+  mBufferPosition >= chunksize ? (
+    // L → WX & YZ
+    mTemp=mNext_L_WX; mNext_L_WX=mCur_L_WX; mCur_L_WX=mTemp;
+    memset(mCur_L_WX+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_L_WX,mFftSize); convolve_c(mCur_L_WX,mK_L_WX,mFftSize); ifft(mCur_L_WX,mFftSize);
+
+    mTemp=mNext_L_YZ; mNext_L_YZ=mCur_L_YZ; mCur_L_YZ=mTemp;
+    memset(mCur_L_YZ+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_L_YZ,mFftSize); convolve_c(mCur_L_YZ,mK_L_YZ,mFftSize); ifft(mCur_L_YZ,mFftSize);
+
+    // R → WX & YZ
+    mTemp=mNext_R_WX; mNext_R_WX=mCur_R_WX; mCur_R_WX=mTemp;
+    memset(mCur_R_WX+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_R_WX,mFftSize); convolve_c(mCur_R_WX,mK_R_WX,mFftSize); ifft(mCur_R_WX,mFftSize);
+
+    mTemp=mNext_R_YZ; mNext_R_YZ=mCur_R_YZ; mCur_R_YZ=mTemp;
+    memset(mCur_R_YZ+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_R_YZ,mFftSize); convolve_c(mCur_R_YZ,mK_R_YZ,mFftSize); ifft(mCur_R_YZ,mFftSize);
+
+    // T → WX & YZ
+    mTemp=mNext_T_WX; mNext_T_WX=mCur_T_WX; mCur_T_WX=mTemp;
+    memset(mCur_T_WX+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_T_WX,mFftSize); convolve_c(mCur_T_WX,mK_T_WX,mFftSize); ifft(mCur_T_WX,mFftSize);
+
+    mTemp=mNext_T_YZ; mNext_T_YZ=mCur_T_YZ; mCur_T_YZ=mTemp;
+    memset(mCur_T_YZ+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_T_YZ,mFftSize); convolve_c(mCur_T_YZ,mK_T_YZ,mFftSize); ifft(mCur_T_YZ,mFftSize);
+
+    // Q → WX & YZ
+    mTemp=mNext_Q_WX; mNext_Q_WX=mCur_Q_WX; mCur_Q_WX=mTemp;
+    memset(mCur_Q_WX+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_Q_WX,mFftSize); convolve_c(mCur_Q_WX,mK_Q_WX,mFftSize); ifft(mCur_Q_WX,mFftSize);
+
+    mTemp=mNext_Q_YZ; mNext_Q_YZ=mCur_Q_YZ; mCur_Q_YZ=mTemp;
+    memset(mCur_Q_YZ+chunksize*2,0,(mFftSize-chunksize)*2);
+    fft(mCur_Q_YZ,mFftSize); convolve_c(mCur_Q_YZ,mK_Q_YZ,mFftSize); ifft(mCur_Q_YZ,mFftSize);
+
+    pdc_delay = ((1.5 * mKernelSize)|0) - 2;
+    pdc_bot_ch=0; pdc_top_ch=4;
+
+    mBufferPosition=0;
+  );
+
+  bp2 = mBufferPosition*2;
+
+  // buffer UHJ inputs to real lanes
+  mNext_L_WX[bp2]=spl0; mNext_L_WX[bp2+1]=0;  mNext_L_YZ[bp2]=spl0; mNext_L_YZ[bp2+1]=0;
+  mNext_R_WX[bp2]=spl1; mNext_R_WX[bp2+1]=0;  mNext_R_YZ[bp2]=spl1; mNext_R_YZ[bp2+1]=0;
+  mNext_T_WX[bp2]=spl2; mNext_T_WX[bp2+1]=0;  mNext_T_YZ[bp2]=spl2; mNext_T_YZ[bp2+1]=0;
+  mNext_Q_WX[bp2]=spl3; mNext_Q_WX[bp2+1]=0;  mNext_Q_YZ[bp2]=spl3; mNext_Q_YZ[bp2+1]=0;
+
+  // sum current block
+  W = mCur_L_WX[bp2]   + mCur_R_WX[bp2]   + mCur_T_WX[bp2]   + mCur_Q_WX[bp2];
+  X = mCur_L_WX[bp2+1] + mCur_R_WX[bp2+1] + mCur_T_WX[bp2+1] + mCur_Q_WX[bp2+1];
+  Y = mCur_L_YZ[bp2]   + mCur_R_YZ[bp2]   + mCur_T_YZ[bp2]   + mCur_Q_YZ[bp2];
+  Z = mCur_L_YZ[bp2+1] + mCur_R_YZ[bp2+1] + mCur_T_YZ[bp2+1] + mCur_Q_YZ[bp2+1];
+
+  // overlap add
+  mBufferPosition < mFftSize - chunksize ? (
+    W += mNext_L_WX[chunksize2+bp2]   + mNext_R_WX[chunksize2+bp2]   + mNext_T_WX[chunksize2+bp2]   + mNext_Q_WX[chunksize2+bp2];
+    X += mNext_L_WX[chunksize2+bp2+1] + mNext_R_WX[chunksize2+bp2+1] + mNext_T_WX[chunksize2+bp2+1] + mNext_Q_WX[chunksize2+bp2+1];
+    Y += mNext_L_YZ[chunksize2+bp2]   + mNext_R_YZ[chunksize2+bp2]   + mNext_T_YZ[chunksize2+bp2]   + mNext_Q_YZ[chunksize2+bp2];
+    Z += mNext_L_YZ[chunksize2+bp2+1] + mNext_R_YZ[chunksize2+bp2+1] + mNext_T_YZ[chunksize2+bp2+1] + mNext_Q_YZ[chunksize2+bp2+1];
+  );
+
+  // output
+  spl0=W; spl1=X; spl2=Y; spl3=Z;
+
+  mBufferPosition += 1;
+
+) : (
+  spl0=0; spl1=0; spl2=0; spl3=0;
+);
+

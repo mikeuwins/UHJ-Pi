@@ -1,0 +1,323 @@
+/*
+ATK FOA Transform - B-VHAP (Route A, Z-row)
+FOA (W,X,Y,Z) → FOA (W,X,Y,Z')
+
+Only Z is modified:
+  Z' = Z_in(aligned) + Amount * (W ⊗ ZW + X ⊗ ZX + Y ⊗ ZY)
+
+Kernel (4-lane float32 WAV, per-tap interleaved):
+  [ZW, ZX, ZY, delta]
+
+Kernel path (ATK style; relative to REAPER resource path):
+  ATK/kernels/FOA/transforms/b-vhap/<fs>/<N>/0100/BVHAP_Z.wav
+
+Design notes:
+- Dry Z is internally delay-aligned to the donors’ effective FIR group delay.
+- Auto engine: TD for N ≤ 512; Hybrid (TD head + FFT tail) for N > 512.
+- Z-Solo monitors only the injected component on the Z channel (W/X/Y muted).
+- Amount (0–100%) is the main injection control; Z-Added Trim is a fine gain (on injected only).
+- Polarity lets you flip sign to check “up vs. down” with your decoder.
+*/
+
+desc: ATK FOA Transform B-VHAP (Z-row, Route A)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W
+out_pin:X
+out_pin:Y
+out_pin:Z
+
+// --------------------- Sliders (simple UX) ---------------------
+slider1:1<0,5,1{256,512,1024,2048,4096,8192}>Kernel size (N)
+slider2:1<0,1,1{Off,On}>Enable
+slider3:50<0,100,1>Amount (% of injected height)
+slider4:0<-18,18,0.1>Z-Added Trim (dB)
+slider5:0<0,1,1{Normal,Invert}>Polarity
+slider6:0<0,1,1{Off,On}>Z-Solo (monitor injected only)
+
+// --------------------- Buffers / State ---------------------
+@init
+// Path string for BVHAP Z-row kernel
+mFN_Z = 1;
+
+// Interleaved impulse (from BVHAP_Z.wav): N * 4 lanes
+mImpZ = 65536 * 1;
+
+// Full time-domain kernels (length N)
+hZW   = 65536 * 2;  // donor from W → Z
+hZX   = 65536 * 3;  // donor from X → Z
+hZY   = 65536 * 4;  // donor from Y → Z
+
+// Head (TD) and Tail (FFT) partitions
+hZW_H = 65536 * 5;  hZX_H = 65536 * 6;  hZY_H = 65536 * 7;
+hZW_T = 65536 * 8;  hZX_T = 65536 * 9;  hZY_T = 65536 * 10;
+
+// Tail FFT spectra (complex)
+kZW_T = 65536 * 11; kZX_T = 65536 * 12; kZY_T = 65536 * 13;
+
+// Overlap-add working buffers for tail (complex, per donor)
+mCur_W = 65536 * 14;  mNext_W = 65536 * 15;
+mCur_X = 65536 * 16;  mNext_X = 65536 * 17;
+mCur_Y = 65536 * 18;  mNext_Y = 65536 * 19;
+
+// Time-domain rings (for head / full TD)
+RINGSZ = 4096;  RINGMSK = RINGSZ - 1;
+wr_td = 0;
+memset(wb_td,0,RINGSZ);
+memset(xb_td,0,RINGSZ);
+memset(yb_td,0,RINGSZ);
+
+// Dry Z alignment delay (match effective group delay)
+ZDL_SZ = 16384;  ZDL_MSK = ZDL_SZ - 1;
+zdl_w = 0;
+memset(zdl,0,ZDL_SZ);
+gd_samp = 0; // set when kernels load
+
+// State
+mPrevK = -1;
+mKernelSize = 512;
+
+mFftNewRequired = 1;
+mFftSize = -1;
+chunksize = 0; chunksize2 = 0;
+mBufferPosition = 0;
+
+amount = 0.5;
+zTrim = 1;
+pol = 1;
+engine_hybrid = 0; // 0=TD full, 1=Hybrid (TD head + FFT tail)
+H_internal = 256;  // internal head taps for hybrid
+
+// --------------------- Helpers ---------------------
+
+// De-interleave 4-lane interleaved (ZW,ZX,ZY,delta) into three mono arrays.
+function deinterleave_Zrow(src, N, dstZW, dstZX, dstZY) local(i, j) (
+  i = 0; j = 0;
+  loop(N,
+    dstZW[i] = src[j + 0];
+    dstZX[i] = src[j + 1];
+    dstZY[i] = src[j + 2];
+    // skip delta at j+3
+    i += 1; j += 4;
+  );
+);
+
+// Partition full kernel (N) into head (H) and tail (zeros 0..H-1)
+function split_head_tail(full, H, N, head, tail) local(i)(
+  // head: copy 0..H-1; zero H..N-1
+  i=0; loop(H, head[i] = full[i]; i+=1; );
+  loop(N-H, head[i] = 0; i+=1; );
+  // tail: zero 0..H-1; copy H..N-1
+  i=0; loop(H, tail[i] = 0; i+=1; );
+  loop(N-H, tail[H + i] = full[H + i]; i+=1; );
+);
+
+// Prepare real tail kernel (length N) into complex spectrum k[] (length mFftSize*2).
+function prepKernel1_R_tail(hTail, k, aKernelSize, anFftSize) local(i2,inv)(
+  i2 = 0;
+  loop(aKernelSize,
+    k[i2]   = hTail[i2/2]; // real
+    k[i2+1] = 0;           // imag
+    i2 += 2;
+  );
+  memset(k + (aKernelSize*2), 0, (anFftSize - aKernelSize) * 2);
+  fft(k, mFftSize);
+  inv = 1.0 / anFftSize;
+  i2 = 0; loop(anFftSize*2, k[i2] *= inv; i2 += 1;);
+);
+
+// Simple time-domain dot (ring-safe)
+function fir_sum_td(rb*, headIdx, coeff*, taps)
+(
+  acc=0; i=0; idx=headIdx;
+  loop(taps,
+    acc += rb[idx] * coeff[i];
+    idx = (idx - 1) & RINGMSK;
+    i += 1;
+  );
+  acc;
+);
+
+// --------------------- Sliders ---------------------
+@slider
+// Kernel length from dropdown (PHJ-style)
+(mPrevK != slider1) ? (
+  mPrevK = slider1;
+  mKernelSize = 256; loop(slider1, mKernelSize *= 2;);
+  mFftNewRequired = 1;
+);
+
+// User-facing gains / polarity
+amount = slider3 / 100;      // 0..1
+zTrim  = 2 ^ (slider4 / 6);  // dB to linear
+pol    = (slider5|0)==0 ? 1 : -1;
+
+// --------------------- Load / Prepare on change ---------------------
+@block
+mFftNewRequired ? (
+  // Build path using current project fs
+  sr_i = floor(srate + 0.5);
+  sprintf(mFN_Z, "ATK/kernels/FOA/transforms/b-vhap/%i/%i/0100/BVHAP_Z.wav", sr_i, mKernelSize);
+
+  // Read interleaved [ZW,ZX,ZY,delta] (float32), into mImpZ (length N*4)
+  impCount = mKernelSize * 4;
+  memset(mImpZ, 0, impCount);
+  readKernelImpulseFromFile(mFN_Z, mImpZ);
+
+  // De-interleave → full time-domain kernels (length N)
+  deinterleave_Zrow(mImpZ, mKernelSize, hZW, hZX, hZY);
+
+  // Engine: TD for N ≤ 512; Hybrid otherwise
+  engine_hybrid = (mKernelSize > 512) ? 1 : 0;
+
+  // Internal head size for hybrid
+  H_internal = (mKernelSize <= 1024) ? 256 : 512;
+  (H_internal > mKernelSize) ? (H_internal = mKernelSize);
+
+  // Partition kernels if hybrid; else TD uses full kernels in head slots
+  engine_hybrid ? (
+    split_head_tail(hZW, H_internal, mKernelSize, hZW_H, hZW_T);
+    split_head_tail(hZX, H_internal, mKernelSize, hZX_H, hZX_T);
+    split_head_tail(hZY, H_internal, mKernelSize, hZY_H, hZY_T);
+
+    // FFT setup for tail (PHJ-style)
+    mFftSize = 2 * mKernelSize;
+    chunksize  = mFftSize - mKernelSize - 1;
+    chunksize2 = chunksize * 2;
+
+    // Prepare tail spectra
+    prepKernel1_R_tail(hZW_T, kZW_T, mKernelSize, mFftSize);
+    prepKernel1_R_tail(hZX_T, kZX_T, mKernelSize, mFftSize);
+    prepKernel1_R_tail(hZY_T, kZY_T, mKernelSize, mFftSize);
+
+    // Reset OLA state
+    mBufferPosition = 0;
+  ) : (
+    // Full TD path
+    memcpy(hZW_H, hZW, mKernelSize);
+    memcpy(hZX_H, hZX, mKernelSize);
+    memcpy(hZY_H, hZY, mKernelSize);
+    memset(hZW_T,0,mKernelSize);
+    memset(hZX_T,0,mKernelSize);
+    memset(hZY_T,0,mKernelSize);
+  );
+
+  // Reset TD rings
+  wr_td = 0;
+  memset(wb_td,0,RINGSZ);
+  memset(xb_td,0,RINGSZ);
+  memset(yb_td,0,RINGSZ);
+
+  // Effective group delay for alignment (use head length for immediacy)
+  effective_H = engine_hybrid ? H_internal : mKernelSize;
+  gd_samp = ((effective_H - 1) / 2) | 0;
+
+  // Reset & align dry Z delay line
+  zdl_w = 0;
+  memset(zdl,0,ZDL_SZ);
+
+  // Host PDC: report gd_samp so playback lines up with the mix
+  pdc_delay = gd_samp;
+  pdc_bot_ch=0; pdc_top_ch=4;
+
+  mFftNewRequired = 0;
+);
+
+// --------------------- Sample ---------------------
+@sample
+W_in = spl0; X_in = spl1; Y_in = spl2; Z_in = spl3;
+
+enabled = slider2|0;
+zsolo   = slider6|0;
+
+// ---- Dry Z alignment: delay Z_in by gd_samp ----
+zdl[zdl_w] = Z_in;
+z_read_idx = (zdl_w - gd_samp) & ZDL_MSK;
+Z_dry_aligned = zdl[z_read_idx];
+zdl_w = (zdl_w + 1) & ZDL_MSK;
+
+// ---- Time-domain head (or full TD) ----
+wb_td[wr_td]=W_in; xb_td[wr_td]=X_in; yb_td[wr_td]=Y_in;
+head_td = wr_td;
+wr_td = (wr_td + 1) & RINGMSK;
+
+H_use = engine_hybrid ? H_internal : mKernelSize;
+
+z_head = 0;
+(H_use > 0) ? (
+  z_head = fir_sum_td(wb_td, head_td, hZW_H, H_use)
+          + fir_sum_td(xb_td, head_td, hZX_H, H_use)
+          + fir_sum_td(yb_td, head_td, hZY_H, H_use);
+);
+
+// ---- FFT tail (only in hybrid) ----
+z_tail = 0;
+engine_hybrid ? (
+  mBufferPosition >= chunksize ? (
+    // W donor tail
+    mTemp=mNext_W; mNext_W=mCur_W; mCur_W=mTemp;
+    memset(mCur_W + chunksize*2, 0, (mFftSize - chunksize) * 2);
+    fft(mCur_W, mFftSize); convolve_c(mCur_W, kZW_T, mFftSize); ifft(mCur_W, mFftSize);
+
+    // X donor tail
+    mTemp=mNext_X; mNext_X=mCur_X; mCur_X=mTemp;
+    memset(mCur_X + chunksize*2, 0, (mFftSize - chunksize) * 2);
+    fft(mCur_X, mFftSize); convolve_c(mCur_X, kZX_T, mFftSize); ifft(mCur_X, mFftSize);
+
+    // Y donor tail
+    mTemp=mNext_Y; mNext_Y=mCur_Y; mCur_Y=mTemp;
+    memset(mCur_Y + chunksize*2, 0, (mFftSize - chunksize) * 2);
+    fft(mCur_Y, mFftSize); convolve_c(mCur_Y, kZY_T, mFftSize); ifft(mCur_Y, mFftSize);
+
+    mBufferPosition = 0;
+  );
+
+  // buffer donors into "next" real lanes (imag = 0) for tail OLA
+  bp2 = mBufferPosition * 2;
+  mNext_W[bp2]=W_in; mNext_W[bp2+1]=0;
+  mNext_X[bp2]=X_in; mNext_X[bp2+1]=0;
+  mNext_Y[bp2]=Y_in; mNext_Y[bp2+1]=0;
+
+  // read current tail block (real lanes only), add overlap
+  z_tail = mCur_W[bp2] + mCur_X[bp2] + mCur_Y[bp2];
+  mBufferPosition < mFftSize - chunksize ? (
+    z_tail += mNext_W[chunksize2 + bp2]
+           +  mNext_X[chunksize2 + bp2]
+           +  mNext_Y[chunksize2 + bp2];
+  );
+
+  mBufferPosition += 1;
+);
+
+// ---- Build injected component, apply Amount, Trim, Polarity ----
+Z_added = enabled ? ((z_head + z_tail) * amount * zTrim * pol) : 0;
+
+// ---- Outputs / Z-Solo ----
+W_out = X_out = Y_out = Z_out = 0;
+
+zsolo ? (
+  // Z-Solo: ONLY injected Z; W/X/Y muted; dry Z muted
+  Z_out = Z_added;
+) : (
+  // Normal: W/X/Y passthrough; Z = Z_dry_aligned + injected
+  W_out = W_in;
+  X_out = X_in;
+  Y_out = Y_in;
+  Z_out = Z_dry_aligned + Z_added;
+);
+
+// NaN guards
+(W_out != W_out) ? (W_out=0);
+(X_out != X_out) ? (X_out=0);
+(Y_out != Y_out) ? (Y_out=0);
+(Z_out != Z_out) ? (Z_out=0);
+
+// Outputs
+spl0=W_out; spl1=X_out; spl2=Y_out; spl3=Z_out;
+ 

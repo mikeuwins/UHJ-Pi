@@ -1,0 +1,213 @@
+/*
+ATK FOA Decode PHJ (pure)
+FOA (W,X,Y,Z) → UHJ family (L,R,T,Q)
+No forward preference. No shelves (use ATK PsychoShelf as a separate FOA→FOA transform).
+
+UHJ modes:
+  PHJ : L,R,T,Q
+  THJ : L,R,T        (Q = 0)
+  SHJ : L,R,T'       (Q = 0, T low-passed @ 5 kHz fixed)
+  BHJ : L,R          (T = 0, Q = 0)
+
+Decoder kernel lanes per tap (4-lane interleaved): [LR_r, LR_i, TQ_r, TQ_i]
+Kernels (macOS):
+  ~/Library/Application Support/ATK/kernels/FOA/decoders/phj/None/<N>/0000/UHJ_{W,X,Y,Z}.wav
+
+Inputs : W X Y Z
+Outputs: L R T Q
+*/
+
+desc: ATK FOA Decode PHJ
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:L
+out_pin:R
+out_pin:T
+out_pin:Q
+
+slider1:3<0,5,1{256,512,1024,2048,4096,8192}>Kernel size
+slider2:0<0,3,1{PHJ,THJ,SHJ,BHJ}>UHJ Mode
+slider3:0<-18,18,0.1>Output Trim (dB)
+
+/************ Init & buffers ************/
+@init
+mFN_W=1; mFN_X=2; mFN_Y=3; mFN_Z=4;
+mImpW=65536*1; mImpX=65536*2; mImpY=65536*3; mImpZ=65536*4;
+
+mK_W_LR=65536*5;  mK_W_TQ=65536*6;
+mK_X_LR=65536*7;  mK_X_TQ=65536*8;
+mK_Y_LR=65536*9;  mK_Y_TQ=65536*10;
+mK_Z_LR=65536*11; mK_Z_TQ=65536*12;
+
+mCur_W_LR=65536*13; mNext_W_LR=65536*14;
+mCur_W_TQ=65536*15; mNext_W_TQ=65536*16;
+
+mCur_X_LR=65536*17; mNext_X_LR=65536*18;
+mCur_X_TQ=65536*19; mNext_X_TQ=65536*20;
+
+mCur_Y_LR=65536*21; mNext_Y_LR=65536*22;
+mCur_Y_TQ=65536*23; mNext_Y_TQ=65536*24;
+
+mCur_Z_LR=65536*25; mNext_Z_LR=65536*26;
+mCur_Z_TQ=65536*27; mNext_Z_TQ=65536*28;
+
+mPrevK=-1; mFftSize=-1; mKernelSize=-1; mFftNewRequired=1;
+
+// SHJ LPF state (fixed 5 kHz)
+mTprev=0; alpha=0;
+
+/************ Helpers ************/
+// Copy from 4-lane interleaved impulse to two complex kernels (LR and TQ)
+function prepKernel4_D(anImp, kLR, kTQ, aKernelSize, anFftSize) local(i2,i3,inv)
+(
+  i2=0; i3=0;
+  loop(aKernelSize,
+    kLR[i2  ] = anImp[i3 + 0];
+    kLR[i2+1] = anImp[i3 + 1];
+    i2+=2; i3+=4;
+  );
+  memset(kLR + (aKernelSize*2), 0, aKernelSize*2);
+  fft(kLR, mFftSize);
+
+  i2=0; i3=0;
+  loop(aKernelSize,
+    kTQ[i2  ] = anImp[i3 + 2];
+    kTQ[i2+1] = anImp[i3 + 3];
+    i2+=2; i3+=4;
+  );
+  memset(kTQ + (aKernelSize*2), 0, aKernelSize*2);
+  fft(kTQ, mFftSize);
+
+  inv = 1.0 / anFftSize;
+  i2=0; loop(anFftSize*2, kLR[i2]*=inv; kTQ[i2]*=inv; i2+=1;);
+);
+
+/************ Sliders ************/
+@slider
+(mPrevK != slider1) ? (
+  mPrevK = slider1;
+  mKernelSize = 256; loop(slider1, mKernelSize *= 2;);
+
+  sprintf(mFN_W, "ATK/kernels/FOA/decoders/phj/None/%i/0000/UHJ_W.wav", mKernelSize);
+  sprintf(mFN_X, "ATK/kernels/FOA/decoders/phj/None/%i/0000/UHJ_X.wav", mKernelSize);
+  sprintf(mFN_Y, "ATK/kernels/FOA/decoders/phj/None/%i/0000/UHJ_Y.wav", mKernelSize);
+  sprintf(mFN_Z, "ATK/kernels/FOA/decoders/phj/None/%i/0000/UHJ_Z.wav", mKernelSize);
+
+  impCount = mKernelSize * 4;
+  memset(mImpW,0,impCount); readKernelImpulseFromFile(mFN_W, mImpW);
+  memset(mImpX,0,impCount); readKernelImpulseFromFile(mFN_X, mImpX);
+  memset(mImpY,0,impCount); readKernelImpulseFromFile(mFN_Y, mImpY);
+  memset(mImpZ,0,impCount); readKernelImpulseFromFile(mFN_Z, mImpZ);
+
+  mFftNewRequired = 1;
+);
+
+// SHJ fixed 5 kHz (alpha here; used only in SHJ mode)
+alpha = exp(-2*$pi*5000/srate);
+trimGain = 2^(slider3/6);
+
+/************ Block ************/
+@block
+mFftNewRequired ? (
+  mFftSize = 2*mKernelSize;
+  chunksize = mFftSize - mKernelSize - 1;
+  chunksize2 = chunksize * 2;
+
+  prepKernel4_D(mImpW, mK_W_LR, mK_W_TQ, mKernelSize, mFftSize);
+  prepKernel4_D(mImpX, mK_X_LR, mK_X_TQ, mKernelSize, mFftSize);
+  prepKernel4_D(mImpY, mK_Y_LR, mK_Y_TQ, mKernelSize, mFftSize);
+  prepKernel4_D(mImpZ, mK_Z_LR, mK_Z_TQ, mKernelSize, mFftSize);
+
+  mBufferPosition = 0;
+  mFftNewRequired = 0;
+);
+
+/************ Sample ************/
+@sample
+W_in = spl0; X_in = spl1; Y_in = spl2; Z_in = spl3;
+
+// Convolution tick
+mBufferPosition >= chunksize ? (
+  // W
+  mTemp=mNext_W_LR; mNext_W_LR=mCur_W_LR; mCur_W_LR=mTemp;
+  memset(mCur_W_LR+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_W_LR,mFftSize); convolve_c(mCur_W_LR,mK_W_LR,mFftSize); ifft(mCur_W_LR,mFftSize);
+
+  mTemp=mNext_W_TQ; mNext_W_TQ=mCur_W_TQ; mCur_W_TQ=mTemp;
+  memset(mCur_W_TQ+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_W_TQ,mFftSize); convolve_c(mCur_W_TQ,mK_W_TQ,mFftSize); ifft(mCur_W_TQ,mFftSize);
+
+  // X
+  mTemp=mNext_X_LR; mNext_X_LR=mCur_X_LR; mCur_X_LR=mTemp;
+  memset(mCur_X_LR+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_X_LR,mFftSize); convolve_c(mCur_X_LR,mK_X_LR,mFftSize); ifft(mCur_X_LR,mFftSize);
+
+  mTemp=mNext_X_TQ; mNext_X_TQ=mCur_X_TQ; mCur_X_TQ=mTemp;
+  memset(mCur_X_TQ+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_X_TQ,mFftSize); convolve_c(mCur_X_TQ,mK_X_TQ,mFftSize); ifft(mCur_X_TQ,mFftSize);
+
+  // Y
+  mTemp=mNext_Y_LR; mNext_Y_LR=mCur_Y_LR; mCur_Y_LR=mTemp;
+  memset(mCur_Y_LR+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_Y_LR,mFftSize); convolve_c(mCur_Y_LR,mK_Y_LR,mFftSize); ifft(mCur_Y_LR,mFftSize);
+
+  mTemp=mNext_Y_TQ; mNext_Y_TQ=mCur_Y_TQ; mCur_Y_TQ=mTemp;
+  memset(mCur_Y_TQ+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_Y_TQ,mFftSize); convolve_c(mCur_Y_TQ,mK_Y_TQ,mFftSize); ifft(mCur_Y_TQ,mFftSize);
+
+  // Z
+  mTemp=mNext_Z_LR; mNext_Z_LR=mCur_Z_LR; mCur_Z_LR=mTemp;
+  memset(mCur_Z_LR+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_Z_LR,mFftSize); convolve_c(mCur_Z_LR,mK_Z_LR,mFftSize); ifft(mCur_Z_LR,mFftSize);
+
+  mTemp=mNext_Z_TQ; mNext_Z_TQ=mCur_Z_TQ; mCur_Z_TQ=mTemp;
+  memset(mCur_Z_TQ+chunksize*2,0,(mFftSize-chunksize)*2);
+  fft(mCur_Z_TQ,mFftSize); convolve_c(mCur_Z_TQ,mK_Z_TQ,mFftSize); ifft(mCur_Z_TQ,mFftSize);
+
+  pdc_delay = ((1.5 * mKernelSize)|0) - 2;
+  pdc_bot_ch=0; pdc_top_ch=4;
+
+  mBufferPosition=0;
+);
+
+// buffer FOA inputs to real lanes
+bp2 = mBufferPosition*2;
+mNext_W_LR[bp2]=W_in; mNext_W_LR[bp2+1]=0; mNext_W_TQ[bp2]=W_in; mNext_W_TQ[bp2+1]=0;
+mNext_X_LR[bp2]=X_in; mNext_X_LR[bp2+1]=0; mNext_X_TQ[bp2]=X_in; mNext_X_TQ[bp2+1]=0;
+mNext_Y_LR[bp2]=Y_in; mNext_Y_LR[bp2+1]=0; mNext_Y_TQ[bp2]=Y_in; mNext_Y_TQ[bp2+1]=0;
+mNext_Z_LR[bp2]=Z_in; mNext_Z_LR[bp2+1]=0; mNext_Z_TQ[bp2]=Z_in; mNext_Z_TQ[bp2+1]=0;
+
+// sum current block to UHJ
+L = mCur_W_LR[bp2] + mCur_X_LR[bp2] + mCur_Y_LR[bp2] + mCur_Z_LR[bp2];
+R = mCur_W_LR[bp2+1] + mCur_X_LR[bp2+1] + mCur_Y_LR[bp2+1] + mCur_Z_LR[bp2+1];
+T = mCur_W_TQ[bp2] + mCur_X_TQ[bp2] + mCur_Y_TQ[bp2] + mCur_Z_TQ[bp2];
+Q = mCur_W_TQ[bp2+1] + mCur_X_TQ[bp2+1] + mCur_Y_TQ[bp2+1] + mCur_Z_TQ[bp2+1];
+
+// overlap add
+mBufferPosition < mFftSize - chunksize ? (
+  L += mNext_W_LR[chunksize2+bp2] + mNext_X_LR[chunksize2+bp2] + mNext_Y_LR[chunksize2+bp2] + mNext_Z_LR[chunksize2+bp2];
+  R += mNext_W_LR[chunksize2+bp2+1] + mNext_X_LR[chunksize2+bp2+1] + mNext_Y_LR[chunksize2+bp2+1] + mNext_Z_LR[chunksize2+bp2+1];
+  T += mNext_W_TQ[chunksize2+bp2] + mNext_X_TQ[chunksize2+bp2] + mNext_Y_TQ[chunksize2+bp2] + mNext_Z_TQ[chunksize2+bp2];
+  Q += mNext_W_TQ[chunksize2+bp2+1] + mNext_X_TQ[chunksize2+bp2+1] + mNext_Y_TQ[chunksize2+bp2+1] + mNext_Z_TQ[chunksize2+bp2+1];
+);
+
+// UHJ mode
+mode = slider2|0;
+(mode == 1) ? ( Q = 0; );                                // THJ
+(mode == 2) ? ( T = (1 - alpha)*T + alpha*mTprev; mTprev=T; Q = 0; ); // SHJ @5k
+(mode == 3) ? ( T = 0; Q = 0; );                         // BHJ
+
+// trim & guards
+gain = trimGain;
+L *= gain; R *= gain; T *= gain; Q *= gain;
+(L != L) ? (L=0); (R != R) ? (R=0); (T != T) ? (T=0); (Q != Q) ? (Q=0);
+
+spl0=L; spl1=R; spl2=T; spl3=Q;
+
+mBufferPosition += 1;

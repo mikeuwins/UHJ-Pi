@@ -1,0 +1,188 @@
+/*
+ATK FOA Transform — B-VHAP (Dimension-style TD)
+
+FOA (W,X,Y,Z) → FOA (W,X,Y,Z′)
+
+Design:
+- Dimension-style, time-domain FIR transform (no FFT partitioning).
+- W/X/Y passthrough. Z is synthesised from donors via BVHAP Z-row kernels.
+- Kernels loaded from:
+    ATK/kernels/FOA/transforms/b-vhap/<fs>/<N>/0100/BVHAP_Z.wav
+  Layout in BVHAP_Z.wav (4ch float32, interleaved per tap):
+    ch0 = ZW[t], ch1 = ZX[t], ch2 = ZY[t], ch3 = delta[t]
+  (Matches your builder & handover.)
+
+Controls (kept minimal):
+- Kernel Size (N on disk): 256..8192
+- Latency Comp: align dry Z by (L_eff-1)/2 samples (default On)
+- Z Make-Up (dB): gain on injected path only
+- Wet (%): blend injected Z with dry Z
+- Z-Solo: monitor injected Z only (W/X/Y muted; dry Z muted)
+
+Notes:
+- Effective convolution length is auto-derived from first/last non-zero taps per lane.
+- Typical effective length ≈ 303 taps (odd) → group delay ≈ (L-1)/2.
+*/
+
+desc:ATK FOA Transform — B-VHAP (TD)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W
+out_pin:X
+out_pin:Y
+out_pin:Z
+
+// ---------------- Sliders ----------------
+slider1:2<0,5,1{256,512,1024,2048,4096,8192}>Kernel Size (N on disk)
+slider2:1<0,1,1{Off,On}>Latency Comp
+slider3:0<-18,18,0.1>Z Make-Up (dB)
+slider4:100<0,100,1>Wet (%)
+slider5:0<0,1,1{Off,On}>Z-Solo (injected only)
+
+// ---------------- State ----------------
+@init
+tiny = 0.000000000000000001;
+
+// file path buffer + interleaved read buffer
+mFN_Z = 1;
+mImpZ = 65536 * 1;  // N * 4 floats
+
+// de-interleaved kernels
+hZW = 65536 * 2;
+hZX = 65536 * 3;
+hZY = 65536 * 4;
+hZD = 65536 * 5;    // delta lane (unused for Route-A Z synthesis)
+
+// sparse support indices
+zw_beg=zw_end=0;
+zx_beg=zx_end=0;
+zy_beg=zy_end=0;
+L_eff = 0;          // effective length for latency calculation
+
+// ring buffers for donors
+RINGSZ = 8192; RINGMSK = RINGSZ - 1;
+wr=0; memset(rbW,0,RINGSZ); memset(rbX,0,RINGSZ); memset(rbY,0,RINGSZ);
+
+// delay line for dry Z (latency comp)
+ZDL_SZ = 8192; ZDL_MSK = ZDL_SZ - 1; zdl_w=0; memset(zdl,0,ZDL_SZ);
+gd = 0;
+
+// cached selection
+mPrevK = -1;
+mKernelSize = 256;
+
+// -------- Helpers --------
+function deinterleave_Zrow(src*, N, dstZW*, dstZX*, dstZY*, dstD*) local(i,j)(
+  i=0; j=0;
+  loop(N,
+    dstZW[i] = src[j+0];
+    dstZX[i] = src[j+1];
+    dstZY[i] = src[j+2];
+    dstD [i] = src[j+3];
+    j += 4; i += 1;
+  );
+);
+
+function find_support(h*, N, *beg, *end) local(i,b,e)(
+  b = N; e = -1;
+  i=0; loop(N, (h[i] != 0) ? ( (i < b) ? (b = i) : 0; (i > e) ? (e = i) : 0; ); i+=1; );
+  (e < 0) ? ( b = 0; e = 0; ); // all zero → trivial
+  *beg = b; *end = e+1; // end is exclusive
+);
+
+function fir_dot_sliced(rb*, head, h*, beg, end) local(i,idx,acc)(
+  acc = 0;
+  i = beg; idx = (head - beg) & RINGMSK;
+  loop(end - beg,
+    acc += rb[idx] * h[i];
+    idx = (idx - 1) & RINGMSK;
+    i += 1;
+  );
+  acc;
+);
+
+// ---------------- Slider (load kernels) ----------------
+@slider
+(mPrevK != slider1) ? (
+  mPrevK = slider1;
+  mKernelSize = 256; loop(slider1, mKernelSize *= 2;);
+
+  // build path from current project sample-rate
+  sr_i = floor(srate + 0.5);
+  sprintf(mFN_Z, "ATK/kernels/FOA/transforms/b-vhap/%i/%i/0100/BVHAP_Z.wav", sr_i, mKernelSize);
+
+  // read interleaved BVHAP_Z (ZW,ZX,ZY,delta)
+  total = mKernelSize * 4;
+  memset(mImpZ, 0, total);
+  readKernelImpulseFromFile(mFN_Z, mImpZ);
+
+  // de-interleave lanes
+  deinterleave_Zrow(mImpZ, mKernelSize, hZW, hZX, hZY, hZD);
+
+  // find sparse support per lane
+  find_support(hZW, mKernelSize, zw_beg, zw_end);
+  find_support(hZX, mKernelSize, zx_beg, zx_end);
+  find_support(hZY, mKernelSize, zy_beg, zy_end);
+
+  // effective convolution span (union of supports)
+  L_beg = zw_beg; (zx_beg < L_beg) ? (L_beg = zx_beg) : 0; (zy_beg < L_beg) ? (L_beg = zy_beg) : 0;
+  L_end = zw_end; (zx_end > L_end) ? (L_end = zx_end) : 0; (zy_end > L_end) ? (L_end = zy_end) : 0;
+  L_eff = L_end - L_beg;  (L_eff < 1) ? (L_eff = 1) : 0;
+
+  // group delay for latency comp (assume odd-ish linear-phase around the band)
+  gd = (L_eff - 1) / 2;
+
+  // reset runtime state
+  wr=0; memset(rbW,0,RINGSZ); memset(rbX,0,RINGSZ); memset(rbY,0,RINGSZ);
+  zdl_w=0; memset(zdl,0,ZDL_SZ);
+
+  // host PDC only if Latency Comp is enabled (we’ll update in @sample too)
+  (slider2|0) ? ( pdc_delay = gd|0; pdc_bot_ch=0; pdc_top_ch=4; ) : ( pdc_delay=0; );
+) : 0;
+
+// cache gains
+zGain = 2^(slider3/6);
+wet   = slider4 * 0.01;
+latOn = slider2|0;
+zsolo = slider5|0;
+
+// ---------------- Sample ----------------
+@sample
+// refresh fast controls every sample
+zGain = 2^(slider3/6);
+wet   = slider4 * 0.01;
+latOn = slider2|0;
+zsolo = slider5|0;
+
+// inputs
+W_in = spl0; X_in = spl1; Y_in = spl2; Z_in = spl3;
+
+// write donors to rings
+rbW[wr] = W_in; rbX[wr] = X_in; rbY[wr] = Y_in; head = wr; wr = (wr + 1) & RINGMSK;
+
+// convolve donors with their Z-row kernels (sliced to effective support)
+zw = fir_dot_sliced(rbW, head, hZW, zw_beg, zw_end);
+zx = fir_dot_sliced(rbX, head, hZX, zx_beg, zx_end);
+zy = fir_dot_sliced(rbY, head, hZY, zy_beg, zy_end);
+
+Z_injected = (zw + zx + zy) * zGain;
+
+// latency comp on dry Z (align to donor FIR GD)
+latOn ? (
+  zdl[zdl_w] = Z_in; Z_aligned = zdl[(zdl_w - (gd|0)) & ZDL_MSK]; zdl_w = (zdl_w + 1) & ZDL_MSK;
+) : (
+  Z_aligned = Z_in;
+);
+
+// mix or solo
+zsolo ? (
+  spl0 = 0; spl1 = 0; spl2 = 0; spl3 = Z_injected;
+) : (
+  spl0 = W_in; spl1 = X_in; spl2 = Y_in; spl3 = (1 - wet)*Z_aligned + wet*Z_injected;
+);

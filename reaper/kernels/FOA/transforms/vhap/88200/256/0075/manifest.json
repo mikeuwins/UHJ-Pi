@@ -1,0 +1,31 @@
+{
+  "fs": 88200,
+  "N": 256,
+  "U_percent": 75,
+  "mode": "add",
+  "variant": "basic",
+  "bands_Hz": [
+    [
+      700.0,
+      4000.0
+    ],
+    [
+      4000.0,
+      12000.0
+    ]
+  ],
+  "delays_ms": [
+    1.75,
+    5.375
+  ],
+  "gains_linear": {
+    "mid": 0.1875,
+    "high_core": 0.30081416478176304
+  },
+  "shelf_dB_high": 5.25,
+  "donor_weights": {
+    "W": 0.6,
+    "X": 0.2,
+    "Y": 0.2
+  }
+}

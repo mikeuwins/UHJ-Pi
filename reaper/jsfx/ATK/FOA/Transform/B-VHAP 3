@@ -1,0 +1,162 @@
+/*
+ATK FOA Transform — B-VHAP (TD 1024 • Theory-Faithful Minimal)
+
+Goal: implement VHAP exactly as designed by the FIRs.
+No alignment, no EQ, no RMS steering, no tone tweaks.
+
+Z′ = Z_dry + Amount · G_norm · ( W ⊗ hZW + X ⊗ hZX + Y ⊗ hZY )
+
+Kernels (time-domain FIR, Dimension-style):
+  ATK/kernels/FOA/transforms/b-vhap/<fs>/1024/0100/BVHAP_Z.wav
+  Interleaved per tap: [ ZW, ZX, ZY, Δ ]   (Δ not used here)
+
+Controls:
+- Amount (%)         – scales only the injected Z′ (dry Z always 100%)
+- Z-Solo (Injected)  – audition injected component only on channel 4
+*/
+
+desc:ATK FOA Transform — B-VHAP (TD 1024 • Theory Minimal)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+out_pin:W
+out_pin:X
+out_pin:Y
+out_pin:Z
+
+slider1:70<0,100,1>Amount (%)
+slider2:0<0,1,1{Off,On}>Z-Solo (Injected Only)
+
+@init
+// ---------- constants ----------
+EPS  = 0.000000001;   // threshold for “non-zero” tap
+N_KER = 1024;         // Dimension convention (fixed length)
+
+// ---------- buffers ----------
+mFN_Z = 1;                 // path buffer
+mImpZ = 65536 * 1;         // interleaved IR: N_KER * 4 floats
+
+hZW = 65536 * 2;           // deinterleaved lanes
+hZX = 65536 * 3;
+hZY = 65536 * 4;
+
+zw_beg=0; zw_end=1;        // effective supports [beg,end)
+zx_beg=0; zx_end=1;
+zy_beg=0; zy_end=1;
+
+RINGSZ = 8192; RINGMSK = RINGSZ - 1;  // donor rings
+wr=0; memset(rbW,0,RINGSZ); memset(rbX,0,RINGSZ); memset(rbY,0,RINGSZ);
+
+// normalisation
+G_norm = 1.0;
+
+// ---------- helpers ----------
+function deint_Zrow(src*, N, dstZW*, dstZX*, dstZY*)
+(
+  i=0; j=0;
+  loop(N,
+    dstZW[i] = src[j+0];
+    dstZX[i] = src[j+1];
+    dstZY[i] = src[j+2];
+    j += 4; i += 1;
+  );
+);
+
+// find first/last above threshold → writes globals sup_b, sup_e (end exclusive)
+sup_b=0; sup_e=1;
+function support_thresh_do(h*, N)
+(
+  sup_b = N; sup_e = -1;
+  i=0; loop(N,
+    (abs(h[i]) > EPS) ? (
+      (i < sup_b) ? sup_b = i : 0;
+      (i > sup_e) ? sup_e = i : 0;
+    ) : 0;
+    i += 1;
+  );
+  (sup_e < 0) ? ( sup_b = 0; sup_e = 1; ) : ( sup_e += 1; );
+);
+
+// energy (L2) on [b,e)
+function l2_energy(h*, b, e)
+(
+  acc=0; i=b; loop(e-b, acc += h[i]*h[i]; i+=1;); acc;
+);
+
+// FIR dot on [beg,end)
+function fir_dot_slice(rb*, head, h*, beg, end)
+(
+  acc = 0;
+  i = beg; idx = (head - beg) & RINGMSK;
+  loop(end - beg,
+    acc += rb[idx] * h[i];
+    idx = (idx - 1) & RINGMSK;
+    i += 1;
+  );
+  acc;
+);
+
+// ---------- kernel load ----------
+function load_kernels()
+(
+  sr_i = floor(srate + 0.5);
+  sprintf(mFN_Z, "ATK/kernels/FOA/transforms/b-vhap/%i/%i/0100/BVHAP_Z.wav", sr_i, N_KER);
+
+  total = N_KER * 4;
+  memset(mImpZ, 0, total);
+  readKernelImpulseFromFile(mFN_Z, mImpZ);
+
+  deint_Zrow(mImpZ, N_KER, hZW, hZX, hZY);
+
+  support_thresh_do(hZW, N_KER); zw_beg = sup_b; zw_end = sup_e;
+  support_thresh_do(hZX, N_KER); zx_beg = sup_b; zx_end = sup_e;
+  support_thresh_do(hZY, N_KER); zy_beg = sup_b; zy_end = sup_e;
+
+  // simple L2 normaliser across all three lanes → unity-ish loudness
+  eZW = l2_energy(hZW, zw_beg, zw_end);
+  eZX = l2_energy(hZX, zx_beg, zx_end);
+  eZY = l2_energy(hZY, zy_beg, zy_end);
+  eTot = eZW + eZX + eZY; (eTot <= 0) ? (eTot = 1) : 0;
+  G_norm = 1 / sqrt(eTot);
+  // clamp to sane range
+  (G_norm < 0.25) ? (G_norm = 0.25) : 0;
+  (G_norm > 8.00) ? (G_norm = 8.00)  : 0;
+
+  // reset runtime
+  wr=0; memset(rbW,0,RINGSZ); memset(rbX,0,RINGSZ); memset(rbY,0,RINGSZ);
+);
+
+load_kernels();
+last_sr = srate;
+
+@block
+(last_sr != srate) ? ( last_sr = srate; load_kernels(); ) : 0;
+
+@sample
+amount = slider1 * 0.01;
+zsolo  = slider2|0;
+
+// inputs
+W_in = spl0; X_in = spl1; Y_in = spl2; Z_in = spl3;
+
+// donors into rings
+rbW[wr]=W_in; rbX[wr]=X_in; rbY[wr]=Y_in; head=wr; wr=(wr+1)&RINGMSK;
+
+// theory-faithful injection (no extras)
+zw = fir_dot_slice(rbW, head, hZW, zw_beg, zw_end);
+zx = fir_dot_slice(rbX, head, hZX, zx_beg, zx_end);
+zy = fir_dot_slice(rbY, head, hZY, zy_beg, zy_end);
+
+Z_injected = (zw + zx + zy) * (G_norm * amount);
+
+// outputs
+zsolo ? (
+  spl0 = 0; spl1 = 0; spl2 = 0; spl3 = Z_injected;
+) : (
+  spl0 = W_in; spl1 = X_in; spl2 = Y_in; spl3 = Z_in + Z_injected;
+);
+   

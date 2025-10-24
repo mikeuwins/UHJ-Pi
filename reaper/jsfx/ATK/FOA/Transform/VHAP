@@ -1,0 +1,206 @@
+desc:ATK VHAP (Field) - FOA Z Pseudo-Height (FIR, linear-phase, fixed taps)
+author: you (with ChatGPT)
+version: 1.0
+chans: 4
+in_pin:W in
+in_pin:X in
+in_pin:Y in
+in_pin:Z in
+out_pin:W out
+out_pin:X out
+out_pin:Y out
+out_pin:Z out
+
+/*
+ATK VHAP (Field) - FIR, linear-phase bands (theory-aligned, fixed tap length)
+
+- Linear-phase FIR band split via windowed-sinc LPs at f1 and f2.
+  Bands: low=LP(f1), mid=LP(f2)-LP(f1), high=input-LP(f2).
+- Z synthesis: inject mid/high from W/X/Y (decorrelated via tiny pure delays) into Z.
+- W/X/Y passthrough; Z augmented; low band preserved unchanged.
+- Fixed tap length (no user control) to ensure constant group delay and theory alignment.
+
+Channel order: FuMa W(1), X(2), Y(3), Z(4).
+*/
+
+slider1:50<0,100,1>Upward Preference (U)
+slider2:700<200,1500,1>Split f1 (Hz)
+slider3:4000<2500,8000,1>Split f2 (Hz)
+slider4:0.60<0,1,0.01>Max Z mid injection (beta_m cap)
+slider5:0.90<0,1,0.01>Max Z high injection (beta_h cap)
+slider6:0.20<0,2,0.01>Decor mid delay (ms)
+slider7:0.40<0,2,0.01>Decor high delay (ms)
+slider8:1.00<0,1,0.01>Dry/Wet (Z transform)
+
+@init
+twoPi = 2*$pi;
+TAPS = 97 ; // fixed odd length; linear-phase; group delay = (TAPS-1)/2 samples
+
+// ---- Memory layout (use mem[]) ----
+// Coefficients
+coeff1_base = 0;   // LP at f1
+coeff2_base = 4096;// LP at f2
+// Ring buffers per channel (same size, power-of-two >= TAPS)
+bufW_base = 8192;
+bufX_base = bufW_base + 8192;
+bufY_base = bufX_base + 8192;
+bufZ_base = bufY_base + 8192;
+// Small delay lines for mid/high decorrelation (X/Y separate)
+dXm_base = bufZ_base + 8192;
+dYm_base = dXm_base + 1024;
+dXh_base = dYm_base + 1024;
+dYh_base = dXh_base + 1024;
+
+// ptrs and masks
+buf_mask = 8192-1; // power-of-two mask for main ring buffers
+ptrW=ptrX=ptrY=ptrZ=0;
+
+// decor delay states
+dXm_ptr=0; dYm_ptr=0; dXh_ptr=0; dYh_ptr=0;
+dXm_mask=1024-1; dYm_mask=1024-1; dXh_mask=1024-1; dYh_mask=1024-1;
+
+// donor balance (constants for now)
+gW_mid_base = 0.60;
+gX_mid_base = 0.20;
+gY_mid_base = 0.20;
+gW_hi_base  = 0.65;
+gX_hi_base  = 0.175;
+gY_hi_base  = 0.175;
+
+function sinc(x) (
+  x == 0 ? 1 : sin($pi*x)/($pi*x);
+);
+
+function design_lp(fc, taps, base)
+(
+  taps |= 1; // ensure odd
+  M = taps - 1;
+  fn = fc / (srate/2);
+  i=0;
+  while (i < taps) (
+    n = i - M*0.5;
+    h = 2*fn * sinc(2*fn*n);       // ideal LP
+    w = 0.54 - 0.46*cos(twoPi*i/M);// Hamming window
+    mem[base + i] = h*w;
+    i += 1;
+  );
+  // normalize DC gain
+  sum=0; i=0; while (i<taps) ( sum += mem[base+i]; i+=1; );
+  sum != 0 ? (
+    g = 1.0/sum;
+    i=0; while (i<taps) ( mem[base+i] *= g; i+=1; );
+  );
+);
+
+function conv_dot(baseBuf, ptr, baseCoef, taps)
+(
+  acc = 0;
+  i=0;
+  while (i < taps) (
+    idx = (ptr - i) & buf_mask;
+    acc += mem[baseBuf + idx] * mem[baseCoef + i];
+    i += 1;
+  );
+  acc;
+);
+
+function push_ring(baseBuf, ptrRef, x)
+(
+  mem[baseBuf + ptrRef] = x;
+  ptrRef = (ptrRef + 1) & buf_mask;
+);
+
+// small integer delay lines for decor (linear phase)
+function delay_push(base, ptrRef, mask, x)
+(
+  mem[base + ptrRef] = x;
+  ptrRef = (ptrRef + 1) & mask;
+);
+
+function delay_read(base, ptr, mask, D)
+(
+  mem[base + ((ptr - D) & mask)];
+);
+
+function update_coeffs()
+(
+  design_lp(slider2, TAPS, coeff1_base);
+  design_lp(slider3, TAPS, coeff2_base);
+);
+
+update_coeffs();
+
+@slider
+// Upward preference mapping
+U = slider1/100;
+gamma = 1.2;
+beta_m = min(slider4,      pow(U, gamma));
+beta_h = min(slider5, 1.2* pow(U, gamma));
+
+// delays in samples (cap to buffer size-1)
+Dmid = floor(slider6 * 0.001 * srate);
+Dhi  = floor(slider7 * 0.001 * srate);
+Dmid < 0 ? Dmid = 0;
+Dhi  < 0 ? Dhi  = 0;
+Dmid > dXm_mask ? Dmid = dXm_mask : Dmid;
+Dhi  > dXh_mask ? Dhi  = dXh_mask : Dhi;
+
+// update FIRs if f1/f2 changed
+update_coeffs();
+
+@sample
+// read inputs
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// push into ring buffers
+push_ring(bufW_base, ptrW, W);
+push_ring(bufX_base, ptrX, X);
+push_ring(bufY_base, ptrY, Y);
+push_ring(bufZ_base, ptrZ, Z);
+
+// FIR low-passes
+lp1_W = conv_dot(bufW_base, ptrW, coeff1_base, TAPS);
+lp2_W = conv_dot(bufW_base, ptrW, coeff2_base, TAPS);
+lp1_X = conv_dot(bufX_base, ptrX, coeff1_base, TAPS);
+lp2_X = conv_dot(bufX_base, ptrX, coeff2_base, TAPS);
+lp1_Y = conv_dot(bufY_base, ptrY, coeff1_base, TAPS);
+lp2_Y = conv_dot(bufY_base, ptrY, coeff2_base, TAPS);
+lp1_Z = conv_dot(bufZ_base, ptrZ, coeff1_base, TAPS);
+lp2_Z = conv_dot(bufZ_base, ptrZ, coeff2_base, TAPS);
+
+// bands
+W_low = lp1_W; W_mid = lp2_W - lp1_W; W_hi = W - lp2_W;
+X_low = lp1_X; X_mid = lp2_X - lp1_X; X_hi = X - lp2_X;
+Y_low = lp1_Y; Y_mid = lp2_Y - lp1_Y; Y_hi = Y - lp2_Y;
+Z_low = lp1_Z; Z_mid = lp2_Z - lp1_Z; Z_hi = Z - lp2_Z;
+
+// decor delays (apply to X/Y mid/high bands)
+delay_push(dXm_base, dXm_ptr, dXm_mask, X_mid);
+delay_push(dYm_base, dYm_ptr, dYm_mask, Y_mid);
+delay_push(dXh_base, dXh_ptr, dXh_mask, X_hi);
+delay_push(dYh_base, dYh_ptr, dYh_mask, Y_hi);
+
+X_mid_d = delay_read(dXm_base, dXm_ptr, dXm_mask, Dmid);
+Y_mid_d = delay_read(dYm_base, dYm_ptr, dYm_mask, Dmid);
+X_hi_d  = delay_read(dXh_base, dXh_ptr, dXh_mask, Dhi);
+Y_hi_d  = delay_read(dYh_base, dYh_ptr, dYh_mask, Dhi);
+
+// Z synthesis
+Z_syn_mid = gW_mid_base*W_mid + gX_mid_base*X_mid_d + gY_mid_base*Y_mid_d;
+Z_syn_hi  = gW_hi_base *W_hi  + gX_hi_base *X_hi_d  + gY_hi_base *Y_hi_d;
+
+Z_mid_out = Z_mid + beta_m * Z_syn_mid;
+Z_hi_out  = Z_hi  + beta_h * Z_syn_hi;
+
+Z_new = Z_low + Z_mid_out + Z_hi_out;
+
+// dry/wet on Z only
+wet = slider8;
+Z_final = (1-wet)*Z + wet*Z_new;
+
+// outputs (W/X/Y passthrough)
+spl0 = W;
+spl1 = X;
+spl2 = Y;
+spl3 = Z_final;
+ 
