@@ -1819,6 +1819,10 @@ FoaDecoderKernel {
 		^super.newCopyArgs(\uhj, 0).initKernel(kernelSize, server, sampleRate, score);
 	}
 
+	*newPHJ { |kernelSize = 512, server = (Server.default), sampleRate, score|
+		^super.newCopyArgs(\phj, 0).initKernel(kernelSize, server, sampleRate, score);
+	}
+
 	initPath {
 		var kernelLibPath;
 		var decodersPath;
@@ -1860,16 +1864,23 @@ FoaDecoderKernel {
 		kernelInfo = [];
 
 		// constants
-		chans = 2;			// stereo kernel
+		// PHJ decoder outputs 4 channels (L,R,T,Q), not stereo
+		chans = if(this.kind == \phj, 4, 2);  // stereo kernel for UHJ/HRIR, 4-channel for PHJ
 
 		// init dirChannels (output channel (speaker) directions) and kernel sr
+		// PHJ decoder outputs 4 channels (L,R,T,Q), not stereo
 		if(this.kind == \uhj, {
 			dirChannels = [pi/6, (pi/6).neg];
 			sampleRateStr = "None"
 		}, {
-			dirChannels = [5/9 * pi, 5/9 * pi.neg];
-			if(sampleRateStr.isNil, {
-				sampleRateStr = server.sampleRate.asInteger.asString
+			if(this.kind == \phj, {
+				dirChannels = [inf, inf, inf, inf];  // 4-channel output (L,R,T,Q)
+				sampleRateStr = "None"
+			}, {
+				dirChannels = [5/9 * pi, 5/9 * pi.neg];
+				if(sampleRateStr.isNil, {
+					sampleRateStr = server.sampleRate.asInteger.asString
+				})
 			})
 		});
 
