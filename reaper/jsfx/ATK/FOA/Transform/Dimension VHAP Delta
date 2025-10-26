@@ -1,0 +1,382 @@
+/*
+ATK FOA Transform — Dimension
+FOA (FuMa) W,X,Y,Z → W',X',Y',Z' (feed to PHJ decoder)
+
+Unified build:
+  Stage 1 (pre): B-VHAP (Lee) — synthesise pseudo-height Z′ from W/X/Y via FIR (1024 taps)
+  Stage 2:       Dimension (your original) — Forward Preference (+HP) and Psycho Shelves (WXYZ, last)
+
+Kernels (macOS default paths):
+  ~/Library/Application Support/ATK/kernels/FOA/transforms/b-vhap/<fs>/1024/0100/BVHAP_Z.wav
+    Interleaved per tap: [ZW, ZX, ZY, Δ]  (Δ unused)
+
+Author: you (with ChatGPT)
+Version: 1.0-unified
+*/
+
+desc:ATK FOA Transform — Dimension 2
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W'
+out_pin:X'
+out_pin:Y'
+out_pin:Z'
+
+// -------------------- UI --------------------
+// (Added) VHAP pre-stage (on top)
+slider1:0.0<0.0,12.0,0.1>VHAP Trim (dB)
+slider2:100<0,100,1>VHAP Morph (%)
+slider3:0<0,1,1{VHAP Solo Off,VHAP Solo On}>VHAP Solo      
+
+// (Original Dimension controls)
+slider4:0.00<0.00,0.70,0.01>Forward Preference (k)
+slider5:180<80,400,1>Forward Pref HP (Hz)
+
+slider6:0<0,2,1{Off,2D (WXY),3D (WXYZ)}>Psycho Shelves Mode
+slider7:0<0,1,1{Off,On}>Gerzon Presets
+slider8:400<100,3000,10>Transition Freq (Hz)
+slider9:0<-6,6,0.1>LF Gain (dB)
+slider10:0<-6,6,0.1>HF Gain (dB)
+
+slider11:0<-18,18,0.1>Output Trim (dB)
+
+options:no_meter
+
+// =====================================================
+//                B-VHAP PRE-STAGE (TD 1024)
+// =====================================================
+@init
+// ----- B-VHAP FIR constants / buffers -----
+BV_N = 1024;
+BV_EPS = 0.000000001;
+
+// path + interleaved buffer
+bvFN = 1;
+bvImp = 65536*1;          // BV_N * 4 floats
+
+// deinterleaved lanes (four real lanes: Zw, Zx, Zy, ZΔ)
+bvZW = 65536*2;
+bvZX = 65536*3;
+bvZY = 65536*4;
+bvZD = 65536*5;  // ZΔ lane for original Z processing
+
+// supports [beg,end)
+bvZW_b=0; bvZW_e=1;
+bvZX_b=0; bvZX_e=1;
+bvZY_b=0; bvZY_e=1;
+bvZD_b=0; bvZD_e=1;
+
+// donor ring buffers (need Z buffer too for ZΔ lane)
+BV_RINGSZ = 8192; BV_RINGMSK = BV_RINGSZ - 1;
+bv_rbW = 65536*6;  // Allocate memory for ring buffers
+bv_rbX = 65536*7;
+bv_rbY = 65536*8;
+bv_rbZ = 65536*9;
+bv_wr=0; memset(bv_rbW,0,BV_RINGSZ); memset(bv_rbX,0,BV_RINGSZ); memset(bv_rbY,0,BV_RINGSZ); memset(bv_rbZ,0,BV_RINGSZ);
+
+// normaliser
+BV_G = 1.0;
+Z_injected_peak = 0;
+Z_original = 0;
+Z_after_vhap = 0;
+Z_delta_db_smooth = 0;
+
+// ----- DIMENSION constants / buffers -----
+// Niemitalo (+90°) constants
+h_d1 = 0.4021921162426;
+h_d2 = 0.8561710882420;
+h_d3 = 0.9722909545651;
+h_d4 = 0.9952884791278;
+
+// AP states for +90°(X)
+x90_s1_xm=0; x90_s1_ym=0;
+x90_s2_xm=0; x90_s2_ym=0;
+x90_s3_xm=0; x90_s3_ym=0;
+x90_s4_xm=0; x90_s4_ym=0;
+
+// FP high-pass (on injected term) state/coeffs
+inj_lp=0; inj_hp_a=0; inj_hp_b=1;
+
+// Simple tilt (one-pole split) states & coeffs
+simp_a=0; simp_b=1;
+w_lp=0; x_lp=0; y_lp=0; z_lp=0;
+
+// Denormal preventer
+tiny = 0.000000000000000000000001; // 1e-24 equivalent
+
+// small helpers (no pointers)
+function bv_deint(base, N, dstZW, dstZX, dstZY, dstZD)
+(
+  i=0; j=0;
+  loop(N,
+    mem[dstZW + i] = mem[base + j];     // ZW
+    mem[dstZX + i] = mem[base + j + 1]; // ZX
+    mem[dstZY + i] = mem[base + j + 2]; // ZY
+    mem[dstZD + i] = mem[base + j + 3]; // ZΔ
+    j += 4; i += 1;
+  );
+);
+
+bv_sup_b=0; bv_sup_e=1;
+function bv_support(base, N)
+(
+  bv_sup_b=N; bv_sup_e=-1; i=0;
+  loop(N,
+    (abs(mem[base+i]) > BV_EPS) ? (
+      (i<bv_sup_b) ? bv_sup_b=i : 0;
+      (i>bv_sup_e) ? bv_sup_e=i : 0;
+    ) : 0;
+    i += 1;
+  );
+  (bv_sup_e<0) ? (bv_sup_b=0; bv_sup_e=0) : 0;
+  bv_sup_e += 1; // end exclusive
+);
+
+function bv_l2(base,b,e)
+(
+  acc=0; i=b; loop(e-b, acc += mem[base+i]*mem[base+i]; i+=1;); acc;
+);
+
+function bv_firdot(rb*, head, hbase, beg, end_)
+(
+  acc=0; i=beg; idx=(head-beg)&BV_RINGMSK;
+  loop(end_-beg,
+    acc += rb[idx] * mem[hbase + i];
+    idx = (idx - 1) & BV_RINGMSK;
+    i += 1;
+  );
+  acc;
+);
+
+// load kernels
+function bv_load()
+(
+  fs_i = floor(srate+0.5);
+  sprintf(bvFN, "ATK/kernels/FOA/transforms/b-vhap/%i/%i/0100/BVHAP_Z.wav", fs_i, BV_N);
+  total = BV_N*4;
+  memset(bvImp, 0, total);
+  readKernelImpulseFromFile(bvFN, bvImp);
+
+  bv_deint(bvImp, BV_N, bvZW, bvZX, bvZY, bvZD);
+
+  bv_support(bvZW,BV_N); bvZW_b=bv_sup_b; bvZW_e=bv_sup_e;
+  bv_support(bvZX,BV_N); bvZX_b=bv_sup_b; bvZX_e=bv_sup_e;
+  bv_support(bvZY,BV_N); bvZY_b=bv_sup_b; bvZY_e=bv_sup_e;
+  bv_support(bvZD,BV_N); bvZD_b=bv_sup_b; bvZD_e=bv_sup_e;
+
+  // Normalization: include all four lanes as per B-VHAP spec
+  eZW = bv_l2(bvZW,bvZW_b,bvZW_e);
+  eZX = bv_l2(bvZX,bvZX_b,bvZX_e);
+  eZY = bv_l2(bvZY,bvZY_b,bvZY_e);
+  eZD = bv_l2(bvZD,bvZD_b,bvZD_e);
+  eTot = eZW + eZX + eZY + eZD; (eTot<=0) ? (eTot=1):0;
+  BV_G = 1/sqrt(eTot);
+  (BV_G<0.25) ? BV_G=0.25 : 0;
+  (BV_G>8.0)  ? BV_G=8.0  : 0;
+
+  bv_wr=0; memset(bv_rbW,0,BV_RINGSZ); memset(bv_rbX,0,BV_RINGSZ); memset(bv_rbY,0,BV_RINGSZ); memset(bv_rbZ,0,BV_RINGSZ);
+);
+
+bv_load(); bv_last_sr = srate;
+
+@block
+(bv_last_sr != srate) ? ( bv_last_sr = srate; bv_load(); ) : 0;
+
+@gfx 400 200
+gfx_clear = 0x000000;
+gfx_setfont(1, "Arial", 12);
+
+// Debug info
+gfx_set(1, 1, 1, 1);
+gfx_x = 10; gfx_y = 10;
+gfx_printf("BV_G: %.3f", BV_G);
+gfx_x = 10; gfx_y = 25;
+gfx_printf("Trim: %.2f, Morph: %.2f", vhap_trim, vhap_morph);
+gfx_x = 10; gfx_y = 40;
+gfx_printf("Support W: %d-%d, X: %d-%d, Y: %d-%d", bvZW_b, bvZW_e, bvZX_b, bvZX_e, bvZY_b, bvZY_e);
+gfx_x = 10; gfx_y = 55;
+gfx_printf("Energy W: %.6f, X: %.6f, Y: %.6f", eZW, eZX, eZY);
+gfx_x = 10; gfx_y = 70;
+gfx_printf("FIR out: zw=%.6f, zx=%.6f, zy=%.6f", bv_zw, bv_zx, bv_zy);
+gfx_x = 10; gfx_y = 85;
+gfx_printf("Z': %.6f, Z_orig: %.6f, Delta: %.6f", Z_prime_full, Z_original, Z_delta);
+gfx_x = 10; gfx_y = 115;
+gfx_printf("Solo: %d", vhap_solo);
+
+// Simple meter
+meter_w = gfx_w - 20;
+meter_h = 20;
+meter_x = 10;
+meter_y = 120;
+z_scaled = min(1, abs(Z_prime_full) * 1000);  // Scale up for visibility
+
+// Draw background
+gfx_set(0.3, 0.3, 0.3, 1.0);
+gfx_rect(meter_x, meter_y, meter_w, meter_h);
+
+// Draw bar
+gfx_set(0,1,1,1);
+gfx_rect(meter_x, meter_y, meter_w * z_scaled, meter_h);
+
+gfx_x = 10; gfx_y = 150;
+gfx_printf("Z' level: %.6f", Z_prime_full);
+
+
+
+// =====================================================
+//                  DIMENSION  (ORIGINAL)
+// =====================================================
+
+// ---------- Sliders ----------
+@slider
+// (VHAP)
+vhap_trim   = exp(log(10)*(slider1/20));
+vhap_morph  = slider2 * 0.01;
+vhap_solo   = slider3|0;
+
+// Forward Preference
+k    = slider4;
+fpHP = max(10, min(slider5, srate*0.333));
+
+// Shelves / mode / presets / gains
+shelves_mode = slider6|0;       // 0=Off, 1=2D, 2=3D
+psy_on       = slider7|0;
+tf           = max(10, min(slider8, srate*0.333));
+gLF          = slider9;
+gHF          = slider10;
+
+// Derived flags
+s_on = shelves_mode > 0;
+dim3 = shelves_mode == 2;
+
+// Output trim
+out_lin = exp(log(10)*(slider11/20));
+
+// VHAP is always enabled (internal state)
+vhap_enable = 1;
+
+// FP HP coeffs
+inj_hp_a = exp(-2*$pi*fpHP/srate);
+inj_hp_b = 1 - inj_hp_a;
+
+// Psycho presets (per-channel dB offsets)
+psyW_HF=0; psyX_HF=0; psyY_HF=0; psyZ_HF=0;
+psyW_LF=0; psyX_LF=0; psyY_LF=0; psyZ_LF=0;
+
+psy_on ? (
+  // 2D vs 3D HF targets (Gerzon-ish)
+  psyW_HF = dim3 ? 3.01 : 1.76;
+  psyX_HF = dim3 ? 1.76 : -1.25;
+  psyY_HF = dim3 ? 1.76 : -1.25;
+  psyZ_HF = dim3 ? 1.76 : 0.00;
+  // gentle counter-LF to keep overall power closer
+  psyW_LF = -psyW_HF*0.6;
+  psyX_LF = -psyX_HF*0.6;
+  psyY_LF = -psyY_HF*0.6;
+  psyZ_LF = -psyZ_HF*0.6;
+);
+
+// Per-channel dB targets (global + preset offsets)
+gLF_W=gLF+psyW_LF; gHF_W=gHF+psyW_HF;
+gLF_X=gLF+psyX_LF; gHF_X=gHF+psyX_HF;
+gLF_Y=gLF+psyY_LF; gHF_Y=gHF+psyY_HF;
+gLF_Z=gLF+psyZ_LF; gHF_Z=gHF+psyZ_HF;
+
+// Tilt split coeffs
+simp_a = exp(-2*$pi*tf/srate);
+simp_b = 1 - simp_a;
+
+// ---------- Audio ----------
+@sample
+// --- Inputs ---
+W=spl0; X=spl1; Y=spl2; Z=spl3;
+
+Z_original = Z;
+// --- Stage 1: B-VHAP injection (pre) ---
+// Fill ring buffers for all four lanes: W, X, Y, Z
+bv_rbW[bv_wr]=W; bv_rbX[bv_wr]=X; bv_rbY[bv_wr]=Y; bv_rbZ[bv_wr]=Z; bv_head=bv_wr; bv_wr=(bv_wr+1)&BV_RINGMSK;
+
+// Convolve with all four lanes
+bv_zw = bv_firdot(bv_rbW, bv_head, bvZW, bvZW_b, bvZW_e);
+bv_zx = bv_firdot(bv_rbX, bv_head, bvZX, bvZX_b, bvZX_e);
+bv_zy = bv_firdot(bv_rbY, bv_head, bvZY, bvZY_b, bvZY_e);
+bv_zd = bv_firdot(bv_rbZ, bv_head, bvZD, bvZD_b, bvZD_e);
+
+// Synthesize Z' from all four lanes
+Z_prime = (bv_zw + bv_zx + bv_zy + bv_zd) * (BV_G * vhap_enable);
+(abs(Z_prime) > Z_injected_peak) ? (Z_injected_peak = abs(Z_prime)) : 0;
+
+// Synthesize Z' from all four lanes at full level with moderate boost
+Z_prime_full = (bv_zw + bv_zx + bv_zy + bv_zd) * (BV_G * vhap_enable * 3.0);  // 9dB boost for audibility
+
+// Simplified B-VHAP: Z_out = Z + trim × morph × (Z' - Z)
+Z_delta = Z_prime_full - Z_original;
+Z_morph = Z_original + vhap_trim * vhap_morph * Z_delta;
+
+// VHAP Solo modes
+vhap_solo ? (
+  // Solo: output synthesized Z' with trim applied (no morph - that's for blending)
+  Z_trimmed = Z_prime_full * vhap_trim;
+  Z_after_vhap = Z_trimmed;  // For meter calculation
+  // Solo: output trimmed Z' only in Z channel, silence others
+  solo_clipped = max(-0.8, min(0.8, Z_trimmed));  // Hard clip
+  spl0=0; spl1=0; spl2=0; spl3=solo_clipped;
+) : (
+  // Normal mode: use morphed Z
+  Z = Z_morph;
+  Z_after_vhap = Z;
+
+  // --- Stage 2: Dimension (original, unchanged) ---
+
+  // +90°(X) via 4× first-order all-pass (inline)
+  x90 = X;
+  tmp = -h_d1*x90 + x90_s1_xm + h_d1*x90_s1_ym; x90_s1_xm=x90; x90_s1_ym=tmp; x90=tmp + tiny;
+  tmp = -h_d2*x90 + x90_s2_xm + h_d2*x90_s2_ym; x90_s2_xm=x90; x90_s2_ym=tmp; x90=tmp + tiny;
+  tmp = -h_d3*x90 + x90_s3_xm + h_d3*x90_s3_ym; x90_s3_xm=x90; x90_s3_ym=tmp; x90=tmp + tiny;
+  tmp = -h_d4*x90 + x90_s4_xm + h_d4*x90_s4_ym; x90_s4_xm=x90; x90_s4_ym=tmp; x90=tmp + tiny;
+
+  // HP on injected term (only), then inject into Y
+  inj_lp = inj_hp_a*inj_lp + inj_hp_b*x90;
+  inj = (x90 - inj_lp) * k;
+
+  Wp=W; Xp=X; Yp=Y+inj; Zp=Z;
+
+  // SIMPLE TILT shelves (first-order split), per channel
+  gLF_lin_W = exp(log(10)*(gLF_W/20)); gHF_lin_W = exp(log(10)*(gHF_W/20));
+  gLF_lin_X = exp(log(10)*(gLF_X/20)); gHF_lin_X = exp(log(10)*(gHF_X/20));
+  gLF_lin_Y = exp(log(10)*(gLF_Y/20)); gHF_lin_Y = exp(log(10)*(gHF_Y/20));
+  gLF_lin_Z = exp(log(10)*(gLF_Z/20)); gHF_lin_Z = exp(log(10)*(gHF_Z/20));
+
+  s_on ? (
+    // W
+    w_lp = simp_a*w_lp + simp_b*Wp;
+    Wp   = gLF_lin_W*w_lp + gHF_lin_W*(Wp - w_lp);
+    // X
+    x_lp = simp_a*x_lp + simp_b*Xp;
+    Xp   = gLF_lin_X*x_lp + gHF_lin_X*(Xp - x_lp);
+    // Y
+    y_lp = simp_a*y_lp + simp_b*Yp;
+    Yp   = gLF_lin_Y*y_lp + gHF_lin_Y*(Yp - y_lp);
+    // Z (3D only)
+    dim3 ? (
+      z_lp = simp_a*z_lp + simp_b*Zp;
+      Zp   = gLF_lin_Z*z_lp + gHF_lin_Z*(Zp - z_lp);
+    );
+  );
+
+  // Output (with trim)
+  spl0 = Wp * out_lin;
+  spl1 = Xp * out_lin;
+  spl2 = Yp * out_lin;
+  spl3 = Zp * out_lin;
+  
+  // Capture final Z for meter (after all processing)
+  Z_final = spl3;
+);
+
