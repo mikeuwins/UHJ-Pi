@@ -1,0 +1,166 @@
+TITLE:: FoaVHAP
+summary:: B-Format Virtual Hemispherical Amplitude Panning Transform
+categories:: UGens>Ambisonic
+related:: Classes/FoaEncode, Classes/FoaDecode, Classes/FoaRTT
+
+DESCRIPTION::
+FoaVHAP is a B-format ambisonic transform that synthesizes or enhances the height channel (Z) using Virtual Hemispherical Amplitude Panning (VHAP). It reconstructs plausible height information from the horizontal components (W, X, Y) and optionally blends it with the existing Z channel.
+
+The transform is particularly useful for:
+- Enhancing B-format signals derived from UHJ (where Z was discarded)
+- Adding perceptually plausible height to horizontal-only recordings
+- Creating vintage-style height enhancement effects
+
+The processing uses FIR convolution with psychoacoustically-designed kernels that inject quadrature band-passed height components, primarily in the 900-4000Hz and 4000-12000Hz ranges.
+
+CLASSMETHODS::
+
+METHOD:: ar
+Main audio rate processing method.
+
+ARGUMENT:: input
+A 4-element array containing B-format components [W, X, Y, Z].
+
+ARGUMENT:: trim
+Height synthesis level trim in dB (-12.0 to +12.0, default 0).
+Allows matching the synthesized Z' level to the original Z level.
+
+ARGUMENT:: morph
+Morph amount between original and synthesized Z (0.0 to 1.0, default 1).
+- 0.0 = original Z only
+- 1.0 = full blend with synthesized Z'
+- Values between create a controlled blend
+
+ARGUMENT:: solo
+Solo mode for auditioning (0 or 1, default 0).
+- 0 = normal mode (W/X/Y passthrough, processed Z output)
+- 1 = solo mode (synthesized Z' routed to W and Z channels for monitoring)
+
+ARGUMENT:: partitionSize
+FIR partition size for convolution (256, 512, 1024, 2048, 4096, or 8192, default 1024).
+Larger sizes are more efficient but have higher latency.
+
+returns:: A 4-element array of processed B-format signals [W, X, Y, Z].
+
+METHOD:: balanced
+Convenience method with balanced preset configuration.
+
+ARGUMENT:: input
+A 4-element array containing B-format components [W, X, Y, Z].
+
+ARGUMENT:: trim
+Height synthesis level trim in dB (-12.0 to +12.0, default 0).
+
+ARGUMENT:: morph
+Morph amount (0.0 to 1.0, default 0.8 for balanced enhancement).
+
+returns:: A 4-element array of processed B-format signals with balanced settings.
+
+METHOD:: cleanup
+Cleans up global kernel buffers. Call this when done using FoaVHAP to free memory.
+
+EXAMPLES::
+
+code::
+// Basic VHAP enhancement
+(
+{
+    var input, enhanced;
+    
+    // Create test B-format signal (horizontal plane only)
+    input = [
+        WhiteNoise.ar(0.1),  // W
+        SinOsc.ar(440) * 0.1,  // X (front-back)
+        SinOsc.ar(880) * 0.1,  // Y (left-right)
+        0  // Z (no height)
+    ];
+    
+    // Apply VHAP enhancement
+    enhanced = FoaVHAP.ar(input, trim: 0, morph: 0.8);
+    
+    enhanced;
+}.play;
+)
+
+// Solo mode for auditioning synthesized height
+(
+{
+    var input, solo;
+    
+    input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        0
+    ];
+    
+    // Solo the synthesized Z' component
+    solo = FoaVHAP.ar(input, trim: 3, morph: 1, solo: 1);
+    
+    solo;
+}.play;
+)
+
+// Integration with ATK encoding/decoding chain
+(
+{
+    var stereo, encoded, enhanced, decoded;
+    
+    // Start with stereo source
+    stereo = [SinOsc.ar([440, 880]) * 0.1].flatten;
+    
+    // Encode to B-format using UHJ
+    encoded = FoaEncode.ar(stereo, FoaEncoderKernel.newUHJ);
+    
+    // Apply VHAP enhancement
+    enhanced = FoaVHAP.balanced(encoded, trim: 0);
+    
+    // Decode to binaural
+    decoded = FoaDecode.ar(enhanced, FoaDecoderKernel.newListen(1053));
+    
+    decoded;
+}.play;
+)
+
+// Parameter control
+(
+var synth = {
+    var input, output;
+    
+    input = [
+        WhiteNoise.ar(0.05),
+        SinOsc.ar(\freq.kr(440)) * 0.05,
+        SinOsc.ar(\freq.kr(880)) * 0.05,
+        0
+    ];
+    
+    output = FoaVHAP.ar(
+        input, 
+        trim: \trim.kr(0),
+        morph: \morph.kr(0.8),
+        solo: \solo.kr(0)
+    );
+    
+    output;
+}.play;
+
+// Control parameters
+synth.set(\trim, 3);     // Boost synthesized height
+synth.set(\morph, 1.0);  // Full blend
+synth.set(\solo, 1);     // Solo mode
+synth.set(\solo, 0);     // Back to normal
+)
+
+// Clean up when done
+FoaVHAP.cleanup;
+::
+
+NOTES::
+- Requires ATK kernels to be installed in the standard ATK kernel directory
+- The BVHAP_Z.wav kernel files must be present for the target sample rate and partition size
+- Uses global buffers for efficiency - call cleanup() when done to free memory
+- Solo mode is intended for monitoring/QA purposes only
+- The transform maintains FOA orthogonality by keeping W, X, Y unchanged
+
+IMPLEMENTATION::
+This implementation uses ATK's multi-channel kernel approach with PartConv channel indexing to properly access the 4-lane BVHAP_Z.wav kernel. Each B-format input channel (W, X, Y, Z) is convolved with its corresponding kernel lane (Zw, Zx, Zy, ZΔ) and the results are summed to synthesize the height channel Z'. This provides the full psychoacoustic benefits of the complete B-VHAP algorithm as implemented in the JSFX version.
