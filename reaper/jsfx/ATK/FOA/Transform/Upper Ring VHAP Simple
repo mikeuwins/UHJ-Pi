@@ -1,0 +1,204 @@
+/*
+ATK FOA Transform — Upper Ring VHAP Simple
+Speaker-domain VHAP with simplified, outcome-led controls.
+
+- Place after Periphonic decode (upper 1–4, lower 5–8), before re-encode
+- Moves airy content upward; preserves body on the floor
+
+Author: you (with ChatGPT)
+Version: 1.0
+*/
+
+desc:ATK Upper Ring VHAP Simple
+
+import ../../libraries/atk/atk.jsfx-inc
+
+// 8-channel focus (first two rings). Extra channels pass through.
+in_pin:Speaker 1
+in_pin:Speaker 2
+in_pin:Speaker 3
+in_pin:Speaker 4
+in_pin:Speaker 5
+in_pin:Speaker 6
+in_pin:Speaker 7
+in_pin:Speaker 8
+out_pin:Speaker 1
+out_pin:Speaker 2
+out_pin:Speaker 3
+out_pin:Speaker 4
+out_pin:Speaker 5
+out_pin:Speaker 6
+out_pin:Speaker 7
+out_pin:Speaker 8
+
+// ---------------- User-friendly UI ----------------
+slider1:50<0,100,1>Height Amount (%)
+slider2:0<-100,100,1>Airiness Tilt
+slider3:50<0,100,1>Height Morph (%)
+slider4:0<0,1,1{Solo Off,Solo Injected}>Solo Injected
+
+options:no_meter
+
+// ---------------- Constants/State ----------------
+@init
+pi2 = 2*$pi;
+tiny = 0.000000000000001;
+// simple soft limiter for safety at higher gains
+function softlim(x) (
+  // smooth limiter x/(1+|x|)
+  ax = x; (ax < 0) ? ax = -ax : 0;
+  x/(1 + ax);
+);
+
+// Splits (biquad approx)
+F1 = 700;   // LP1 cutoff
+F2 = 4000;  // LP2 cutoff
+Qn = 0.7071;
+
+// HPF for synthesized paths
+HPF_fc = 850;
+
+// Decor per lower channel (mid, hi)
+DLEN = 2048; DMASK = DLEN-1;
+
+// Coeffs
+function biquad_lp_set(fc, Q, b0* b1* b2* a1* a2*) (
+  w = pi2*fc/srate; sn = sin(w); cs = cos(w);
+  alpha = sn/(2*Q);
+  b0t = (1-cs)*0.5; b1t = 1-cs; b2t = (1-cs)*0.5;
+  a0t = 1+alpha; a1t = -2*cs; a2t = 1-alpha;
+  b0 = b0t/a0t; b1 = b1t/a0t; b2 = b2t/a0t; a1 = a1t/a0t; a2 = a2t/a0t;
+);
+
+function hpf1_set(fc, a1* b0* b1*) (
+  a = exp(-2*$pi*fc/srate);
+  b0 = (1+a)*0.5; b1 = -(1+a)*0.5; a1 = a;
+);
+
+biquad_lp_set(F1, Qn, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2);
+biquad_lp_set(F2, Qn, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2);
+hpf1_set(HPF_fc, hpa1, hpb0, hpb1);
+
+// States
+kMaxCh = 32;
+state_base = 65536*1; memset(state_base, 0, kMaxCh*8);
+hpf_state = 65536*2; memset(hpf_state, 0, 4*4);
+dly_ptr = 65536*3; memset(dly_ptr, 0, 8*2);
+dly_buf = 65536*4; memset(dly_buf, 0, 8*DLEN*2);
+
+warm = 256;
+
+function biquad_proc(x, b0,b1,b2,a1,a2, ch, filt) (
+  idx = filt*(kMaxCh*4) + ch*4;
+  x1 = mem[state_base+idx+0]; x2 = mem[state_base+idx+1];
+  y1 = mem[state_base+idx+2]; y2 = mem[state_base+idx+3];
+  x += tiny; x -= tiny;
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  mem[state_base+idx+1]=x1; mem[state_base+idx+0]=x;
+  mem[state_base+idx+3]=y1; mem[state_base+idx+2]=y;
+  y;
+);
+
+function hpf1_proc(x, up_ch, path) (
+  base = hpf_state + up_ch*4 + path*2;
+  x1 = mem[base+0]; y1 = mem[base+1];
+  x += tiny; x -= tiny;
+  y = hpb0*x + hpb1*x1 + hpa1*y1;
+  mem[base+0] = x; mem[base+1] = y; y;
+);
+
+function dpush(ch, path, v) (
+  ptr = mem[dly_ptr + ch*2 + path];
+  v += tiny; v -= tiny;
+  mem[dly_buf + ch*DLEN*2 + path*DLEN + ptr] = v;
+  ptr = (ptr + 1) & DMASK;
+  mem[dly_ptr + ch*2 + path] = ptr;
+  ptr;
+);
+
+function dread(ch, path, D) (
+  ptr = mem[dly_ptr + ch*2 + path];
+  mem[dly_buf + ch*DLEN*2 + path*DLEN + ((ptr - 1 - D) & DMASK)];
+);
+
+// ---------------- Slider mapping ----------------
+@slider
+U = slider1/100; // 0..1
+// Airiness tilt: -100 (Body) to +100 (Air)
+air = slider2/100; // -1..+1
+
+// Map to caps: emphasize mid for Body, hi for Air
+base_mid_cap = 0.15; base_hi_cap = 0.40;
+// tilt range ±33%
+mid_cap = base_mid_cap * (1 + (-air)*0.33);
+hi_cap  = base_hi_cap  * (1 + ( air)*0.33);
+(mid_cap < 0) ? mid_cap = 0 : 0; (hi_cap < 0) ? hi_cap = 0 : 0;
+
+// Gentle U^1.2 curve
+gamma = 1.2;
+beta_m = min(mid_cap, pow(U, gamma));
+beta_h = min(hi_cap,  1.2*pow(U, gamma));
+
+// Decor (fixed per recipe)
+Dmid = floor(0.20 * 0.001 * srate + 0.5); // 0.2 ms
+Dhi  = floor(0.40 * 0.001 * srate + 0.5); // 0.4 ms
+(Dmid < 0) ? Dmid = 0 : 0; (Dhi < 0) ? Dhi = 0 : 0;
+(Dmid > DMASK) ? Dmid = DMASK : 0; (Dhi > DMASK) ? Dhi = DMASK : 0;
+
+height_morph = slider3/100; // dry/wet blend
+solo_injected = slider4|0;
+
+// ---------------- Sample ----------------
+@sample
+// copy first 8
+i=0; loop(min(num_ch,8), mem[65536*10+i]=spl(i); i+=1;);
+
+col=0; loop(4,
+  up = col; dn = col+4;
+  up_in = (up < num_ch) ? mem[65536*10+up] : 0;
+  dn_in = (dn < num_ch) ? mem[65536*10+dn] : 0;
+
+  // band-split
+  up_l1 = biquad_proc(up_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, up, 0);
+  up_l2 = biquad_proc(up_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, up, 1);
+  up_low = up_l1; up_mid = up_l2 - up_l1; up_hi = up_in - up_l2;
+
+  dn_l1 = biquad_proc(dn_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, dn, 0);
+  dn_l2 = biquad_proc(dn_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, dn, 1);
+  dn_low = dn_l1; dn_mid = dn_l2 - dn_l1; dn_hi = dn_in - dn_l2;
+
+  // decor
+  (warm>0) ? (Dm=0; Dh=0; warm-=1;) : (Dm=Dmid; Dh=Dhi;);
+  dpush(dn,0,dn_mid); dpush(dn,1,dn_hi);
+  dn_mid_d = dread(dn,0,Dm);
+  dn_hi_d  = dread(dn,1,Dh);
+
+  // synth (HPF only on sends)
+  up_idx = up;
+  syn_mid = hpf1_proc(dn_mid_d, up_idx, 0);
+  syn_hi  = hpf1_proc(dn_hi_d,  up_idx, 1);
+
+  inj = beta_m * syn_mid + beta_h * syn_hi;
+
+  // Add injected to original with gain boost to make it audible
+  up_dry = up_low + up_mid + up_hi;
+  inj_gain = 3.0; // 3x boost on injected content
+  up_out = up_dry + (inj * height_morph * inj_gain);
+
+  (solo_injected) ? (
+    spl(up) = inj * height_morph * 1.77827941; // +5 dB
+    spl(dn) = 0;
+  ) : (
+    spl(up) = up_out;
+    // complementary reduction below (pre-HPF donors)
+    rem_mid = beta_m * dn_mid_d;
+    rem_hi  = beta_h * dn_hi_d;
+    dn_out = dn_low + (dn_mid - rem_mid) + (dn_hi - rem_hi);
+    spl(dn) = dn_out;
+  );
+
+  col += 1;
+);
+
+// passthrough rest
+c=8; loop(max(0, num_ch-8), spl(c)=spl(c); c+=1;);
