@@ -1,0 +1,349 @@
+/*
+ATK FOA Transform — Upper Ring VHAP
+Adapted from "VHAP No Kernel" - proven working approach
+Process upper ring (1-4) using lower ring (5-8) as donors
+
+Based on working B-format implementation:
+- Uses proven biquad_proc functions
+- Same band split frequencies (700 Hz, 4000 Hz)
+- Same decorrelation delay approach
+- Adapted for speaker domain: lower ring = donors, upper ring = enhanced
+
+Author: you (with ChatGPT)
+Version: 8.0 - Based on Working Implementation
+*/
+
+desc:ATK Upper Ring VHAP
+
+import ../../libraries/atk/atk.jsfx-inc
+
+// Multi-channel: up to 32 channels
+in_pin:Speaker 1
+in_pin:Speaker 2
+in_pin:Speaker 3
+in_pin:Speaker 4
+in_pin:Speaker 5
+in_pin:Speaker 6
+in_pin:Speaker 7
+in_pin:Speaker 8
+in_pin:Speaker 9
+in_pin:Speaker 10
+in_pin:Speaker 11
+in_pin:Speaker 12
+in_pin:Speaker 13
+in_pin:Speaker 14
+in_pin:Speaker 15
+in_pin:Speaker 16
+in_pin:Speaker 17
+in_pin:Speaker 18
+in_pin:Speaker 19
+in_pin:Speaker 20
+in_pin:Speaker 21
+in_pin:Speaker 22
+in_pin:Speaker 23
+in_pin:Speaker 24
+in_pin:Speaker 25
+in_pin:Speaker 26
+in_pin:Speaker 27
+in_pin:Speaker 28
+in_pin:Speaker 29
+in_pin:Speaker 30
+in_pin:Speaker 31
+in_pin:Speaker 32
+
+out_pin:Speaker 1
+out_pin:Speaker 2
+out_pin:Speaker 3
+out_pin:Speaker 4
+out_pin:Speaker 5
+out_pin:Speaker 6
+out_pin:Speaker 7
+out_pin:Speaker 8
+out_pin:Speaker 9
+out_pin:Speaker 10
+out_pin:Speaker 11
+out_pin:Speaker 12
+out_pin:Speaker 13
+out_pin:Speaker 14
+out_pin:Speaker 15
+out_pin:Speaker 16
+out_pin:Speaker 17
+out_pin:Speaker 18
+out_pin:Speaker 19
+out_pin:Speaker 20
+out_pin:Speaker 21
+out_pin:Speaker 22
+out_pin:Speaker 23
+out_pin:Speaker 24
+out_pin:Speaker 25
+out_pin:Speaker 26
+out_pin:Speaker 27
+out_pin:Speaker 28
+out_pin:Speaker 29
+out_pin:Speaker 30
+out_pin:Speaker 31
+out_pin:Speaker 32
+
+// -------------------- UI --------------------
+slider1:50<0,100,1>Height send (%)
+slider2:0.15<0,0.30,0.01>Mid height cap
+slider3:0.40<0,0.60,0.01>High height cap
+slider4:0.20<0,0.80,0.01>Mid diffusion (ms)
+slider5:0.40<0,1.00,0.01>High diffusion (ms)
+slider6:0<-6,6,0.1>Upper Ring Gain (dB)
+slider7:0<0,1,1{VHAP Solo Off,VHAP Solo On}>VHAP Solo
+
+options:no_meter
+
+// =====================================================
+//    VHAP: Adapted from working "No Kernel" implementation
+// =====================================================
+@init
+pi2 = 2*$pi;
+tiny = 0.000000000000001;
+kMaxCh = 32;
+kUpperCh = 4; // Process channels 1-4
+
+// Fixed split frequencies (from working implementation)
+F1 = 700;    // LP1 cutoff
+F2 = 4000;   // LP2 cutoff
+Qn = 0.7071; // Butterworth Q
+
+// Donor balance (use equal weighting for lower ring)
+gW_mid = 0.25;  gX_mid = 0.25;  gY_mid = 0.25;  gZ_mid = 0.25; // Equal for 4 channels
+gW_hi  = 0.25;  gX_hi  = 0.25;  gY_hi  = 0.25;  gZ_hi  = 0.25;
+
+// One-pole HPF on synthesised paths
+HPF_fc = 850;
+
+// Decor delay buffers (per lower channel)
+DLEN = 2048; DMASK = DLEN - 1;
+
+// LP biquad coeffs (shared)
+function biquad_lp_set(fc, Q, 
+  b0_out* b1_out* b2_out* a1_out* a2_out*)
+(
+  w = pi2*fc/srate; sn = sin(w); cs = cos(w);
+  alpha = sn/(2*Q);
+  b0 = (1 - cs) * 0.5;
+  b1 = 1 - cs;
+  b2 = (1 - cs) * 0.5;
+  a0 = 1 + alpha;
+  a1 = -2*cs;
+  a2 = 1 - alpha;
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+  b0_out = b0; b1_out = b1; b2_out = b2; a1_out = a1; a2_out = a2;
+);
+
+// One-pole HPF
+function hpf1_set(fc, a1_out* b0_out* b1_out*)
+(
+  a = exp(-2*$pi*fc/srate);
+  b0 = (1 + a) * 0.5;
+  b1 = -(1 + a) * 0.5;
+  a1 = a;
+  a1_out = a; b0_out = b0; b1_out = b1;
+);
+
+// Initialize coefficients
+biquad_lp_set(F1, Qn, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2);
+biquad_lp_set(F2, Qn, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2);
+hpf1_set(HPF_fc, hpa1, hpb0, hpb1);
+
+// States: LP1/LP2 per channel (upper + lower)
+// Storage: [x1, x2, y1, y2] per channel per filter
+state_base = 65536*1; // 4 states × 2 filters × kMaxCh
+memset(state_base, 0, kMaxCh * 8);
+
+// HPF states for synthesized paths (per upper channel)
+hpf_state_base = 65536*2; // 2 states × 2 paths × kUpperCh
+memset(hpf_state_base, 0, kUpperCh * 4);
+
+// Decor delay pointers and buffers (per lower channel)
+dly_ptr_base = 65536*3; // kMaxCh pointers
+dly_buf_base = 65536*4; // DLEN × kMaxCh × 2 (mid + hi)
+memset(dly_ptr_base, 0, kMaxCh);
+memset(dly_buf_base, 0, kMaxCh * DLEN * 2);
+
+// Warm-up counter
+warm = 512;
+
+// Biquad processor (inline style from working implementation)
+function biquad_proc(x, b0,b1,b2,a1,a2, ch_idx, filter_idx)
+(
+  state_idx = filter_idx * (kMaxCh * 4) + ch_idx * 4;
+  x1 = mem[state_base + state_idx + 0];
+  x2 = mem[state_base + state_idx + 1];
+  y1 = mem[state_base + state_idx + 2];
+  y2 = mem[state_base + state_idx + 3];
+  
+  x += tiny; x -= tiny;
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  
+  mem[state_base + state_idx + 1] = x1;
+  mem[state_base + state_idx + 0] = x;
+  mem[state_base + state_idx + 3] = y1;
+  mem[state_base + state_idx + 2] = y;
+  y;
+);
+
+// HPF processor
+function hpf1_proc(x, ch_idx, path_idx)
+(
+  state_idx = path_idx * (kUpperCh * 2) + ch_idx * 2;
+  x1 = mem[hpf_state_base + state_idx + 0];
+  y1 = mem[hpf_state_base + state_idx + 1];
+  
+  x += tiny; x -= tiny;
+  y = hpb0*x + hpb1*x1 + hpa1*y1;
+  
+  mem[hpf_state_base + state_idx + 0] = x;
+  mem[hpf_state_base + state_idx + 1] = y;
+  y;
+);
+
+// Decor delay push
+function dpush(ch_idx, path_idx, v)
+(
+  buf_base = dly_buf_base + (ch_idx * DLEN * 2) + (path_idx * DLEN);
+  ptr = mem[dly_ptr_base + ch_idx * 2 + path_idx];
+  v += tiny; v -= tiny;
+  mem[buf_base + ptr] = v;
+  new_ptr = (ptr + 1) & DMASK;
+  mem[dly_ptr_base + ch_idx * 2 + path_idx] = new_ptr;
+  new_ptr;
+);
+
+// Decor delay read
+function dread(ch_idx, path_idx, D)
+(
+  buf_base = dly_buf_base + (ch_idx * DLEN * 2) + (path_idx * DLEN);
+  ptr = mem[dly_ptr_base + ch_idx * 2 + path_idx];
+  mem[buf_base + ((ptr - 1 - D) & DMASK)];
+);
+
+@slider
+U = slider1 / 100.0;
+gamma = 1.2;
+beta_m_cap = slider2;
+beta_h_cap = slider3;
+beta_m = min(beta_m_cap, pow(U, gamma));
+beta_h = min(beta_h_cap, 1.2 * pow(U, gamma));
+
+Dmid = floor(slider4 * 0.001 * srate);
+Dhi  = floor(slider5 * 0.001 * srate);
+Dmid < 0 ? Dmid = 0 : 0;
+Dhi  < 0 ? Dhi  = 0 : 0;
+Dmid > DMASK ? Dmid = DMASK : 0;
+Dhi  > DMASK ? Dhi  = DMASK : 0;
+
+upper_gain = exp(log(10)*(slider6/20));
+vhap_solo = slider7|0;
+
+@sample
+// Process each upper/lower pair
+ch = 0;
+loop(min(kUpperCh, min(num_ch, num_ch - kUpperCh)),
+  upper_idx = ch;
+  lower_idx = ch + kUpperCh;
+  
+  // Get inputs
+  (upper_idx < num_ch) ? (
+    upper_in = spl(upper_idx);
+  ) : (
+    upper_in = 0;
+  );
+  
+  (lower_idx < num_ch) ? (
+    lower_in = spl(lower_idx);
+  ) : (
+    lower_in = 0;
+  );
+  
+  // ==== UPPER RING: Band split ====
+  (upper_idx < num_ch) ? (
+    upper_l1 = biquad_proc(upper_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, upper_idx, 0);
+    upper_l2 = biquad_proc(upper_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, upper_idx, 1);
+    
+    upper_low = upper_l1;
+    upper_mid = upper_l2 - upper_l1;
+    upper_hi  = upper_in - upper_l2;
+  ) : (
+    upper_low = 0; upper_mid = 0; upper_hi = 0;
+  );
+  
+  // ==== LOWER RING (donor): Band split ====
+  (lower_idx < num_ch) ? (
+    lower_l1 = biquad_proc(lower_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, lower_idx, 0);
+    lower_l2 = biquad_proc(lower_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, lower_idx, 1);
+    
+    lower_low = lower_l1;
+    lower_mid = lower_l2 - lower_l1;
+    lower_hi  = lower_in - lower_l2;
+  ) : (
+    lower_low = 0; lower_mid = 0; lower_hi = 0;
+  );
+  
+  // ==== Decorrelation delays on donor ====
+  (warm > 0) ? (
+    Dm = 0; Dh = 0; warm -= 1;
+  ) : (
+    Dm = Dmid; Dh = Dhi;
+  );
+  
+  (lower_idx < num_ch) ? (
+    dpush(lower_idx, 0, lower_mid); // mid delay
+    dpush(lower_idx, 1, lower_hi);  // hi delay
+    
+    lower_mid_d = dread(lower_idx, 0, Dm);
+    lower_hi_d  = dread(lower_idx, 1, Dh);
+  ) : (
+    lower_mid_d = 0; lower_hi_d = 0;
+  );
+  
+  // ==== Synthesize HF enhancement from donor ====
+  donor_mid = gW_mid*lower_mid_d + gX_mid*lower_mid_d + gY_mid*lower_mid_d + gZ_mid*lower_mid_d;
+  donor_hi  = gW_hi*lower_hi_d  + gX_hi*lower_hi_d  + gY_hi*lower_hi_d  + gZ_hi*lower_hi_d;
+  
+  // HPF the synthesized paths
+  (upper_idx < num_ch) ? (
+    donor_mid_hp = hpf1_proc(donor_mid, ch, 0);
+    donor_hi_hp  = hpf1_proc(donor_hi,  ch, 1);
+    
+    // Apply to upper ring
+    upper_mid_out = upper_mid + beta_m * donor_mid_hp;
+    upper_hi_out  = upper_hi  + beta_h * donor_hi_hp;
+    upper_new = upper_low + upper_mid_out + upper_hi_out;
+    upper_new *= upper_gain;
+    
+    // Output
+    (vhap_solo) ? (
+      injected = (beta_m * donor_mid_hp + beta_h * donor_hi_hp) * upper_gain * 3.1622776;
+      spl(upper_idx) = injected;
+    ) : (
+      spl(upper_idx) = upper_new;
+    );
+  ) : 0;
+  
+  // Lower ring: passthrough (or silence in solo)
+  (lower_idx < num_ch) ? (
+    (vhap_solo) ? (
+      spl(lower_idx) = 0;
+    ) : (
+      spl(lower_idx) = lower_in * upper_gain;
+    );
+  ) : 0;
+  
+  ch += 1;
+);
+
+// Passthrough remaining channels
+ch = kUpperCh * 2;
+loop(min(num_ch - ch, 32 - ch),
+  (vhap_solo) ? (
+    spl(ch) = 0;
+  ) : (
+    spl(ch) = spl(ch);
+  );
+  ch += 1;
+);

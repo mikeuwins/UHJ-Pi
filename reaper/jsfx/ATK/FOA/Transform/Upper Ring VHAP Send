@@ -1,0 +1,213 @@
+/*
+ATK FOA Transform — Upper Ring VHAP Send
+Speaker-domain VHAP per azimuth column: lower→upper sends with band-split, decorrelation, and HPF.
+
+- Decode to periphonic bus before this.
+- This plugin nudges height by sending mid/high from lower ring (5–8) to upper ring (1–4).
+- Re-encode to FOA afterwards if needed.
+
+Author: you (with ChatGPT)
+Version: 1.0
+*/
+
+desc:ATK Upper Ring VHAP Send
+
+import ../../libraries/atk/atk.jsfx-inc
+
+// 8-channel focus (first two rings). Extra channels pass through.
+in_pin:Speaker 1
+in_pin:Speaker 2
+in_pin:Speaker 3
+in_pin:Speaker 4
+in_pin:Speaker 5
+in_pin:Speaker 6
+in_pin:Speaker 7
+in_pin:Speaker 8
+out_pin:Speaker 1
+out_pin:Speaker 2
+out_pin:Speaker 3
+out_pin:Speaker 4
+out_pin:Speaker 5
+out_pin:Speaker 6
+out_pin:Speaker 7
+out_pin:Speaker 8
+
+// ---------------- UI ----------------
+slider1:50<0,100,1>Height send U (%)
+slider2:0.15<0,0.30,0.01>Mid cap (beta_m)
+slider3:0.40<0,0.60,0.01>High cap (beta_h)
+slider4:0.20<0,1.00,0.01>Decor mid (ms)
+slider5:0.40<0,1.50,0.01>Decor high (ms)
+slider6:0<-6,6,0.1>Inject Gain (dB)
+slider7:0<0,1,1{Solo Off,Solo Injected}>Solo Injected
+slider8:0<0,1,1{Energy Preserve Off,On}>Energy Preserve
+
+options:no_meter
+
+// ---------------- Constants/State ----------------
+@init
+pi2 = 2*$pi;
+tiny = 0.000000000000001;
+
+// Splits (biquad approximation of linear-phase recipe)
+F1 = 700;   // LP1 cutoff
+F2 = 4000;  // LP2 cutoff
+Qn = 0.7071;
+
+// HPF on synthesized paths (keep top airy)
+HPF_fc = 850;
+
+// Decor ring-buffers per lower channel (mid, hi)
+DLEN = 2048; DMASK = DLEN-1;
+
+// Coeffs shared
+function biquad_lp_set(fc, Q, b0* b1* b2* a1* a2*) (
+  w = pi2*fc/srate; sn = sin(w); cs = cos(w);
+  alpha = sn/(2*Q);
+  b0t = (1-cs)*0.5; b1t = 1-cs; b2t = (1-cs)*0.5;
+  a0t = 1+alpha; a1t = -2*cs; a2t = 1-alpha;
+  b0 = b0t/a0t; b1 = b1t/a0t; b2 = b2t/a0t; a1 = a1t/a0t; a2 = a2t/a0t;
+);
+
+function hpf1_set(fc, a1* b0* b1*) (
+  a = exp(-2*$pi*fc/srate);
+  b0 = (1+a)*0.5; b1 = -(1+a)*0.5; a1 = a;
+);
+
+biquad_lp_set(F1, Qn, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2);
+biquad_lp_set(F2, Qn, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2);
+hpf1_set(HPF_fc, hpa1, hpb0, hpb1);
+
+// States per channel (8 of interest) × 2 filters × 4 state vars
+kMaxCh = 32;
+state_base = 65536*1; memset(state_base, 0, kMaxCh*8);
+
+// HPF states per upper channel (two paths: mid=0, hi=1)
+hpf_state = 65536*2; memset(hpf_state, 0, 4*4); // 4 upper × 2 states × 2 paths
+
+// Decor pointers and buffers for lower channels (mid=0, hi=1)
+dly_ptr = 65536*3; memset(dly_ptr, 0, 8*2);
+dly_buf = 65536*4; memset(dly_buf, 0, 8*DLEN*2);
+
+warm = 256; // avoid reading unfilled delay
+
+function biquad_proc(x, b0,b1,b2,a1,a2, ch, filt) (
+  idx = filt*(kMaxCh*4) + ch*4;
+  x1 = mem[state_base+idx+0]; x2 = mem[state_base+idx+1];
+  y1 = mem[state_base+idx+2]; y2 = mem[state_base+idx+3];
+  x += tiny; x -= tiny;
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  mem[state_base+idx+1]=x1; mem[state_base+idx+0]=x;
+  mem[state_base+idx+3]=y1; mem[state_base+idx+2]=y;
+  y;
+);
+
+function hpf1_proc(x, up_ch, path) (
+  // up_ch in 0..3; path 0=mid 1=hi
+  base = hpf_state + up_ch*4 + path*2;
+  x1 = mem[base+0]; y1 = mem[base+1];
+  x += tiny; x -= tiny;
+  y = hpb0*x + hpb1*x1 + hpa1*y1;
+  mem[base+0] = x; mem[base+1] = y; y;
+);
+
+function dpush(ch, path, v) (
+  // lower channel ch in 4..7 (we index absolute)
+  ptr = mem[dly_ptr + ch*2 + path];
+  v += tiny; v -= tiny;
+  mem[dly_buf + ch*DLEN*2 + path*DLEN + ptr] = v;
+  ptr = (ptr + 1) & DMASK;
+  mem[dly_ptr + ch*2 + path] = ptr;
+  ptr;
+);
+
+function dread(ch, path, D) (
+  ptr = mem[dly_ptr + ch*2 + path];
+  mem[dly_buf + ch*DLEN*2 + path*DLEN + ((ptr - 1 - D) & DMASK)];
+);
+
+// ---------------- Sliders ----------------
+@slider
+U = slider1/100;
+gamma = 1.2;
+beta_m_cap = slider2;
+beta_h_cap = slider3;
+beta_m = min(beta_m_cap,      pow(U, gamma));
+beta_h = min(beta_h_cap, 1.2* pow(U, gamma));
+
+Dmid = floor(slider4 * 0.001 * srate + 0.5);
+Dhi  = floor(slider5 * 0.001 * srate + 0.5);
+(Dmid < 0) ? Dmid = 0 : 0; (Dhi < 0) ? Dhi = 0 : 0;
+(Dmid > DMASK) ? Dmid = DMASK : 0; (Dhi > DMASK) ? Dhi = DMASK : 0;
+
+up_gain = exp(log(10)*(slider6/20));
+solo_injected = slider7|0;
+energy_preserve = slider8|0;
+
+// ---------------- Sample ----------------
+@sample
+// Copy inputs (we only need 8 for pairing)
+i=0; loop(min(num_ch,8), mem[65536*10+i]=spl(i); i+=1;);
+
+// Process four azimuth columns (1↔5, 2↔6, 3↔7, 4↔8)
+col=0; loop(4,
+  up = col; dn = col+4;
+  up_in = (up < num_ch) ? mem[65536*10+up] : 0;
+  dn_in = (dn < num_ch) ? mem[65536*10+dn] : 0;
+
+  // Band-split upper and lower
+  up_l1 = biquad_proc(up_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, up, 0);
+  up_l2 = biquad_proc(up_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, up, 1);
+  up_low = up_l1; up_mid = up_l2 - up_l1; up_hi = up_in - up_l2;
+
+  dn_l1 = biquad_proc(dn_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, dn, 0);
+  dn_l2 = biquad_proc(dn_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, dn, 1);
+  dn_low = dn_l1; dn_mid = dn_l2 - dn_l1; dn_hi = dn_in - dn_l2;
+
+  // Decor on donor (lower)
+  (warm>0) ? (Dm=0; Dh=0; warm-=1;) : (Dm=Dmid; Dh=Dhi;);
+  dpush(dn,0,dn_mid); dpush(dn,1,dn_hi);
+  dn_mid_d = dread(dn,0,Dm);
+  dn_hi_d  = dread(dn,1,Dh);
+
+  // Synth paths (HPF)
+  up_idx = up; // 0..3
+  syn_mid = hpf1_proc(dn_mid_d, up_idx, 0);
+  syn_hi  = hpf1_proc(dn_hi_d,  up_idx, 1);
+
+  // Apply betas
+  inj_mid = beta_m * syn_mid;
+  inj_hi  = beta_h * syn_hi;
+  inj = inj_mid + inj_hi;
+
+  // Energy preserve (optional small dry reduction proportional to U)
+  dry_scale = energy_preserve ? (1 - 0.10*U) : 1.0;
+
+  // Output routes
+  // Apply Inject Gain only to VHAP (injected) content
+  up_out = (up_low + up_mid + up_hi) * dry_scale + (inj * up_gain);
+  
+  // Solo injected only
+  (solo_injected) ? (
+    spl(up) = inj * up_gain * 1.77827941; // +5 dB for audibility
+    spl(dn) = 0;
+  ) : (
+    spl(up) = up_out;
+    // Inverse VHAP on lower: remove exactly the bands being injected (complementary)
+    // Use the same delayed donors per band (pre-HPF) so transfer is 1:1 perceptually
+    rem_mid = beta_m * dn_mid_d; // amount moved upward (mid)
+    rem_hi  = beta_h * dn_hi_d;  // amount moved upward (hi)
+    dn_mid_cut = dn_mid - rem_mid;
+    dn_hi_cut  = dn_hi  - rem_hi;
+    // Prevent over-subtraction
+    (dn_mid_cut < -1000000000.0) ? dn_mid_cut = -1000000000.0 : 0;
+    (dn_hi_cut  < -1000000000.0) ? dn_hi_cut  = -1000000000.0 : 0;
+    dn_out = dn_low + dn_mid_cut + dn_hi_cut;
+    spl(dn) = dn_out;
+  );
+
+  col += 1;
+);
+
+// Pass-through any remaining channels
+c=8; loop(max(0, num_ch-8), spl(c)=spl(c); c+=1;);
