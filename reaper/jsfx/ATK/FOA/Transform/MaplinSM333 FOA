@@ -1,0 +1,173 @@
+/*
+ATK FOA Transform — MaplinSM333 (FOA)
+FOA (FuMa) WXYZ → decode to quad → Maplin-style processing (rears only) → encode back to FOA.
+
+Controls:
+- Surround Level (%): rears dry/wet (0=dry rears off, 100=full effect rears)
+- Effect Level (%): intensity of Maplin effect routing
+- Delay (ms): short delay on effect path
+- Source Type: Stereo (L-R) or Spatial (Pantophonic surround)
+- Rear Solo: hear rears only post-encode
+- Bypass
+
+Source Type settings:
+- Stereo: Classic L-R difference (for stereo sources like UHJ), 800 Hz HPF
+- Spatial: Per-front steering LF→RL, RF→RR (for surround content), 1200 Hz HPF, better for solo monitoring
+
+Author: you (with ChatGPT)
+Version: 2.0
+*/
+
+desc:ATK MaplinSM333 (FOA)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W'
+out_pin:X'
+out_pin:Y'
+out_pin:Z'
+
+// ---------------- UI ----------------
+slider1:80<0,100,1>Surround Level (%)
+slider2:80<0,100,1>Effect Level (%)
+slider3:25<5,50,1>Delay (ms)
+slider4:0<0,1,1{Stereo,Spatial (Surround)}>Source Type
+slider5:0<0,1,1{Rear Solo Off,Rear Solo On}>Rear Solo
+
+options:no_meter
+
+// ---------------- Constants/State ----------------
+@init
+pi = $pi; twoPi = 2*$pi;
+// Speaker azimuths (deg): LF=45, RF=315(-45), RL=135, RR=225(-135)
+az_LF =  45 * (twoPi/360);
+az_RF = -45 * (twoPi/360);
+az_RL = 135 * (twoPi/360);
+az_RR = -135* (twoPi/360);
+
+cos_LF = cos(az_LF); sin_LF = sin(az_LF);
+cos_RF = cos(az_RF); sin_RF = sin(az_RF);
+cos_RL = cos(az_RL); sin_RL = sin(az_RL);
+cos_RR = cos(az_RR); sin_RR = sin(az_RR);
+
+// Delay lines for Maplin effect paths
+MAXD = 0.100; // 100ms safety
+maxSamples = floor(MAXD * srate + 0.5);
+wrptrL = 0; wrptrR = 0;
+bufLF = 65536*1; // LF buffer (left rear)
+bufRF = 65536*2; // RF buffer (right rear)
+memset(bufLF, 0, maxSamples);
+memset(bufRF, 0, maxSamples);
+
+function delay_write(base, ptr, v) (
+  mem[base + ptr] = v; (ptr + 1) % maxSamples;
+);
+function delay_read(base, ptr, dSamples) (
+  idx = ptr - dSamples; (idx < 0) ? idx += maxSamples : 0; mem[base + idx];
+);
+
+// Simple one-pole HPF for effect path; coeffs set in @slider
+function hpf1_proc(x, a1,b0,b1, st*) (
+  x1 = st[0]; y1 = st[1];
+  y = b0*x + b1*x1 + a1*y1; st[0]=x; st[1]=y; y;
+);
+
+// HPF states per path (x1,y1 for HPF, then x1_ap,y1_ap for all-pass)
+stLF = 65536*3; memset(stLF, 0, 4);
+stRF = 65536*4; memset(stRF, 0, 4);
+
+@slider
+// Surround: dry/wet for rears
+surround = slider1 * 0.01; // 0..1
+// Effect intensity
+effect = slider2 * 0.01;   // 0..1
+// Delay
+Dms = slider3; Dsamp = floor(Dms * 0.001 * srate + 0.5); (Dsamp<1)?Dsamp=1:0; (Dsamp>maxSamples-1)?Dsamp=maxSamples-1:0;
+// Source Type: 0=Stereo, 1=Spatial
+src_type = slider4|0;
+// Set HPF based on source type
+(src_type == 0) ? (  // Stereo
+  hpf_freq = 800.0;  // Classic L-R processing
+) : (                // Spatial
+  hpf_freq = 1200.0; // Higher HPF for spatial sources
+);
+ah = exp(-twoPi*hpf_freq/srate); b0h = (1+ah)*0.5; b1h = -(1+ah)*0.5;
+rear_solo = slider5|0;
+
+@sample
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+(
+  // -------- Orthonormal-ish decode FOA (FuMa) to quad (LF,RF,RL,RR)
+  kW = 0.70710678;
+  LF = kW*W + X*cos_LF + Y*sin_LF;
+  RF = kW*W + X*cos_RF + Y*sin_RF;
+  RL = kW*W + X*cos_RL + Y*sin_RL;
+  RR = kW*W + X*cos_RR + Y*sin_RR;
+
+  // -------- Fronts dry (unchanged)
+  LFp = LF;
+  RFp = RF;
+
+  // -------- Rears: effect-only
+  // Stereo mode: LF→RL + small crossfeed from RF, RF→RR + small crossfeed from LF
+  (src_type == 0) ? (
+    // Left: main signal from LF, small L-R difference crossfeed
+    Fdiff_L = (LF - RF) * 0.2;  // 20% crossfeed for width
+    mixed_L = LF * 0.70710678 + Fdiff_L;
+    wrptrL = delay_write(bufLF, wrptrL, mixed_L);
+    Ldel = delay_read(bufLF, wrptrL, Dsamp);
+    Ldel_h = hpf1_proc(Ldel, ah,b0h,b1h, stLF);
+    ap = 0.2; Ldel_hp = (1-ap)*Ldel_h + ap*(mem[stLF+2]); mem[stLF+2]=Ldel_h; mem[stLF+3]=Ldel_hp;
+    RL_eff = effect * (1.8 * Ldel_hp);
+    
+    // Right: main signal from RF, small R-L difference crossfeed
+    Fdiff_R = (RF - LF) * 0.2;
+    mixed_R = RF * 0.70710678 + Fdiff_R;
+    wrptrR = delay_write(bufRF, wrptrR, mixed_R);
+    Rdel = delay_read(bufRF, wrptrR, Dsamp);
+    Rdel_h = hpf1_proc(Rdel, ah,b0h,b1h, stRF);
+    ap = 0.2; Rdel_hp = (1-ap)*Rdel_h + ap*(mem[stRF+2]); mem[stRF+2]=Rdel_h; mem[stRF+3]=Rdel_hp;
+    RR_eff = effect * (1.8 * Rdel_hp);
+  ) : (
+    // Spatial mode (Per-front steering): LF→RL, RF→RR
+    wrptrL = delay_write(bufLF, wrptrL, LF);
+    wrptrR = delay_write(bufRF, wrptrR, RF);
+    Ldel = delay_read(bufLF, wrptrL, Dsamp);
+    Rdel = delay_read(bufRF, wrptrR, Dsamp);
+    Ldel_h = hpf1_proc(Ldel, ah,b0h,b1h, stLF);
+    Rdel_h = hpf1_proc(Rdel, ah,b0h,b1h, stRF);
+    // All-pass for L/R paths
+    ap = 0.2; Ldel_hp = (1-ap)*Ldel_h + ap*(mem[stLF+2]); mem[stLF+2]=Ldel_h; mem[stLF+3]=Ldel_hp;
+    ap = 0.2; Rdel_hp = (1-ap)*Rdel_h + ap*(mem[stRF+2]); mem[stRF+2]=Rdel_h; mem[stRF+3]=Rdel_hp;
+    // In spatial mode, preserve front polarity with same boost as stereo
+    RL_eff = effect * (1.8 * Ldel_hp);
+    RR_eff = effect * (1.8 * Rdel_hp);
+  );
+
+  // Surround (rear dry/wet) - no crosstalk reject for clean steering
+  RLp = surround * RL_eff;
+  RRp = surround * RR_eff;
+
+  // -------- Encode quad back to FOA (clean basis recomposition)
+  // Rear solo (post-encode audition): zero fronts; force rears to full effect
+  rear_solo ? (
+    LFp=0; RFp=0; RLp=RL_eff; RRp=RR_eff;
+  );
+  // Strict rear gate
+  gate = (surround * effect) < 0.05;
+  gate ? ( RLp = 0; RRp = 0; );
+
+  Wp = 0.5 * (LFp + RFp + RLp + RRp);
+  Xp = gate ? 0 : (0.5 * ((LFp - RFp) + (RLp - RRp)));
+  Yp = gate ? 0 : (0.5 * ((LFp + RRp) - (RFp + RLp)));
+  Zp = rear_solo ? 0 : Z;
+
+  // Output
+  spl0=Wp; spl1=Xp; spl2=Yp; spl3=Zp;
+);
