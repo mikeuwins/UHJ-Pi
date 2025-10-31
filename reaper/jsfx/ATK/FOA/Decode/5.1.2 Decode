@@ -42,7 +42,6 @@ mPeaks = memCount; memCount += kMaxNumSpeakers+1;
 mDisplayPeaks = memCount; memCount += kMaxNumSpeakers+1;
 memset(mPeaks,0,kMaxNumSpeakers+1); memset(mDisplayPeaks,0,kMaxNumSpeakers+1);
 gfx_clear=-1; kRefreshRate = 0.05; mRefreshSampCount = 0; mDoRefresh = 1;
-generateDecode512Matrix(matrixDSP);
 lfeCoeff = exp(-2 * $pi * 80 / srate); lfeGain = 3.16; lfePrev = 0;
 
 function generateDecode512Matrix(aMatrix) local(k, theta, phi)
@@ -130,6 +129,7 @@ function calculateCoordinates512() local(lLedCount, lLedCountLower)
 );
 
 @slider
+generateDecode512Matrix(matrixDSP);
 (slider1 == 0) ? (mPeakScalar = 0.02) :
 (slider1 == 1) ? (mPeakScalar = 0.03) :
 (slider1 == 2) ? (mPeakScalar = 0.05) :
