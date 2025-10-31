@@ -66,9 +66,9 @@ function generateDecode512Matrix(aMatrix) local(k, theta, phi)
 function determine512Geometry()
 (
   gCenterX = gfx_w * 0.5;
-  gCenterYUpper = gfx_h * 0.35;
+  gCenterYUpper = gfx_h * 0.25;
   gCenterY = gfx_h * 0.5;
-  gCenterYLower = gfx_h * 0.65;
+  gCenterYLower = gfx_h * 0.75;
   gCenterX < gCenterYUpper ? gRadius = gCenterX : gRadius = gCenterYUpper;
   gRadius = gRadius - 10;
   gInverseRadius = 1. / gRadius;
@@ -91,7 +91,7 @@ function draw512LEDBackgroundImage()
 function calculateLedCoordinates512(aLedCount, anAngleLo, anAngleHi, lowerRing) local(lLedRadius, lY, i)
 (
   lLedRadius = gRadius * 0.2;
-  lLedRadInc = (0.8*gRadius) / (2*kNumLeds+1);
+  lLedRadInc = (1.0*gRadius) / (2*kNumLeds+1);
   lY = lowerRing ? gCenterYLower : gCenterYUpper;
   loop(kNumLeds,
     mLedCoordinates[aLedCount] = gCenterX + cos(anAngleLo) * lLedRadius;
@@ -150,19 +150,19 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   setSpeakerPositionFont();
   calculateCoordinates512();
   gfx_setfont(1,"Verdana", 12);
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterYUpper - (gRadius+20)*sin(mAngles[0]), "FL");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterYUpper - (gRadius+20)*sin(mAngles[1]), "FR");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterYLower - (gRadius+20)*sin(mAngles[2]), "C");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterYLower - (gRadius+20)*sin(mAngles[3]), "RL");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterYLower - (gRadius+20)*sin(mAngles[4]), "RR");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[5]), gCenterYLower - (gRadius+20)*sin(mAngles[5]), "TFL");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[6]), gCenterYLower - (gRadius+20)*sin(mAngles[6]), "TFR");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterYUpper - (gRadius+20)*sin(mAngles[0]), "1");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterYUpper - (gRadius+20)*sin(mAngles[1]), "2");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterYLower - (gRadius+20)*sin(mAngles[2]), "3");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterYLower - (gRadius+20)*sin(mAngles[3]), "4");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterYLower - (gRadius+20)*sin(mAngles[4]), "5");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[5]), gCenterYLower - (gRadius+20)*sin(mAngles[5]), "7");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[6]), gCenterYLower - (gRadius+20)*sin(mAngles[6]), "8");
   gxColorSet(1.0, 0.9, 0.9, 0.9);
   gfx_setfont(1,"Verdana", 11);
-  gfx_measurestr("LFE", lW, lH);
+  gfx_measurestr("6", lW, lH);
   gfx_x = gCenterX - 0.5*lW;
   gfx_y = gCenterY - 0.5*lH;
-  gfx_drawstr("LFE");
+  gfx_drawstr("6");
   gfx_setfont(1,"Verdana", 12);
   gfx_x = gCenterX - 25;
   gfx_y = gCenterYUpper - (gRadius+35);
