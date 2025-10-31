@@ -169,3 +169,5 @@ Matches SuperCollider `MaplinMatrix.ar` behavior for:
 - Band delay amount control
 - Thermal noise amount control
 
+
+

@@ -14,7 +14,7 @@ Author: you (with ChatGPT)
 Version: 1.0-unified
 */
 
-desc:FOA VHAP Dimension (debug-v2)
+desc:FOA VHAP Dimension (debug-v3)
 
 import ../../libraries/atk/atk.jsfx-inc
 
@@ -35,8 +35,8 @@ slider2:100<0,100,1>VHAP Morph (%)
 slider3:0<0,1,1{VHAP Solo Off,VHAP Solo On}>VHAP Solo
 
 // (Original Dimension controls)
-slider4:0.00<0.00,0.70,0.01>Forward Preference (k)
-slider5:180<80,400,1>Forward Pref HP (Hz)
+slider4:0.00<0.00,0.70,0.01>Width (k)
+slider5:180<80,400,1>Width HP (Hz)
 
 slider6:0<0,2,1{Off,2D (WXY),3D (WXYZ)}>Psycho Shelves Mode
 slider7:0<0,1,1{Off,On}>Gerzon Presets
@@ -52,14 +52,7 @@ options:no_meter
 //                B-VHAP PRE-STAGE (TD 1024)
 // =====================================================
 @init
-// Simple meter variables
-Z_after_vhap = 0;
-vhap_peak_hold = -60;
-vhap_peak_counter = 0;
-z_orig_peak_hold = -60;
-z_orig_peak_counter = 0;
-last_mouse_x = -1;
-last_mouse_y = -1;
+// Meter code completely removed for performance investigation
 
 // ----- B-VHAP FIR constants / buffers -----
 BV_N = 1024;
@@ -92,9 +85,6 @@ bv_wr=0; memset(bv_rbW,0,BV_RINGSZ); memset(bv_rbX,0,BV_RINGSZ); memset(bv_rbY,0
 // normaliser
 BV_G = 1.0;
 Z_injected_peak = 0;
-Z_original = 0;
-Z_after_vhap = 0;
-Z_delta_db_smooth = 0;
 
 // ----- DIMENSION constants / buffers -----
 // Niemitalo (+90°) constants
@@ -119,26 +109,7 @@ w_lp=0; x_lp=0; y_lp=0; z_lp=0;
 // Denormal preventer
 tiny = 0.000000000000000000000001; // 1e-24 equivalent
 
-// --- Dev-only low-frequency metering for synthesized Z' (<200 Hz) ---
-dbg_lf_fc = 200;         // cutoff for LF RMS meter (Hz)
-dbg_lf_a = 0; dbg_lf_b = 1; // coeffs set at @slider from srate
-dbg_zp_lf = 0;           // low-passed Z'
-dbg_acc_lf = 0;          // accumulate LF power
-dbg_acc_tot = 0;         // accumulate total power
-dbg_n = 0;               // sample counter
-dbg_lf_db = -120;        // last computed LF dBFS
-dbg_tot_db = -120;       // last computed total dBFS
-dbg_lf_pct = 0;          // LF power as % of total
-
-// Sanity: force non-zero defaults if not accumulating
-dbg_zw_pct = 0; dbg_zx_pct = 0; dbg_zy_pct = 0; dbg_zd_pct = 0;
-
-// Per-lane LF diagnostics (Zw/Zx/Zy/Zd) using same LP
-dbg_lp_zw = 0; dbg_lp_zx = 0; dbg_lp_zy = 0; dbg_lp_zd = 0;
-dbg_acc_zw_lf = 0; dbg_acc_zx_lf = 0; dbg_acc_zy_lf = 0; dbg_acc_zd_lf = 0;
-dbg_acc_zw_tot = 0; dbg_acc_zx_tot = 0; dbg_acc_zy_tot = 0; dbg_acc_zd_tot = 0;
-dbg_zw_pct = 0; dbg_zx_pct = 0; dbg_zy_pct = 0; dbg_zd_pct = 0;
-dbg_frame_ctr = 0; // throttle gfx string updates
+// Debug/meter variables removed for performance investigation
 
 // small helpers (no pointers)
 function bv_deint(base, N, dstZW, dstZX, dstZY, dstZD)
@@ -226,239 +197,6 @@ bv_load(); bv_last_sr = srate;
 @block
 (bv_last_sr != srate) ? ( bv_last_sr = srate; bv_load(); ) : 0;
 
-// Dev-only: once per block, if we have ~1 sec of samples, compute LF/total dB and %
-dbg_n > srate ? (
-  dbg_lf_db = 10*log10(max(dbg_acc_lf/dbg_n, 0.000000000001));
-  dbg_tot_db = 10*log10(max(dbg_acc_tot/dbg_n, 0.000000000001));
-  dbg_lf_pct = (dbg_acc_tot > 0) ? (100*dbg_acc_lf/dbg_acc_tot) : 0;
-  // per-lane percentages
-  dbg_zw_pct = (dbg_acc_zw_tot > 0) ? (100*dbg_acc_zw_lf/dbg_acc_zw_tot) : 0;
-  dbg_zx_pct = (dbg_acc_zx_tot > 0) ? (100*dbg_acc_zx_lf/dbg_acc_zx_tot) : 0;
-  dbg_zy_pct = (dbg_acc_zy_tot > 0) ? (100*dbg_acc_zy_lf/dbg_acc_zy_tot) : 0;
-  dbg_zd_pct = (dbg_acc_zd_tot > 0) ? (100*dbg_acc_zd_lf/dbg_acc_zd_tot) : 0;
-  // reset accumulators
-  dbg_acc_lf = 0; dbg_acc_tot = 0; dbg_n = 0;
-  dbg_acc_zw_lf=0; dbg_acc_zx_lf=0; dbg_acc_zy_lf=0; dbg_acc_zd_lf=0;
-  dbg_acc_zw_tot=0; dbg_acc_zx_tot=0; dbg_acc_zy_tot=0; dbg_acc_zd_tot=0;
-) : 0;
-
-// No complex meter updates needed for simple horizontal meter
-
-@gfx 400 165
-gfx_clear = 0x000000;
-gfx_setfont(1, "Arial", 12);
-
-// Title (centered)
-gfx_set(1.0, 1.0, 1.0, 1.0);
-gfx_setfont(1, "Arial", 14);
-title_text = "Z CHANNEL METERS";
-title_width = 140;  // Approximate width of the title text
-gfx_x = (gfx_w - title_width) / 2; gfx_y = 10;
-gfx_printf("Z CHANNEL METERS");
-
-// Meter dimensions (shared by both meters)
-meter_w = gfx_w - 100;
-meter_h = 35;
-meter_x = 30;  // Moved left a bit
-z_orig_meter_y = 45;   // Original Z meter position
-vhap_meter_y = 95;     // VHAP Z' meter position
-
-// === ORIGINAL Z METER ===
-z_orig_level = abs(Z_original);
-z_orig_db = 20 * log10(max(z_orig_level, 0.000001));
-
-// VU meter smoothing for original Z
-!z_orig_smooth ? z_orig_smooth = z_orig_db;
-z_orig_db > z_orig_smooth ? (
-  z_orig_smooth = z_orig_db;  // Instant attack
-) : (
-  z_orig_smooth = z_orig_smooth * 0.92 + z_orig_db * 0.08;
-  (z_orig_smooth < -55) ? z_orig_smooth = z_orig_db;
-);
-
-// Peak hold for original Z
-z_orig_db > z_orig_peak_hold ? (
-  z_orig_peak_hold = z_orig_db;
-  z_orig_peak_counter = 0;
-) : (
-  z_orig_peak_counter += 1;
-  z_orig_peak_counter > 120 ? (z_orig_peak_hold = max(z_orig_db, -60););
-);
-
-// === VHAP Z' METER ===
-z_level = abs(Z_after_vhap);
-z_db = 20 * log10(max(z_level, 0.000001));
-
-// VU meter smoothing for VHAP Z'
-!meter_smooth ? meter_smooth = z_db;
-z_db > meter_smooth ? (
-  meter_smooth = z_db;  // Instant attack
-) : (
-  meter_smooth = meter_smooth * 0.92 + z_db * 0.08;
-  (meter_smooth < -55) ? meter_smooth = z_db;
-);
-
-// Peak hold for VHAP Z'
-z_db > vhap_peak_hold ? (
-  vhap_peak_hold = z_db;
-  vhap_peak_counter = 0;
-) : (
-  vhap_peak_counter += 1;
-  vhap_peak_counter > 120 ? (vhap_peak_hold = max(z_db, -60););
-);
-
-// Vertical reference lines (drawn first, underneath meters)
-// Linear positioning for better resolution at lower levels
-gfx_set(0.4, 0.4, 0.4, 1.0);  // Dark grey lines
-// -60dB line (left)
-line_x = meter_x;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-// -40dB line
-pos_40 = 20/60;  // Linear scaling
-line_x = meter_x + meter_w * pos_40;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-// -30dB line
-pos_30 = 30/60;  // Linear scaling
-line_x = meter_x + meter_w * pos_30;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-// -20dB line
-pos_20 = 40/60;  // Linear scaling
-line_x = meter_x + meter_w * pos_20;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-// -12dB line
-pos_12 = 48/60;  // Linear scaling
-line_x = meter_x + meter_w * pos_12;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-// -6dB line
-pos_6 = 54/60;  // Linear scaling
-line_x = meter_x + meter_w * pos_6;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-// 0dB line (right)
-line_x = meter_x + meter_w;
-gfx_line(line_x, z_orig_meter_y - 5, line_x, vhap_meter_y + meter_h + 5);
-
-// === DRAW ORIGINAL Z METER ===
-// Linear scaling for better detail at lower levels (where original Z typically sits)
-z_orig_pos = max(0, min(1, (z_orig_smooth + 60) / 60));
-
-// Draw original Z background (transparent - no background drawn)
-
-// Original Z LED segments
-seg_width = 4;
-seg_gap = 1;
-total_segs = floor(meter_w / (seg_width + seg_gap));
-z_orig_active_segs = floor(z_orig_pos * total_segs);
-
-seg = 0;
-loop(z_orig_active_segs,
-  seg_x = meter_x + seg * (seg_width + seg_gap);
-  seg_db = -60 + (seg / total_segs) * 60;
-  (seg_db > -3) ? (
-    gfx_set(1.0, 0.0, 0.0, 1.0);  // Red
-  ) : (seg_db > -12) ? (
-    gfx_set(1.0, 0.5, 0.0, 1.0);  // Orange
-  ) : (
-    gfx_set(0.0, 1.0, 0.0, 1.0);  // Green for original Z
-  );
-  gfx_rect(seg_x, z_orig_meter_y, seg_width, meter_h);
-  seg += 1;
-);
-
-// === DRAW VHAP Z' METER ===
-// Linear scaling for better detail at lower levels (where original Z typically sits)
-meter_pos = max(0, min(1, (meter_smooth + 60) / 60));
-
-// Draw VHAP Z' background (transparent - no background drawn)
-
-// VHAP Z' LED segments
-vhap_active_segs = floor(meter_pos * total_segs);
-
-seg = 0;
-loop(vhap_active_segs,
-  seg_x = meter_x + seg * (seg_width + seg_gap);
-  seg_db = -60 + (seg / total_segs) * 60;
-  (seg_db > -3) ? (
-    gfx_set(1.0, 0.0, 0.0, 1.0);  // Red
-  ) : (seg_db > -12) ? (
-    gfx_set(1.0, 0.5, 0.0, 1.0);  // Orange
-  ) : (
-    gfx_set(0.0, 1.0, 1.0, 1.0);  // Cyan for VHAP Z'
-  );
-  gfx_rect(seg_x, vhap_meter_y, seg_width, meter_h);
-  seg += 1;
-);
-
-// dB scale markers (below VHAP meter) - logarithmic positioning
-gfx_set(0.7, 0.7, 0.7, 1.0);
-gfx_setfont(1, "Arial", 8);  // Smaller font for more markers
-gfx_x = meter_x - 8; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("-60");
-gfx_x = meter_x + meter_w * pos_40 - 8; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("-40");
-gfx_x = meter_x + meter_w * pos_30 - 8; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("-30");
-gfx_x = meter_x + meter_w * pos_20 - 8; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("-20");
-gfx_x = meter_x + meter_w * pos_12 - 8; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("-12");
-gfx_x = meter_x + meter_w * pos_6 - 5; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("-6");
-gfx_x = meter_x + meter_w - 2; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("0");
-// Add dB label
-gfx_x = meter_x + meter_w + 20; gfx_y = vhap_meter_y + meter_h + 8; gfx_printf("dB");
-
-
-// Efficient mouse click detection for both meters
-(gfx_mouse_x != last_mouse_x || gfx_mouse_y != last_mouse_y || gfx_mouse_cap) ? (
-  (gfx_mouse_cap & 1) ? (  // Left mouse button pressed
-    peak_area_x = meter_x + meter_w + 5;
-    peak_area_w = 70;
-    // Check original Z peak area
-    (gfx_mouse_x >= peak_area_x && gfx_mouse_x <= peak_area_x + peak_area_w &&
-     gfx_mouse_y >= z_orig_meter_y - 5 && gfx_mouse_y <= z_orig_meter_y + meter_h + 5) ? (
-      z_orig_peak_hold = -60;
-      z_orig_peak_counter = 0;
-    );
-    // Check VHAP Z' peak area
-    (gfx_mouse_x >= peak_area_x && gfx_mouse_x <= peak_area_x + peak_area_w &&
-     gfx_mouse_y >= vhap_meter_y - 5 && gfx_mouse_y <= vhap_meter_y + meter_h + 5) ? (
-      vhap_peak_hold = -60;
-      vhap_peak_counter = 0;
-    );
-  );
-  last_mouse_x = gfx_mouse_x;
-  last_mouse_y = gfx_mouse_y;
-);
-
-// === PEAK READOUTS AND LABELS ===
-peak_x = meter_x + meter_w + 15;
-
-// Original Z peak readout
-(z_orig_peak_hold > 0) ? (
-  gfx_set(1.0, 0.0, 0.0, 1.0);
-  gfx_rect(peak_x - 2, z_orig_meter_y - 2, 45, meter_h + 4);
-);
-gfx_set(1.0, 1.0, 1.0, 1.0);
-gfx_setfont(1, "Arial", 11);
-gfx_x = peak_x; gfx_y = z_orig_meter_y + 5;
-sprintf(#zpeak_str, "%.1f", max(z_orig_peak_hold, -60));
-gfx_printf(#zpeak_str);
-
-// VHAP Z' peak readout
-(vhap_peak_hold > 0) ? (
-  gfx_set(1.0, 0.0, 0.0, 1.0);
-  gfx_rect(peak_x - 2, vhap_meter_y - 2, 45, meter_h + 4);
-);
-gfx_set(1.0, 1.0, 1.0, 1.0);
-gfx_setfont(1, "Arial", 11);
-gfx_x = peak_x; gfx_y = vhap_meter_y + 5;
-sprintf(#vhap_str, "%.1f", max(vhap_peak_hold, -60));
-gfx_printf(#vhap_str);
-
-// Labels (with gap between title and meter)
-gfx_set(1.0, 1.0, 1.0, 1.0);
-gfx_setfont(1, "Arial", 11);
-gfx_x = meter_x; gfx_y = z_orig_meter_y - 18;  // Added 3px gap
-gfx_printf("Original Height (Z)");
-gfx_x = meter_x; gfx_y = vhap_meter_y - 18;   // Added 3px gap
-gfx_printf("Final Height (Z')");
-
-
-
 // =====================================================
 //                  DIMENSION  (ORIGINAL)
 // =====================================================
@@ -488,6 +226,8 @@ dim3 = shelves_mode == 2;
 // Output trim
 out_lin = exp(log(10)*(slider11/20));
 
+// Meters code removed
+
 // VHAP is always enabled (internal state)
 vhap_enable = 1;
 
@@ -495,11 +235,7 @@ vhap_enable = 1;
 inj_hp_a = exp(-2*$pi*fpHP/srate);
 inj_hp_b = 1 - inj_hp_a;
 
-// Dev-only LF meter coeffs for synthesized Z'
-dbg_lf_a = exp(-2*$pi*dbg_lf_fc/srate);
-dbg_lf_b = 1 - dbg_lf_a;
-// reset throttle
-dbg_frame_ctr = 0;
+// Meter code removed
 
 // Psycho presets (per-channel dB offsets)
 psyW_HF=0; psyX_HF=0; psyY_HF=0; psyZ_HF=0;
@@ -528,12 +264,18 @@ gLF_Z=gLF+psyZ_LF; gHF_Z=gHF+psyZ_HF;
 simp_a = exp(-2*$pi*tf/srate);
 simp_b = 1 - simp_a;
 
+// Pre-calculate gain conversions (moved from @sample for performance)
+gLF_lin_W = exp(log(10)*(gLF_W/20)); gHF_lin_W = exp(log(10)*(gHF_W/20));
+gLF_lin_X = exp(log(10)*(gLF_X/20)); gHF_lin_X = exp(log(10)*(gHF_X/20));
+gLF_lin_Y = exp(log(10)*(gLF_Y/20)); gHF_lin_Y = exp(log(10)*(gHF_Y/20));
+gLF_lin_Z = exp(log(10)*(gLF_Z/20)); gHF_lin_Z = exp(log(10)*(gHF_Z/20));
+
 // ---------- Audio ----------
 @sample
 // --- Inputs ---
 W=spl0; X=spl1; Y=spl2; Z=spl3;
 
-Z_original = Z;
+// Z_original removed (was only for meters)
 // --- Stage 1: B-VHAP injection (pre) ---
 // Fill ring buffers for all four lanes: W, X, Y, Z
 bv_rbW[bv_wr]=W; bv_rbX[bv_wr]=X; bv_rbY[bv_wr]=Y; bv_rbZ[bv_wr]=Z; bv_head=bv_wr; bv_wr=(bv_wr+1)&BV_RINGMSK;
@@ -545,66 +287,34 @@ bv_zy = bv_firdot(bv_rbY, bv_head, bvZY, bvZY_b, bvZY_e);
 bv_zd = bv_firdot(bv_rbZ, bv_head, bvZD, bvZD_b, bvZD_e);
 
 // Boost ZW/ZX/ZY when original Z is zero (UHJ case) - 2x to compensate for missing ZΔ LF
-(abs(Z_original) < 0.0001) ? (
+(abs(Z) < 0.0001) ? (
   bv_zw = bv_zw * 2.0;
   bv_zx = bv_zx * 2.0;
   bv_zy = bv_zy * 2.0;
 );
 
-// Synthesize Z' from all four lanes
-Z_prime = (bv_zw + bv_zx + bv_zy + bv_zd) * (BV_G * vhap_enable);
-(abs(Z_prime) > Z_injected_peak) ? (Z_injected_peak = abs(Z_prime)) : 0;
-
-// Synthesize Z' from all four lanes at kernel-normalized level (no extra boost)
+// Synthesize Z' from all four lanes at kernel-normalized level
 Z_prime_full = (bv_zw + bv_zx + bv_zy + bv_zd) * (BV_G * vhap_enable);
+(abs(Z_prime_full) > Z_injected_peak) ? (Z_injected_peak = abs(Z_prime_full)) : 0;
 
-// Correct B-VHAP: Z_out = Z_original + morph × (Z' - Z_original), where Z' has trim applied
-// Z' should have trim applied first, then morph between Z_original and Z'_trimmed
+// Correct B-VHAP: Z_out = Z + morph × (Z' - Z), where Z' has trim applied
+// Z' should have trim applied first, then morph between Z and Z'_trimmed
 Z_prime_trimmed = Z_prime_full * vhap_trim;  // Apply trim to Z' first
 // Apply gentle soft limiter to synthesized Z' to avoid distortion
 Z_prime_trimmed = softlim(Z_prime_trimmed);
-Z_delta = Z_prime_trimmed - Z_original;      // Delta between trimmed Z' and original
-Z_morph = Z_original + vhap_morph * Z_delta; // Morph: 0=original, 1=full Z'
+Z_delta = Z_prime_trimmed - Z;      // Delta between trimmed Z' and original
+Z_morph = Z + vhap_morph * Z_delta; // Morph: 0=original, 1=full Z'
 
 // VHAP Solo modes
 vhap_solo ? (
   // Solo: output synthesized Z' with trim applied (pure Z' only, no blending)
-  Z_after_vhap = Z_prime_trimmed;  // For meter calculation
-  // Dev-only LF metering (accumulate on solo path too)
-  dbg_zp_lf = dbg_lf_a*dbg_zp_lf + dbg_lf_b*Z_prime_trimmed;
-  dbg_acc_lf += dbg_zp_lf*dbg_zp_lf;
-  dbg_acc_tot += Z_prime_trimmed*Z_prime_trimmed;
-  // per-lane LF accumulation (solo path)
-  dbg_lp_zw = dbg_lf_a*dbg_lp_zw + dbg_lf_b*bv_zw;
-  dbg_lp_zx = dbg_lf_a*dbg_lp_zx + dbg_lf_b*bv_zx;
-  dbg_lp_zy = dbg_lf_a*dbg_lp_zy + dbg_lf_b*bv_zy;
-  dbg_lp_zd = dbg_lf_a*dbg_lp_zd + dbg_lf_b*bv_zd;
-  dbg_acc_zw_lf += dbg_lp_zw*dbg_lp_zw; dbg_acc_zw_tot += bv_zw*bv_zw;
-  dbg_acc_zx_lf += dbg_lp_zx*dbg_lp_zx; dbg_acc_zx_tot += bv_zx*bv_zx;
-  dbg_acc_zy_lf += dbg_lp_zy*dbg_lp_zy; dbg_acc_zy_tot += bv_zy*bv_zy;
-  dbg_acc_zd_lf += dbg_lp_zd*dbg_lp_zd; dbg_acc_zd_tot += bv_zd*bv_zd;
-  dbg_n += 1;
   // Solo: output trimmed+soft-limited Z' only in Z channel, silence others
   spl0=0; spl1=0; spl2=0; spl3=Z_prime_trimmed;
 ) : (
-  // Normal mode: use morphed Z for output and meter
+  // Normal mode: use morphed Z for output
   Z = Z_morph;
-  Z_after_vhap = Z;
 
-  // Dev-only LF metering on the final Z channel
-  dbg_zp_lf = dbg_lf_a*dbg_zp_lf + dbg_lf_b*Z;
-  dbg_acc_lf += dbg_zp_lf*dbg_zp_lf;
-  dbg_acc_tot += Z*Z;
-  // per-lane LF accumulation (normal path)
-  dbg_lp_zw = dbg_lf_a*dbg_lp_zw + dbg_lf_b*bv_zw;
-  dbg_lp_zx = dbg_lf_a*dbg_lp_zx + dbg_lf_b*bv_zx;
-  dbg_lp_zy = dbg_lf_a*dbg_lp_zy + dbg_lf_b*bv_zy;
-  dbg_lp_zd = dbg_lf_a*dbg_lp_zd + dbg_lf_b*bv_zd;
-  dbg_acc_zw_lf += dbg_lp_zw*dbg_lp_zw; dbg_acc_zw_tot += bv_zw*bv_zw;
-  dbg_acc_zx_lf += dbg_lp_zx*dbg_lp_zx; dbg_acc_zx_tot += bv_zx*bv_zx;
-  dbg_acc_zy_lf += dbg_lp_zy*dbg_lp_zy; dbg_acc_zy_tot += bv_zy*bv_zy;
-  dbg_acc_zd_lf += dbg_lp_zd*dbg_lp_zd; dbg_acc_zd_tot += bv_zd*bv_zd;
-  dbg_n += 1;
+  // Debug LF metering disabled for performance (was causing stutter)
 
   // --- Stage 2: Dimension (original, unchanged) ---
 
@@ -622,10 +332,7 @@ vhap_solo ? (
   Wp=W; Xp=X; Yp=Y+inj; Zp=Z;
 
   // SIMPLE TILT shelves (first-order split), per channel
-  gLF_lin_W = exp(log(10)*(gLF_W/20)); gHF_lin_W = exp(log(10)*(gHF_W/20));
-  gLF_lin_X = exp(log(10)*(gLF_X/20)); gHF_lin_X = exp(log(10)*(gHF_X/20));
-  gLF_lin_Y = exp(log(10)*(gLF_Y/20)); gHF_lin_Y = exp(log(10)*(gHF_Y/20));
-  gLF_lin_Z = exp(log(10)*(gLF_Z/20)); gHF_lin_Z = exp(log(10)*(gHF_Z/20));
+  // (gain conversions moved to @slider for performance)
 
   s_on ? (
     // W
@@ -650,9 +357,11 @@ vhap_solo ? (
   spl2 = Yp * out_lin;
   spl3 = Zp * out_lin;
 
-  // Capture final Z for meter (after all processing)
-  Z_final = spl3;
-
-// Meter sample tracking (measure Z_after_vhap)
-vhap_max_sample = max(vhap_max_sample, abs(Z_after_vhap));
 );
+
+@gfx 100 50
+gfx_clear = 0x000000;
+gfx_set(0.5, 0.5, 0.5, 1.0);
+gfx_setfont(1, "Arial", 12);
+gfx_x = 10; gfx_y = 20;
+gfx_printf("Meters disabled - performance test");

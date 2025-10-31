@@ -4,12 +4,48 @@
 
 FoaVHAP {
 	
-	*ar { |input, trim = 0, morph = 1, solo = 0, partitionSize = 1024|
+	// Initialize kernels - call this before using FoaVHAP.ar
+	*initKernels { |partitionSize = 512, server|
+		var kernelPath;
+		server = server ?? Server.default;
+		
+		// Build kernel path based on server sample rate and partition size
+		kernelPath = "/home/michael-uwins/UHJ-Pi/reaper/kernels/FOA/transforms/b-vhap/%/%/0100/BVHAP_Z.wav".format(
+			server.sampleRate.asInteger,
+			partitionSize
+		);
+		
+		"FoaVHAP: Loading kernel %".format(kernelPath).postln;
+		
+		// Load kernel buffer (4-channel interleaved: Zw, Zx, Zy, ZΔ)
+		~vhapKernelBuffer = Buffer.read(server, 
+			kernelPath,
+			action: { |buf|
+				if(buf.notNil, {
+					"FoaVHAP: Loaded kernel (% frames, % channels)".format(
+						buf.numFrames, buf.numChannels
+					).postln;
+					
+					// Prepare PartConv buffer
+					{
+						var bufSize = PartConv.calcBufSize(partitionSize, buf);
+						~vhapPartConvBuffer = Buffer.alloc(server, bufSize, buf.numChannels);
+						~vhapPartConvBuffer.preparePartConv(buf, partitionSize);
+						~vhapPartitionSize = partitionSize;
+						"FoaVHAP: Kernels ready for processing".postln;
+					}.value;
+				}, {
+					"FoaVHAP: Failed to load kernel %".format(kernelPath).warn;
+				});
+			}
+		);
+	}
+	
+	*ar { |input, trim = 0, morph = 1, solo = 0, partitionSize = 512|
 		var w, x, y, z;
-		var kernelPath, kernelBuffer, partConvBuffer;
 		var zw, zx, zy, zd, zPrime, zDelta, zOut;
 		var trimLinear, output;
-		var server = Server.default;
+		var normalOutput, soloOutput;
 		
 		// Extract B-format components
 		w = input[0]; // W (omnidirectional)
@@ -20,37 +56,11 @@ FoaVHAP {
 		// Convert trim from dB to linear
 		trimLinear = trim.dbamp;
 		
-		// Load VHAP kernel at server boot time
-		// This should be done in a more elegant way, but for now we'll use a global
-		if(~vhapKernelBuffer.isNil or: { ~vhapKernelBuffer.server != server }, {
-			// Build kernel path based on server sample rate and partition size
-			// Use the actual kernel location in the UHJ-Pi project
-			kernelPath = "/home/michael-uwins/UHJ-Pi/reaper/kernels/FOA/transforms/b-vhap/%/%/0100/BVHAP_Z.wav".format(
-				server.sampleRate.asInteger,
-				partitionSize
-			);
-			
-			// Load kernel buffer (4-channel interleaved: Zw, Zx, Zy, ZΔ)
-			~vhapKernelBuffer = Buffer.read(server, 
-				kernelPath,
-				action: { |buf|
-					if(buf.notNil, {
-						"FoaVHAP: Loaded kernel % (% frames, % channels)".format(
-							kernelPath, buf.numFrames, buf.numChannels
-						).postln;
-					}, {
-						"FoaVHAP: Failed to load kernel %".format(kernelPath).warn;
-					});
-				}
-			);
-			
-			// Prepare PartConv buffer for multi-channel kernel
-			server.sync;
-			if(~vhapKernelBuffer.notNil, {
-				var bufSize = PartConv.calcBufSize(partitionSize, ~vhapKernelBuffer);
-				~vhapPartConvBuffer = Buffer.alloc(server, bufSize, ~vhapKernelBuffer.numChannels);
-				~vhapPartConvBuffer.preparePartConv(~vhapKernelBuffer, partitionSize);
-			});
+		// Check if kernels are loaded and partition size matches
+		if((~vhapPartConvBuffer.isNil) or: { ~vhapPartitionSize != partitionSize }, {
+			"FoaVHAP: Kernels not loaded or partition size mismatch. Call FoaVHAP.initKernels(%) first".format(partitionSize).warn;
+			// Return input unchanged as fallback
+			^input;
 		});
 		
 		// Perform 4-lane convolution using ATK multi-channel approach
@@ -80,11 +90,11 @@ FoaVHAP {
 			zPrime = 0;
 		});
 		
-		// Solo mode: output Z' in all channels scaled by 1/√2
-		output = Select.ar(solo, [
-			[w, x, y, zOut],  // Normal mode: W/X/Y passthrough, processed Z
-			[zPrime * 0.707107, 0, 0, zPrime * 0.707107]  // Solo mode: Z' to W and Z
-		]);
+		// Solo mode: use ATK pattern - Select between two complete arrays
+		normalOutput = [w, x, y, zOut];  // Normal mode: W/X/Y passthrough, processed Z
+		soloOutput = [zPrime * 0.707107, 0, 0, zPrime * 0.707107];  // Solo mode: Z' to W and Z
+		
+		output = Select.ar(solo, [normalOutput, soloOutput]);
 		
 		^output;
 	}
