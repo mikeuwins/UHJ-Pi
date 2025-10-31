@@ -1,0 +1,333 @@
+/*
+ATK FOA Transform - MaplinMatrix (FOA)
+Circuit-accurate emulation of MaplinMatrix for B-format workflow.
+
+FOA (FuMa) WXYZ -> decode to quad -> MaplinMatrix processing -> encode back to FOA.
+
+Based on SuperCollider MaplinMatrix class for compatibility with v27 app.
+Includes thermal noise, bandwidth limiting, op-amp saturation, multi-stage all-pass,
+band splitting, BBD modulation, and 80 Hz HPF.
+
+Controls:
+- Surround Level (%): rear channel amplitude with 2.2x boost
+- Effect Level (%): intensity of processedDiff contribution
+- Delay (normalized 0-1): maps to 5-50 ms for BBD delay
+- Active: bypass blend (1=full effect, 0=dry)
+
+Author: Michael Uwins (with ChatGPT)
+Version: 1.0 (MaplinMatrix-circuit-accurate)
+*/
+
+desc:ATK MaplinMatrix (FOA)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W'
+out_pin:X'
+out_pin:Y'
+out_pin:Z'
+
+// -------------------- UI --------------------
+slider1:80<0,100,1>Surround Level (%)
+slider2:80<0,100,1>Effect Level (%)
+slider3:40<0,100,1>BBD Delay (normalized 0-1: 5-50ms)
+slider4:1<0,1,1{Inactive,Active}>Active
+
+options:no_meter
+
+// =====================================================
+//            MAPLIN MATRIX CIRCUIT-ACCURATE
+// =====================================================
+@init
+twoPi = 2*$pi;
+tiny = 0.000000000000001;
+
+// Decode FOA to quad (front left and right only)
+kW = 0.70710678;
+cos_LF = 0.70710678;  // cos(45°)
+sin_LF = 0.70710678;  // sin(45°)
+cos_RF = 0.70710678;  // cos(-45°)
+sin_RF = -0.70710678; // sin(-45°)
+
+// LFNoise variables (sine-based LFO like Chorus)
+lfNoise_L_phase = 0;
+lfNoise_R_phase = 0;
+lfNoise_rate = 0.5;  // Hz
+lfNoise_amount = 0.0002;
+
+// Delay buffers (1024 samples each)
+dlySize = 1024;
+dlyBuf_LOW = 65536*1;
+dlyBuf_MID = 65536*2;
+dlyBuf_HIGH = 65536*3;
+bbdL_BUF = 65536*4;
+bbdR_BUF = 65536*5;
+dlyPtr_LOW = 0;
+dlyPtr_MID = 0;
+dlyPtr_HIGH = 0;
+bbdL_PTR = 0;
+bbdR_PTR = 0;
+memset(dlyBuf_LOW, 0, dlySize);
+memset(dlyBuf_MID, 0, dlySize);
+memset(dlyBuf_HIGH, 0, dlySize);
+memset(bbdL_BUF, 0, dlySize);
+memset(bbdR_BUF, 0, dlySize);
+
+// Filter states start at 1030+ to avoid overlap with delay buffers (1-1029)
+hpf80_st_rear = 65536*1030;   // 2 floats: x1, y1
+lpf800_st = 65536*1032;       // 2 floats: x1, y1
+bpf2k_st = 65536*1034;        // 4 floats: x1, x2, y1, y2
+hpf4k_st = 65536*1038;        // 2 floats: x1, y1
+lpf8k_st = 65536*1040;        // 2 floats: x1, y1
+lpf20k_st_L = 65536*1042;     // 2 floats: x1, y1
+lpf20k_st_R = 65536*1044;     // 2 floats: x1, y1
+bbdL_lpf_st = 65536*1046;     // 2 floats: x1, y1
+bbdR_lpf_st = 65536*1048;     // 2 floats: x1, y1
+
+// All-pass chain states (4 stages, 2 floats each)
+ap_stage1 = 65536*1050;
+ap_stage2 = 65536*1052;
+ap_stage3 = 65536*1054;
+ap_stage4 = 65536*1056;
+
+// Clear all filter states: 1030-1057 = 28 floats
+memset(hpf80_st_rear, 0, 28);
+
+// Simple PRNG using JSFX rand()
+function prng()
+(
+  rand(1) * 2.0 - 1.0;
+);
+
+// One-pole HPF
+function hpf1_coeffs(fc, a1_out*, b0_out*, b1_out*)
+(
+  a = exp(-twoPi*fc/srate);
+  b0 = (1+a)*0.5;
+  b1 = -b0;
+  a1_out = a; b0_out = b0; b1_out = b1;
+);
+
+// One-pole LPF
+function lpf1_coeffs(fc, a1_out*, b0_out*, b1_out*)
+(
+  a = exp(-twoPi*fc/srate);
+  b0 = (1-a);
+  b1 = 0;
+  a1_out = a; b0_out = b0; b1_out = b1;
+);
+
+// Biquad BPF
+function bpf_coeffs(fc, Q)
+  instance(a0, a1, a2, b0, b1, b2)
+(
+  w = twoPi*fc/srate;
+  sn = sin(w);
+  cs = cos(w);
+  alpha = sn/(2*Q);
+  b0 = sn/2;
+  b1 = 0;
+  b2 = -sn/2;
+  a0 = 1 + alpha;
+  a1 = -2*cs;
+  a2 = 1 - alpha;
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+);
+
+// All-pass stage
+function allpass1(x, coeff, st*)
+(
+  x1 = st[0]; y1 = st[1];
+  y = coeff*x + x1 - coeff*y1;
+  st[0] = x;
+  st[1] = y;
+  y;
+);
+
+// Filter processing functions
+function hpf1_proc(x, a1, b0, b1, st*)
+(
+  x += tiny; x -= tiny;
+  x1 = st[0]; y1 = st[1];
+  y = b0*x + b1*x1 + a1*y1;
+  st[0] = x; st[1] = y;
+  y;
+);
+
+function lpf1_proc(x, a1, b0, b1, st*)
+(
+  x += tiny; x -= tiny;
+  y1 = st[1];
+  y = b0*x + a1*y1;
+  st[0] = x; st[1] = y;
+  y;
+);
+
+function bpf_proc(x, b0, b1, b2, a1, a2, st*)
+(
+  x += tiny; x -= tiny;
+  x1 = st[0]; x2 = st[2]; y1 = st[4]; y2 = st[6];
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  st[2] = x1; st[0] = x;
+  st[6] = y1; st[4] = y;
+  y;
+);
+
+// Compute filter coefficients
+hpf1_coeffs(80.0, hpf80_a1, hpf80_b0, hpf80_b1);
+lpf1_coeffs(800.0, lpf800_a1, lpf800_b0, lpf800_b1);
+bpf_coeffs(2000.0, 1.5);
+bpf2k_b0 = bpf_coeffs.b0;
+bpf2k_b1 = 0;
+bpf2k_b2 = bpf_coeffs.b2;
+bpf2k_a1 = bpf_coeffs.a1;
+bpf2k_a2 = bpf_coeffs.a2;
+hpf1_coeffs(4000.0, hpf4k_a1, hpf4k_b0, hpf4k_b1);
+lpf1_coeffs(20000.0, lpf20k_a1, lpf20k_b0, lpf20k_b1);
+lpf1_coeffs(8000.0, lpf8k_a1, lpf8k_b0, lpf8k_b1);
+
+// All-pass coefficients
+ap_coeff1 = 0.0015;
+ap_coeff2 = 0.0033;
+ap_coeff3 = 0.0072;
+ap_coeff4 = 0.0156;
+
+// Band delays
+delay_LOW = floor(0.022 * srate + 0.5);
+delay_MID = floor(0.018 * srate + 0.5);
+delay_HIGH = floor(0.012 * srate + 0.5);
+
+// Tanh saturation approximation
+function soft_tanh(x)
+(
+  (abs(x) < 0.5) ? (
+    x3 = x*x*x;
+    x - x3 * 0.333333;
+  ) : (
+    (x > 0) ? 0.761594 : -0.761594;
+  );
+);
+
+@slider
+surround = slider1 * 0.01;
+effect = slider2 * 0.01;
+delay_normalized = slider3 * 0.01;
+delay_ms = delay_normalized * 45.0 + 5.0;
+delay_samples = floor(delay_ms * 0.001 * srate + 0.5);
+delay_samples = max(1, min(delay_samples, dlySize-1));
+active = slider4;
+
+@sample
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// Decode to quad: extract L/R from FOA
+L = kW*W + X*cos_LF + Y*sin_LF;
+R = kW*W + X*cos_RF + Y*sin_RF;
+
+// === Circuit-accurate MaplinMatrix processing ===
+
+// Add thermal noise (WhiteNoise.ar(0.00001) * 0.1)
+thermal = prng() * 0.000001;
+L += thermal;
+R += thermal;
+
+// Input gain (0.7) and bandwidth limiting (20kHz LPF)
+L = lpf1_proc(L * 0.7, lpf20k_a1, lpf20k_b0, lpf20k_b1, lpf20k_st_L);
+R = lpf1_proc(R * 0.7, lpf20k_a1, lpf20k_b0, lpf20k_b1, lpf20k_st_R);
+
+// Core matrix: sum and diff
+sum = (L + R) * 0.7071;
+diff = (L - R) * 0.7071;
+
+// Op-amp saturation (0.15 blend)
+sum_sat = soft_tanh(sum) * 0.15 + sum * 0.85;
+diff_sat = soft_tanh(diff) * 0.15 + diff * 0.85;
+
+// Multi-stage all-pass phase shifting
+phaseDiff = diff_sat;
+phaseDiff = allpass1(phaseDiff, ap_coeff1, ap_stage1);
+phaseDiff = allpass1(phaseDiff, ap_coeff2, ap_stage2);
+phaseDiff = allpass1(phaseDiff, ap_coeff3, ap_stage3);
+phaseDiff = allpass1(phaseDiff, ap_coeff4, ap_stage4);
+
+// High-pass filter rear channels (80Hz)
+phaseDiff_hpf = hpf1_proc(phaseDiff, hpf80_a1, hpf80_b0, hpf80_b1, hpf80_st_rear);
+
+// Band processing
+lowBand_raw = lpf1_proc(phaseDiff_hpf, lpf800_a1, lpf800_b0, lpf800_b1, lpf800_st);
+midBand_raw = bpf_proc(phaseDiff_hpf, bpf2k_b0, bpf2k_b1, bpf2k_b2, bpf2k_a1, bpf2k_a2, bpf2k_st);
+highBand_raw = hpf1_proc(phaseDiff_hpf, hpf4k_a1, hpf4k_b0, hpf4k_b1, hpf4k_st);
+
+// Apply band delays
+mem[dlyBuf_LOW + dlyPtr_LOW] = lowBand_raw;
+mem[dlyBuf_MID + dlyPtr_MID] = midBand_raw;
+mem[dlyBuf_HIGH + dlyPtr_HIGH] = highBand_raw;
+lowBand = mem[dlyBuf_LOW + (dlyPtr_LOW - delay_LOW + dlySize) % dlySize];
+midBand = mem[dlyBuf_MID + (dlyPtr_MID - delay_MID + dlySize) % dlySize];
+highBand = mem[dlyBuf_HIGH + (dlyPtr_HIGH - delay_HIGH + dlySize) % dlySize];
+dlyPtr_LOW = (dlyPtr_LOW + 1) % dlySize;
+dlyPtr_MID = (dlyPtr_MID + 1) % dlySize;
+dlyPtr_HIGH = (dlyPtr_HIGH + 1) % dlySize;
+
+processedDiff = (lowBand + midBand + highBand) * 0.6;
+
+// Output matrix
+frontLeft = L + sum * 0.1;
+frontRight = R + sum * 0.1;
+rearLeft_raw = (processedDiff * -1.8 * effect) + sum * 0.2;
+rearRight_raw = (processedDiff * 1.8 * effect) + sum * 0.2;
+
+// BBD delay processing (with noise and modulation)
+bbd_noise = prng() * 0.00003;
+rearLeft_bbd = lpf1_proc(rearLeft_raw + bbd_noise, lpf8k_a1, lpf8k_b0, lpf8k_b1, bbdL_lpf_st);
+rearRight_bbd = lpf1_proc(rearRight_raw + bbd_noise, lpf8k_a1, lpf8k_b0, lpf8k_b1, bbdR_lpf_st);
+
+// LFNoise modulation on delay (LFO-based like Chorus)
+rateadj = lfNoise_rate * 2 * $pi / srate;
+lfNoise_L_mod = sin(lfNoise_L_phase += rateadj) * lfNoise_amount;
+lfNoise_R_mod = sin(lfNoise_R_phase += rateadj) * lfNoise_amount;
+delayL_actual = delay_samples + floor(lfNoise_L_mod * srate);
+delayR_actual = delay_samples + floor(lfNoise_R_mod * srate);
+delayL_actual = max(1, min(delayL_actual, dlySize-1));
+delayR_actual = max(1, min(delayR_actual, dlySize-1));
+
+// Apply BBD delay
+mem[bbdL_BUF + bbdL_PTR] = rearLeft_bbd;
+mem[bbdR_BUF + bbdR_PTR] = rearRight_bbd;
+rearLeft_delayed = mem[bbdL_BUF + (bbdL_PTR - delayL_actual + dlySize) % dlySize];
+rearRight_delayed = mem[bbdR_BUF + (bbdR_PTR - delayR_actual + dlySize) % dlySize];
+bbdL_PTR = (bbdL_PTR + 1) % dlySize;
+bbdR_PTR = (bbdR_PTR + 1) % dlySize;
+
+// Final saturation (0.1 blend)
+frontLeft_temp = (frontLeft * 0.9) + (soft_tanh(frontLeft) * 0.1);
+frontRight_temp = (frontRight * 0.9) + (soft_tanh(frontRight) * 0.1);
+rearLeft_temp = (rearLeft_delayed * 0.9) + (soft_tanh(rearLeft_delayed) * 0.1);
+rearRight_temp = (rearRight_delayed * 0.9) + (soft_tanh(rearRight_delayed) * 0.1);
+
+// Apply surround level with 2.2x boost
+rearLeft = rearLeft_temp * surround * 2.2;
+rearRight = rearRight_temp * surround * 2.2;
+
+// Active/bypass blend
+frontLeft = L * (1 - active) + frontLeft_temp * active;
+frontRight = R * (1 - active) + frontRight_temp * active;
+rearLeft = 0 * (1 - active) + rearLeft * active;
+rearRight = 0 * (1 - active) + rearRight * active;
+
+// Encode quad back to FOA
+W_out = 0.5 * (frontLeft + frontRight + rearLeft + rearRight);
+X_out = 0.5 * ((frontLeft - frontRight) + (rearLeft - rearRight));
+Y_out = 0.5 * ((frontLeft + rearRight) - (frontRight + rearLeft));
+Z_out = Z;  // Preserve Z
+
+// Output
+spl0 = W_out;
+spl1 = X_out;
+spl2 = Y_out;
+spl3 = Z_out;
