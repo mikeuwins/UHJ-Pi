@@ -66,8 +66,10 @@ function generateDecode512Matrix(aMatrix) local(k, theta, phi)
 function determine512Geometry()
 (
   gCenterX = gfx_w * 0.5;
+  gCenterYUpper = gfx_h * 0.25;
   gCenterY = gfx_h * 0.5;
-  gCenterX < gCenterY ? gRadius = gCenterX : gRadius = gCenterY;
+  gCenterYLower = gfx_h * 0.75;
+  gCenterX < gCenterYUpper ? gRadius = gCenterX : gRadius = gCenterYUpper;
   gRadius = gRadius - 10;
   gInverseRadius = 1. / gRadius;
 );
@@ -77,26 +79,30 @@ function draw512LEDBackgroundImage()
   gxColorSet(1.0, 0., 0., 0.);
   gfx_rect(0,0,gfx_w,gfx_h);
   gxColorSet(1.0, 0.18, 0.18, 0.18);
-  gfx_circle(gCenterX, gCenterY, gRadius, 1, 1);
+  gfx_circle(gCenterX, gCenterYLower, gRadius, 1, 1);
+  gfx_circle(gCenterX, gCenterYUpper, gRadius, 1, 1);
   gxColorSet(1.0, 0.35, 0.35, 0.35);
-  gfx_circle(gCenterX, gCenterY, 0.15*gRadius, 0, 1);
-  gfx_circle(gCenterX, gCenterY, 1.0*gRadius, 0, 1);
+  gfx_circle(gCenterX, gCenterYUpper, 0.15*gRadius, 0, 1);
+  gfx_circle(gCenterX, gCenterYUpper, 1.0*gRadius, 0, 1);
+  gfx_circle(gCenterX, gCenterYLower, 0.15*gRadius, 0, 1);
+  gfx_circle(gCenterX, gCenterYLower, 1.0*gRadius, 0, 1);
 );
 
-function calculateLedCoordinates512(aLedCount, anAngleLo, anAngleHi) local (lLedRadius)
+function calculateLedCoordinates512(aLedCount, anAngleLo, anAngleHi, lowerRing) local(lLedRadius, lY)
 (
   lLedRadius = gRadius * 0.2;
   lLedRadInc = (0.8*gRadius) / (2*kNumLeds+1);
+  lY = lowerRing ? gCenterYLower : gCenterYUpper;
   loop(kNumLeds,
     mLedCoordinates[aLedCount]     =  gCenterX + cos(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 1] =  gCenterY - sin(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 1] =  lY - sin(anAngleLo) * lLedRadius;
     mLedCoordinates[aLedCount + 2] =  gCenterX + cos(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 3] =  gCenterY - sin(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 3] =  lY - sin(anAngleHi) * lLedRadius;
     lLedRadius += lLedRadInc;
     mLedCoordinates[aLedCount + 4] =  gCenterX + cos(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 5] =  gCenterY - sin(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 5] =  lY - sin(anAngleHi) * lLedRadius;
     mLedCoordinates[aLedCount + 6] =  gCenterX + cos(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 7] =  gCenterY - sin(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 7] =  lY - sin(anAngleLo) * lLedRadius;
     lLedRadius += lLedRadInc;
     aLedCount += 8;
   );
@@ -108,15 +114,18 @@ function calculateCoordinates512() local(lLedCount)
   lLedCount = 0;
   // Bottom layer 1-5: identical to 5_0
   mAngles[0] = 120 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates512(lLedCount, 110 * kDeg2Rad, 130 * kDeg2Rad);
+  lLedCount  = calculateLedCoordinates512(lLedCount, 110 * kDeg2Rad, 130 * kDeg2Rad, 1);
   mAngles[1] =  60 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates512(lLedCount,  50 * kDeg2Rad,  70 * kDeg2Rad);
+  lLedCount  = calculateLedCoordinates512(lLedCount,  50 * kDeg2Rad,  70 * kDeg2Rad, 1);
   mAngles[2] =  90 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates512(lLedCount,  80 * kDeg2Rad, 100 * kDeg2Rad);
+  lLedCount  = calculateLedCoordinates512(lLedCount,  80 * kDeg2Rad, 100 * kDeg2Rad, 1);
   mAngles[3] = 200 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates512(lLedCount, 180 * kDeg2Rad, 220 * kDeg2Rad);
+  lLedCount  = calculateLedCoordinates512(lLedCount, 180 * kDeg2Rad, 220 * kDeg2Rad, 1);
   mAngles[4] = 340 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates512(lLedCount, 320 * kDeg2Rad, 360 * kDeg2Rad);
+  lLedCount  = calculateLedCoordinates512(lLedCount, 320 * kDeg2Rad, 360 * kDeg2Rad, 1);
+  // Upper layer 7-8: FL/FR positions
+  lLedCount  = calculateLedCoordinates512(lLedCount, 110 * kDeg2Rad, 130 * kDeg2Rad, 0);
+  lLedCount  = calculateLedCoordinates512(lLedCount,  50 * kDeg2Rad,  70 * kDeg2Rad, 0);
 );
 
 @slider
@@ -142,11 +151,15 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   setSpeakerPositionFont();
   calculateCoordinates512();
   gfx_setfont(1,"Verdana", 12);
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterY - (gRadius+20)*sin(mAngles[0]), "1");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterY - (gRadius+20)*sin(mAngles[1]), "2");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterY - (gRadius+20)*sin(mAngles[2]), "3");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterY - (gRadius+20)*sin(mAngles[3]), "4");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterY - (gRadius+20)*sin(mAngles[4]), "5");
+  // Bottom layer 1-5
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterYLower - (gRadius+20)*sin(mAngles[0]), "1");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterYLower - (gRadius+20)*sin(mAngles[1]), "2");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterYLower - (gRadius+20)*sin(mAngles[2]), "3");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterYLower - (gRadius+20)*sin(mAngles[3]), "4");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterYLower - (gRadius+20)*sin(mAngles[4]), "5");
+  // Upper layer 7-8
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(120*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(120*kDeg2Rad), "7");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(60*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(60*kDeg2Rad), "8");
   // LFE label in center (6)
   gxColorSet(1.0, 0.9, 0.9, 0.9);
   gfx_setfont(1,"Verdana", 11);
@@ -161,6 +174,8 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   drawSpkrLEDs(amp2db(mDisplayPeaks[2]), 2, mLedCoordinates);
   drawSpkrLEDs(amp2db(mDisplayPeaks[3]), 3, mLedCoordinates);
   drawSpkrLEDs(amp2db(mDisplayPeaks[4]), 4, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[6]), 5, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[7]), 6, mLedCoordinates);
   memset(mDisplayPeaks, 0., 8.);
   mRefreshSampCount = 0; mDoRefresh = 0;
 );
