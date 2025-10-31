@@ -160,11 +160,11 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   // Upper layer 7-8
   drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(120*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(120*kDeg2Rad), "7");
   drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(60*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(60*kDeg2Rad), "8");
-  // LFE label in center (6)
+  // LFE label in center of lower circle (6)
   gxColorSet(1.0, 0.9, 0.9, 0.9);
   gfx_setfont(1,"Verdana", 11);
   gfx_measurestr("6", lW, lH);
-  gfx_x = gCenterX - 0.5*lW; gfx_y = gCenterY - 0.5*lH; gfx_drawstr("6");
+  gfx_x = gCenterX - 0.5*lW; gfx_y = gCenterYLower - 0.5*lH; gfx_drawstr("6");
   mPrevWidth = gfx_w; mPrevHeight = gfx_h; mDoRefresh = 1;
 );
 
@@ -176,6 +176,23 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   drawSpkrLEDs(amp2db(mDisplayPeaks[4]), 4, mLedCoordinates);
   drawSpkrLEDs(amp2db(mDisplayPeaks[6]), 5, mLedCoordinates);
   drawSpkrLEDs(amp2db(mDisplayPeaks[7]), 6, mLedCoordinates);
+  // LFE LED as concentric circles
+  lfeDb = amp2db(mDisplayPeaks[5]);
+  (lfeDb > -60) ? (
+    // Create LED color based on level
+    setLedColour(lfeDb, 0);
+    // Draw concentric circles from inner to outer
+    minRadius = gRadius * 0.15;
+    maxRadius = minRadius + (gRadius * 0.25);
+    numRings = floor((lfeDb + 60) / 6);
+    numRings = max(1, min(numRings, 10));
+    ringStep = (maxRadius - minRadius) / 10;
+    i = 0;
+    loop(numRings,
+      gfx_circle(gCenterX, gCenterYLower, minRadius + (ringStep * i), 1, 1);
+      i += 1;
+    );
+  );
   memset(mDisplayPeaks, 0., 8.);
   mRefreshSampCount = 0; mDoRefresh = 0;
 );
