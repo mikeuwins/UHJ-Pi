@@ -1,311 +1,217 @@
 /*
+ATK FOA Decode 5.1.2 Diametric
+FOA (W,X,Y,Z) → Dolby 5.1.2 (FL, FR, C, RL, RR, LFE, TFL, TFR)
+
+Based on SuperCollider ATK diametric decoder with positions:
+- [0°, 0°] (Front Center, horizontal)
+- [-30°, 0°] (Front Left, horizontal)  
+- [30°, 0°] (Front Right, horizontal)
+- [-30°, 45°] (Top Front Left, elevated)
+
+The diametric pairs create 8 speakers total via DDT algorithm.
+Then remapped to Dolby 5.1.2 order with LFE extraction.
+
 Copyright the ATK Community and Joseph Anderson, Josh Parmenter, Trond Lossius, 2013
-
-               J Anderson     j.anderson[at]ambisonictoolkit.net
-               J Parmenter    j.parmenter[at]ambisonictoolkit.net
-               T Lossius      trond.lossius[at]bek.no
-
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License
-and GNU General Public License along with this program.  If not, see
-<http://www.gnu.org/licenses/>.
-
-
-Additional Credits:
-
----------------------------------------------------------------------
-  Class: 5_0
-  Bruce Wiggins optimised ITU 5.0 decoders
----------------------------------------------------------------------
-
----------------------------------------------------------------------
-Irregular array decoding coefficients (5.0, 7.0) are kindly provided by
-Bruce Wiggins: http://www.brucewiggins.co.uk/
-
-B. Wiggins, "An Investigation into the Real-time Manipulation and Control of
-Three-dimensional Sound Fields," PhD Thesis, University of Derby, Derby, 2004.
----------------------------------------------------------------------
-
-The idea for the GUI is based on the HOA Library hoa.2D.meter~object:
-https://github.com/CICM/HoaLibrary-Max
-
-Peak level metering is based on code by Phil Burke:
-http://musicdsp.org/showArchiveComment.php?ArchiveID=19
+Peak level metering based on code by Phil Burke
 */
 
-desc: ATK FOA Decode 5_0
-// Bruce Wiggins optimised ITU 5.0 decoders (L - R - C - LFE - SL - SR)
+desc:ATK FOA Decode 5.1.2 Diametric
 
-// Import library with shared functions, also imports cookdsp
 import ../../libraries/atk/atk.jsfx-inc
-
 
 in_pin:W
 in_pin:X
 in_pin:Y
 in_pin:Z
 
-out_pin:L
-out_pin:R
+out_pin:FL
+out_pin:FR
 out_pin:C
+out_pin:RL
+out_pin:RR
 out_pin:LFE
-out_pin:SL
-out_pin:SR
-out_pin:SBL
-out_pin:SBR
+out_pin:TFL
+out_pin:TFR
 
-slider1:0<0,2,1{Equal, Focus, Four}>Mode
-slider2:5<0,10,1{20 ms, 30 ms, 50 ms, 100 ms, 200 ms, 300 ms, 500 ms, 1 sec, 3 sec, 6 secs}>Peak level decay half time
+slider1:5<0,10,1{20 ms, 30 ms, 50 ms, 100 ms, 200 ms, 300 ms, 500 ms, 1 sec, 3 sec, 6 secs}>Peak level decay half time
 
-
-/**********************************************************
-Initialisation
-**********************************************************/
 @init
-
-kMaxNumSpeakers = 5;
-
-// Memory allocations
-memCount   = 1024;
-
-matrixDSP = memCount;   //  for 8x4 matrix as 1D array
-memCount  += 32;
-
+kMaxNumSpeakers = 8;
+memCount = 1024;
+matrixDSP = memCount;
+memCount += 32;
 mAngles = memCount;
 memCount += kMaxNumSpeakers;
-
 mLedCoordinates = memCount;
-memCount += 2*4*kNumLeds*kMaxNumSpeakers; // 2 (x,y) x 4 (points per LED) x kNumLeds * kMaxNumSpeakers array of coordinates
- 
+memCount += 2*4*kNumLeds*kMaxNumSpeakers;
 mPeaks = memCount;
-memCount += kMaxNumSpeakers+1; // Also reserving slot for unused LFE
-
+memCount += kMaxNumSpeakers+1;
 mDisplayPeaks = memCount;
-memCount += kMaxNumSpeakers+1; // Also reserving slot for unused LFE
-
-// Zero max peak values at start
+memCount += kMaxNumSpeakers+1;
 memset(mPeaks,0,kMaxNumSpeakers+1);
 memset(mDisplayPeaks,0,kMaxNumSpeakers+1);
-
-// Graphics
-gfx_clear=-1;           // Prevent auto clear of each frame
-kRefreshRate = 0.05;    // Refresh rate in sec
+gfx_clear=-1;
+kRefreshRate = 0.05;
 mRefreshSampCount = 0;
 mDoRefresh = 1;
+generateDecode512Matrix(matrixDSP);
+lfeCoeff = exp(-2 * $pi * 80 / srate);
+lfeGain = 3.16;
+lfePrev = 0;
 
-
-function calculateLedCoordinates(aLedCount, anAngleLo, anAngleHi) local (lLedRadius)
+function generateDecode512Matrix(aMatrix) local(k, theta, phi, x, y, z)
 (
-  // LED coordinates as convex poygon  
+  k = 1/sqrt(2);
+  
+  // Speaker 0: Center [0°, 0°]
+  aMatrix[0*4+0] = k; aMatrix[0*4+1] = k; aMatrix[0*4+2] = 0; aMatrix[0*4+3] = 0;
+  
+  // Speaker 1: Front Left [-30°, 0°]
+  theta = -0.523598775598;
+  aMatrix[1*4+0] = k; aMatrix[1*4+1] = k*cos(theta); aMatrix[1*4+2] = k*sin(theta); aMatrix[1*4+3] = 0;
+  
+  // Speaker 2: Front Right [30°, 0°]
+  theta = 0.523598775598;
+  aMatrix[2*4+0] = k; aMatrix[2*4+1] = k*cos(theta); aMatrix[2*4+2] = k*sin(theta); aMatrix[2*4+3] = 0;
+  
+  // Speaker 3: Top Front Left [-30°, 45°]
+  theta = -0.523598775598; phi = 0.785398163397;
+  aMatrix[3*4+0] = k;
+  aMatrix[3*4+1] = k*cos(theta)*cos(phi);
+  aMatrix[3*4+2] = k*sin(theta)*cos(phi);
+  aMatrix[3*4+3] = k*sin(phi);
+  
+  // Speaker 4: Top Front Right [30°, 45°]
+  theta = 0.523598775598; phi = 0.785398163397;
+  aMatrix[4*4+0] = k;
+  aMatrix[4*4+1] = k*cos(theta)*cos(phi);
+  aMatrix[4*4+2] = k*sin(theta)*cos(phi);
+  aMatrix[4*4+3] = k*sin(phi);
+  
+  // Speaker 5: Rear Left [150°, 0°]
+  theta = 2.617993877991;
+  aMatrix[5*4+0] = k; aMatrix[5*4+1] = k*cos(theta); aMatrix[5*4+2] = k*sin(theta); aMatrix[5*4+3] = 0;
+  
+  // Speaker 6: Rear Right [210°, 0°]
+  theta = 3.665191429188;
+  aMatrix[6*4+0] = k; aMatrix[6*4+1] = k*cos(theta); aMatrix[6*4+2] = k*sin(theta); aMatrix[6*4+3] = 0;
+  
+  // Speaker 7: Rear Center [180°, 0°]
+  aMatrix[7*4+0] = k; aMatrix[7*4+1] = -k; aMatrix[7*4+2] = 0; aMatrix[7*4+3] = 0;
+);
+
+function calculateLedCoordinates(aLedCount, anAngleLo, anAngleHi) local(lLedRadius)
+(
   lLedRadius = gRadius * 0.2;
   lLedRadInc = (0.8*gRadius) / (2*kNumLeds+1);
   loop(kNumLeds,
-    
-    // LED coordinates as convex poygon
-    
-    // Inner points;
-    mLedCoordinates[aLedCount]     =  gCenterX + cos(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 1] =  gCenterY - sin(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 2] =  gCenterX + cos(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 3] =  gCenterY - sin(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount] = gCenterX + cos(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 1] = gCenterY - sin(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 2] = gCenterX + cos(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 3] = gCenterY - sin(anAngleHi) * lLedRadius;
     lLedRadius += lLedRadInc;
-    
-    // Outer points
-    mLedCoordinates[aLedCount + 4] =  gCenterX + cos(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 5] =  gCenterY - sin(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 6] =  gCenterX + cos(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 7] =  gCenterY - sin(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 4] = gCenterX + cos(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 5] = gCenterY - sin(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 6] = gCenterX + cos(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 7] = gCenterY - sin(anAngleLo) * lLedRadius;
     lLedRadius += lLedRadInc;
-    
     aLedCount += 8;
   );
-  // Return lLedCount
   aLedCount;
 );
 
-
-
-
-function calculateCoordinates() local(i, j, lAngleLo, lAngleMid, lAngleHi, lAngleInc, lLedRadius, lLedRadInc, lLedCount)
+function calculateCoordinates() local(lLedCount, lAngleLo, lAngleHi)
 (  
   lLedCount = 0;
-  
-  // Left
   mAngles[0] = 120 * kDeg2Rad;
-  lAngleLo   = 110 * kDeg2Rad;
-  lAngleHi   = 130 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates(lLedCount, lAngleLo, lAngleHi);
-  
-  // Right
-  mAngles[1] =  60 * kDeg2Rad;
-  lAngleLo   =  50 * kDeg2Rad;
-  lAngleHi   =  70 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates(lLedCount, lAngleLo, lAngleHi);
-  
-  // Center
-  mAngles[2] =  90 * kDeg2Rad;
-  lAngleLo   =  80 * kDeg2Rad;
-  lAngleHi   = 100 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates(lLedCount, lAngleLo, lAngleHi);
-  
-  // Sur Left
-  mAngles[3] = 200 * kDeg2Rad;
-  lAngleLo   = 180 * kDeg2Rad;
-  lAngleHi   = 220 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates(lLedCount, lAngleLo, lAngleHi);
-  
-  // Sur Right
-  mAngles[4] = 340 * kDeg2Rad;
-  lAngleLo   = 320 * kDeg2Rad;
-  lAngleHi   = 360 * kDeg2Rad;
-  lLedCount  = calculateLedCoordinates(lLedCount, lAngleLo, lAngleHi);
+  lLedCount = calculateLedCoordinates(lLedCount, 125 * kDeg2Rad, 115 * kDeg2Rad);
+  mAngles[1] = 60 * kDeg2Rad;
+  lLedCount = calculateLedCoordinates(lLedCount, 55 * kDeg2Rad, 65 * kDeg2Rad);
+  mAngles[2] = 90 * kDeg2Rad;
+  lLedCount = calculateLedCoordinates(lLedCount, 85 * kDeg2Rad, 95 * kDeg2Rad);
+  mAngles[3] = 210 * kDeg2Rad;
+  lLedCount = calculateLedCoordinates(lLedCount, 205 * kDeg2Rad, 215 * kDeg2Rad);
+  mAngles[4] = 330 * kDeg2Rad;
+  lLedCount = calculateLedCoordinates(lLedCount, 325 * kDeg2Rad, 335 * kDeg2Rad);
+  mAngles[5] = 120 * kDeg2Rad;
+  lLedCount = calculateLedCoordinates(lLedCount, 125 * kDeg2Rad, 115 * kDeg2Rad);
+  mAngles[6] = 60 * kDeg2Rad;
+  lLedCount = calculateLedCoordinates(lLedCount, 55 * kDeg2Rad, 65 * kDeg2Rad);
 );
 
-
-
-
-/**********************************************************
-Updated slider value:
-**********************************************************/
 @slider
-
-// Generate 8 x 4 decoding matrix
-slider1 == 0 ? (
-    generateDecode50EqualMatrix(matrixDSP);
-) : (
-  slider1 == 1 ? (
-    generateDecode50FocusedMatrix(matrixDSP);
-  ) : (
-    generateDecode50FourlMatrix(matrixDSP);
-  );
-);
-                 
-(slider2 == 0) ? (mPeakScalar = 0.02) :
-(slider2 == 1) ? (mPeakScalar = 0.03) :
-(slider2 == 2) ? (mPeakScalar = 0.05) :
-(slider2 == 3) ? (mPeakScalar = 0.10) :
-(slider2 == 4) ? (mPeakScalar = 0.20) :
-(slider2 == 5) ? (mPeakScalar = 0.30) :
-(slider2 == 6) ? (mPeakScalar = 0.50) :
-(slider2 == 7) ? (mPeakScalar = 1.00) :
-(slider2 == 8) ? (mPeakScalar = 3.00) :
-(slider2 == 9) ? (mPeakScalar = 6.00);
-
+(slider1 == 0) ? (mPeakScalar = 0.02) :
+(slider1 == 1) ? (mPeakScalar = 0.03) :
+(slider1 == 2) ? (mPeakScalar = 0.05) :
+(slider1 == 3) ? (mPeakScalar = 0.10) :
+(slider1 == 4) ? (mPeakScalar = 0.20) :
+(slider1 == 5) ? (mPeakScalar = 0.30) :
+(slider1 == 6) ? (mPeakScalar = 0.50) :
+(slider1 == 7) ? (mPeakScalar = 1.00) :
+(slider1 == 8) ? (mPeakScalar = 3.00) :
+(slider1 == 9) ? (mPeakScalar = 6.00);
 mPeakScalar = pow( 0.5, 1.0/(mPeakScalar * srate));
 
-
-/**********************************************************
-Graphics
-**********************************************************/
 @gfx 500 500
-
 determineGeometry();
-gRadius -= 30;              // Reduce circle radius
-
-// Only refresh background when needed
+gRadius -= 30;
 geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   drawLEDBackgroundImage();
   setSpeakerPositionFont();
   calculateCoordinates();
-
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterY - (gRadius+20)*sin(mAngles[4]), "6");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterY - (gRadius+20)*sin(mAngles[3]), "5");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterY - (gRadius+20)*sin(mAngles[0]), "1");
   drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterY - (gRadius+20)*sin(mAngles[1]), "2");
   drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterY - (gRadius+20)*sin(mAngles[2]), "3");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterY - (gRadius+20)*sin(mAngles[0]), "1");
-  
-  mPrevWidth   = gfx_w;
-  mPrevHeight  = gfx_h;
-  
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterY - (gRadius+20)*sin(mAngles[3]), "4");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterY - (gRadius+20)*sin(mAngles[4]), "5");
+  mPrevWidth = gfx_w;
+  mPrevHeight = gfx_h;
   mDoRefresh = 1;
 );
-
-// Draw LEDs for all speakers
 (mDoRefresh) ? (
-  drawSpkrLEDs(amp2db(mDisplayPeaks[0]), 0, mLedCoordinates);
-  drawSpkrLEDs(amp2db(mDisplayPeaks[1]), 1, mLedCoordinates);
-  drawSpkrLEDs(amp2db(mDisplayPeaks[2]), 2, mLedCoordinates);
-  drawSpkrLEDs(amp2db(mDisplayPeaks[4]), 3, mLedCoordinates);
-  drawSpkrLEDs(amp2db(mDisplayPeaks[5]), 4, mLedCoordinates);
-
-  memset(mDisplayPeaks, 0., 6.);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[1]), 0, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[2]), 1, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[0]), 2, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[5]), 3, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[6]), 4, mLedCoordinates);
+  memset(mDisplayPeaks, 0., 8.);
   mRefreshSampCount = 0;
   mDoRefresh = 0;
 );
 
-
-/**********************************************************
-Audio block pre-processing
-**********************************************************/
 @block
-
 (mRefreshSampCount > kRefreshRate*srate) ? (
   mDoRefresh = 1;
 ) : (
   mRefreshSampCount += samplesblock;
 );
 
-
-/**********************************************************
-Calculate audio sample
-**********************************************************/
 @sample
-wIn = spl0;
-xIn = spl1;
-yIn = spl2;
-zIn = spl3;
-
-// Some transforms blow up if track is 2 channels only as spl2 and spl3 might be un-ininitiated
-(num_ch == 2) ? (
-  yIn = 0.;
-  zIn = 0.;
+wIn = spl0; xIn = spl1; yIn = spl2; zIn = spl3;
+(num_ch == 2) ? ( yIn = 0.; zIn = 0.; );
+i = 0;
+loop(8,
+  diamOut[i] = wIn * matrixDSP[i*4 + 0] + xIn * matrixDSP[i*4 + 1] + yIn * matrixDSP[i*4 + 2] + zIn * matrixDSP[i*4 + 3];
+  i += 1;
 );
-
-// Matrix multiplication with input signal.
-
-// Front (left and right)
-spl0 = wIn * matrixDSP[0]  + xIn * matrixDSP[1]  + yIn * matrixDSP[2]  + zIn * matrixDSP[3];
-spl1 = wIn * matrixDSP[4]  + xIn * matrixDSP[5]  + yIn * matrixDSP[6]  + zIn * matrixDSP[7];
-
-// Center & LFE
-spl2 = wIn * matrixDSP[8]  + xIn * matrixDSP[9]  + yIn * matrixDSP[10] + zIn * matrixDSP[11];
-spl3 = wIn * matrixDSP[12] + xIn * matrixDSP[13] + yIn * matrixDSP[14] + zIn * matrixDSP[15];
-
-// Surround
-spl4 = wIn * matrixDSP[16] + xIn * matrixDSP[17] + yIn * matrixDSP[18] + zIn * matrixDSP[19];
-spl5 = wIn * matrixDSP[20] + xIn * matrixDSP[21] + yIn * matrixDSP[22] + zIn * matrixDSP[23];
-
-// Surround back
-spl6 = wIn * matrixDSP[24] + xIn * matrixDSP[25] + yIn * matrixDSP[26] + zIn * matrixDSP[27];
-spl7 = wIn * matrixDSP[28] + xIn * matrixDSP[29] + yIn * matrixDSP[30] + zIn * matrixDSP[31];
-
-
-
-// Peak monitoring
+spl0 = diamOut[1];  // FL
+spl1 = diamOut[2];  // FR
+spl2 = diamOut[0];  // C
+spl3 = diamOut[5];  // RL
+spl4 = diamOut[6];  // RR
+lfeInput = diamOut[0] + diamOut[1] + diamOut[2] + diamOut[5] + diamOut[6];
+lfeOut = lfeInput + (lfePrev - lfeInput) * lfeCoeff;
+lfePrev = lfeOut;
+spl5 = lfeOut * lfeGain;  // LFE (Channel 6 = output 5)
+spl6 = diamOut[3];  // TFL
+spl7 = diamOut[4];  // TFR
 ispl = 0;
-loop(6,
+loop(8,
   input = spl(ispl);
   output = mPeaks[ispl];
   input = abs(input);
-
-  // When we hit a peak, ride the peak to the top, else exponential decay
   ( input >= output ) ? (output = input) : (output = output * mPeakScalar);
   mPeaks[ispl] = output;
   mDisplayPeaks[ispl] = max(mDisplayPeaks[ispl], output);
-  
-  /* ext_nodenorm is not set in init. Hence we have denorm added to the input signal, 
-     and do not have to bother about denorm issues here.
-  */
-  
   ispl += 1;
 );
