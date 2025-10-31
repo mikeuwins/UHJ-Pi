@@ -88,44 +88,40 @@ function draw512LEDBackgroundImage()
   gfx_circle(gCenterX, gCenterYLower, 1.0*gRadius, 0, 1);
 );
 
-function calculateLedCoordinates512(aLedCount, anAngleLo, anAngleHi, lowerRing) local(lLedRadius, lY, i)
+function calculateLedCoordinates512(aLedCount, anAngleLo, anAngleHi) local (lLedRadius)
 (
   lLedRadius = gRadius * 0.2;
-  lLedRadInc = (1.0*gRadius) / (2*kNumLeds+1);
-  lY = lowerRing ? gCenterYLower : gCenterYUpper;
+  lLedRadInc = (0.8*gRadius) / (2*kNumLeds+1);
   loop(kNumLeds,
-    mLedCoordinates[aLedCount] = gCenterX + cos(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 1] = lY - sin(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 2] = gCenterX + cos(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 3] = lY - sin(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount]     =  gCenterX + cos(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 1] =  gCenterY - sin(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 2] =  gCenterX + cos(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 3] =  gCenterY - sin(anAngleHi) * lLedRadius;
     lLedRadius += lLedRadInc;
-    mLedCoordinates[aLedCount + 4] = gCenterX + cos(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 5] = lY - sin(anAngleHi) * lLedRadius;
-    mLedCoordinates[aLedCount + 6] = gCenterX + cos(anAngleLo) * lLedRadius;
-    mLedCoordinates[aLedCount + 7] = lY - sin(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 4] =  gCenterX + cos(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 5] =  gCenterY - sin(anAngleHi) * lLedRadius;
+    mLedCoordinates[aLedCount + 6] =  gCenterX + cos(anAngleLo) * lLedRadius;
+    mLedCoordinates[aLedCount + 7] =  gCenterY - sin(anAngleLo) * lLedRadius;
     lLedRadius += lLedRadInc;
     aLedCount += 8;
   );
   aLedCount;
 );
 
-function calculateCoordinates512() local(lLedCount, lLedCountLower)
+function calculateCoordinates512() local(lLedCount)
 (
-  lLedCount = 0; lLedCountLower = 5*8*kNumLeds;
+  lLedCount = 0;
+  // Bottom layer 1-5: identical to 5_0
   mAngles[0] = 120 * kDeg2Rad;
-  lLedCount = calculateLedCoordinates512(lLedCount, 125 * kDeg2Rad, 115 * kDeg2Rad, 0);
-  mAngles[1] = 60 * kDeg2Rad;
-  lLedCount = calculateLedCoordinates512(lLedCount, 55 * kDeg2Rad, 65 * kDeg2Rad, 0);
-  mAngles[2] = 90 * kDeg2Rad;
-  lLedCount = calculateLedCoordinates512(lLedCount, 85 * kDeg2Rad, 95 * kDeg2Rad, 1);
-  mAngles[3] = 210 * kDeg2Rad;
-  lLedCount = calculateLedCoordinates512(lLedCount, 205 * kDeg2Rad, 215 * kDeg2Rad, 1);
-  mAngles[4] = 330 * kDeg2Rad;
-  lLedCount = calculateLedCoordinates512(lLedCount, 325 * kDeg2Rad, 335 * kDeg2Rad, 1);
-  mAngles[5] = 120 * kDeg2Rad;
-  lLedCountLower = calculateLedCoordinates512(lLedCountLower, 125 * kDeg2Rad, 115 * kDeg2Rad, 1);
-  mAngles[6] = 60 * kDeg2Rad;
-  lLedCountLower = calculateLedCoordinates512(lLedCountLower, 55 * kDeg2Rad, 65 * kDeg2Rad, 1);
+  lLedCount  = calculateLedCoordinates512(lLedCount, 110 * kDeg2Rad, 130 * kDeg2Rad);
+  mAngles[1] =  60 * kDeg2Rad;
+  lLedCount  = calculateLedCoordinates512(lLedCount,  50 * kDeg2Rad,  70 * kDeg2Rad);
+  mAngles[2] =  90 * kDeg2Rad;
+  lLedCount  = calculateLedCoordinates512(lLedCount,  80 * kDeg2Rad, 100 * kDeg2Rad);
+  mAngles[3] = 200 * kDeg2Rad;
+  lLedCount  = calculateLedCoordinates512(lLedCount, 180 * kDeg2Rad, 220 * kDeg2Rad);
+  mAngles[4] = 340 * kDeg2Rad;
+  lLedCount  = calculateLedCoordinates512(lLedCount, 320 * kDeg2Rad, 360 * kDeg2Rad);
 );
 
 @slider
@@ -174,8 +170,6 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   drawSpkrLEDs(amp2db(mDisplayPeaks[2]), 2, mLedCoordinates);
   drawSpkrLEDs(amp2db(mDisplayPeaks[3]), 3, mLedCoordinates);
   drawSpkrLEDs(amp2db(mDisplayPeaks[4]), 4, mLedCoordinates);
-  drawSpkrLEDs(amp2db(mDisplayPeaks[6]), 5, mLedCoordinates);
-  drawSpkrLEDs(amp2db(mDisplayPeaks[7]), 6, mLedCoordinates);
   memset(mDisplayPeaks, 0., 8.);
   mRefreshSampCount = 0; mDoRefresh = 0;
 );
