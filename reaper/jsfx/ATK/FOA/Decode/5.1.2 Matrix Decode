@@ -2,13 +2,13 @@
 ATK FOA Decode 5.1.2 Matrix
 FOA (W,X,Y,Z) → Dolby 5.1.2 (FL, FR, C, RL, RR, LFE, TFL, TFR)
 
-Based on 5_0 decoder with Z-only height channels
+Based on 5_0 decoder with full spatial height channels and optional Z-gate
 
 Copyright the ATK Community and Joseph Anderson, Josh Parmenter, Trond Lossius, 2013
 Peak level metering based on code by Phil Burke
 */
 
-desc:ATK FOA Decode 5.1.2 Matrix
+desc:ATK FOA 5.1.2 MATRIX
 
 import ../../libraries/atk/atk.jsfx-inc
 
@@ -31,6 +31,7 @@ slider2:0<-36,24,0.1>Centre trim (dB)
 slider3:-10<-36,0,0.1>LFE trim (dB)
 slider4:100<20,200,1>LFE LPF (Hz)
 slider5:5<0,10,1{20 ms, 30 ms, 50 ms, 100 ms, 200 ms, 300 ms, 500 ms, 1 sec, 3 sec, 6 secs}>Peak level decay half time
+slider6:1<0,1,1{Off,On}>Gate heights when Z=0
 
 @init
 kMaxNumSpeakers = 8;
@@ -86,12 +87,12 @@ function set_four_matrix() local(i) (
   matrixDSP[i*4+0] = 0.63; matrixDSP[i*4+1] = -0.275; matrixDSP[i*4+2] = -0.285; matrixDSP[i*4+3] = 0.0;
 );
 
-// Heights 2x4 matrix (TFL,TFR) - Z-only for flat pantaphonic compatibility
+// Heights 2x4 matrix (TFL,TFR) - full spatial width
 function set_heights_matrix() local(i) (
   i = 5; // TFL
-  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.707106781;
+  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.61237243569579; matrixDSP[i*4+2] = -0.35355339059327; matrixDSP[i*4+3] = 0.70710678118655;
   i = 6; // TFR
-  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.707106781;
+  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.61237243569579; matrixDSP[i*4+2] = 0.35355339059327; matrixDSP[i*4+3] = 0.70710678118655;
 );
 
 function determine512Geometry()
@@ -202,10 +203,13 @@ lfeInput = decOut[0] + decOut[1] + decOut[2] + decOut[3] + decOut[4];
 lfeOut = lfeInput + (lfePrev - lfeInput) * lfeCoeff;
 lfePrev = lfeOut;
 
+// Gate heights when Z=0 (if enabled)
+heightGate = slider6 ? ((abs(zIn) < 0.0001) ? 0.0 : 1.0) : 1.0;
+
 // Output mapping (8 channels: FL,FR,C,RL,RR,LFE,TFL,TFR)
 spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
 spl3 = decOut[3]; spl4 = decOut[4]; spl5 = lfeOut * lfeGain;
-spl6 = decOut[5]; spl7 = decOut[6];
+spl6 = decOut[5] * heightGate; spl7 = decOut[6] * heightGate;
 
 // Peak metering
 ispl = 0;
