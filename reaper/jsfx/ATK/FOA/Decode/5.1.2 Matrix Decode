@@ -26,7 +26,7 @@ out_pin:LFE
 out_pin:TFL
 out_pin:TFR
 
-slider1:0<0,1,1{UHJ-Pi,Dolby}>Output order
+slider1:0<0,2,1{Equal, Focus, Four}>Mode
 slider2:0<-36,24,0.1>Centre trim (dB)
 slider3:-10<-36,0,0.1>LFE trim (dB)
 slider4:100<20,200,1>LFE LPF (Hz)
@@ -44,37 +44,55 @@ memset(mPeaks,0,kMaxNumSpeakers+1); memset(mDisplayPeaks,0,kMaxNumSpeakers+1);
 gfx_clear=-1; kRefreshRate = 0.05; mRefreshSampCount = 0; mDoRefresh = 1;
 lfeCoeff = exp(-2 * $pi * 100 / srate); lfeGain = 3.16; lfePrev = 0;
 
-// Lower ring 5x4 matrix (L,R,C,Ls,Rs)
+// Lower ring 5x4 matrix - Equal (C,FL,RL,RR,FR)
 function set_equal_matrix() local(i) (
-  i = 0;
-  // L
-  matrixDSP[i*4+0] = 0.2;   matrixDSP[i*4+1] = 0.085;  matrixDSP[i*4+2] = 0.0;    matrixDSP[i*4+3] = 0.0;
-  i = 1;
-  // R
-  matrixDSP[i*4+0] = 0.2;   matrixDSP[i*4+1] = 0.435;  matrixDSP[i*4+2] = 0.34;   matrixDSP[i*4+3] = 0.0;
-  i = 2;
-  // C
-  matrixDSP[i*4+0] = 0.0;   matrixDSP[i*4+1] = -0.285; matrixDSP[i*4+2] = 0.405;  matrixDSP[i*4+3] = 0.0;
-  i = 3;
-  // Ls (RL)
-  matrixDSP[i*4+0] = 0.0;   matrixDSP[i*4+1] = -0.285; matrixDSP[i*4+2] = -0.405; matrixDSP[i*4+3] = 0.0;
-  i = 4;
-  // Rs (RR)
-  matrixDSP[i*4+0] = 0.0;   matrixDSP[i*4+1] = 0.435;  matrixDSP[i*4+2] = -0.34;  matrixDSP[i*4+3] = 0.0;
+  i = 0; // FL
+  matrixDSP[i*4+0] = 0.365; matrixDSP[i*4+1] = 0.435; matrixDSP[i*4+2] = 0.34; matrixDSP[i*4+3] = 0.0;
+  i = 1; // FR
+  matrixDSP[i*4+0] = 0.365; matrixDSP[i*4+1] = 0.435; matrixDSP[i*4+2] = -0.34; matrixDSP[i*4+3] = 0.0;
+  i = 2; // C
+  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.085; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.0;
+  i = 3; // RL
+  matrixDSP[i*4+0] = 0.555; matrixDSP[i*4+1] = -0.285; matrixDSP[i*4+2] = 0.405; matrixDSP[i*4+3] = 0.0;
+  i = 4; // RR
+  matrixDSP[i*4+0] = 0.555; matrixDSP[i*4+1] = -0.285; matrixDSP[i*4+2] = -0.405; matrixDSP[i*4+3] = 0.0;
 );
 
-// Heights 2x4 matrix (TFL,TFR) - Z-only
+// Lower ring 5x4 matrix - Focused (C,FL,RL,RR,FR)
+function set_focused_matrix() local(i) (
+  i = 0; // FL
+  matrixDSP[i*4+0] = 0.425; matrixDSP[i*4+1] = 0.36; matrixDSP[i*4+2] = 0.405; matrixDSP[i*4+3] = 0.0;
+  i = 1; // FR
+  matrixDSP[i*4+0] = 0.425; matrixDSP[i*4+1] = 0.36; matrixDSP[i*4+2] = -0.405; matrixDSP[i*4+3] = 0.0;
+  i = 2; // C
+  matrixDSP[i*4+0] = 0.2; matrixDSP[i*4+1] = 0.16; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.0;
+  i = 3; // RL
+  matrixDSP[i*4+0] = 0.47; matrixDSP[i*4+1] = -0.33; matrixDSP[i*4+2] = 0.415; matrixDSP[i*4+3] = 0.0;
+  i = 4; // RR
+  matrixDSP[i*4+0] = 0.47; matrixDSP[i*4+1] = -0.33; matrixDSP[i*4+2] = -0.415; matrixDSP[i*4+3] = 0.0;
+);
+
+// Lower ring 5x4 matrix - Four (C,FL,RL,RR,FR)
+function set_four_matrix() local(i) (
+  i = 0; // FL
+  matrixDSP[i*4+0] = 0.425; matrixDSP[i*4+1] = 0.385; matrixDSP[i*4+2] = 0.33; matrixDSP[i*4+3] = 0.0;
+  i = 1; // FR
+  matrixDSP[i*4+0] = 0.425; matrixDSP[i*4+1] = 0.385; matrixDSP[i*4+2] = -0.33; matrixDSP[i*4+3] = 0.0;
+  i = 2; // C
+  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.0;
+  i = 3; // RL
+  matrixDSP[i*4+0] = 0.63; matrixDSP[i*4+1] = -0.275; matrixDSP[i*4+2] = 0.285; matrixDSP[i*4+3] = 0.0;
+  i = 4; // RR
+  matrixDSP[i*4+0] = 0.63; matrixDSP[i*4+1] = -0.275; matrixDSP[i*4+2] = -0.285; matrixDSP[i*4+3] = 0.0;
+);
+
+// Heights 2x4 matrix (TFL,TFR) - Z-only for flat pantaphonic compatibility
 function set_heights_matrix() local(i) (
-  i = 5;
-  // TFL (speaker 6)
-  matrixDSP[i*4+0] = 0.0;   matrixDSP[i*4+1] = 0.0;  matrixDSP[i*4+2] = 0.0;  matrixDSP[i*4+3] = 0.707106781;
-  i = 6;
-  // TFR (speaker 7)
-  matrixDSP[i*4+0] = 0.0;   matrixDSP[i*4+1] = 0.0;  matrixDSP[i*4+2] = 0.0;  matrixDSP[i*4+3] = 0.707106781;
+  i = 5; // TFL
+  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.707106781;
+  i = 6; // TFR
+  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = 0.0; matrixDSP[i*4+3] = 0.707106781;
 );
-
-set_equal_matrix();
-set_heights_matrix();
 
 function determine512Geometry()
 (
@@ -142,7 +160,18 @@ function calculateCoordinates512() local(lLedCount)
 );
 
 @slider
-order   = slider1|0;
+// Generate matrix based on mode
+slider1 == 0 ? (
+    set_equal_matrix();
+) : (
+  slider1 == 1 ? (
+    set_focused_matrix();
+  ) : (
+    set_four_matrix();
+  );
+);
+set_heights_matrix();
+
 centerGain = 10^(slider2/20);
 lfeGain = 10^(slider3/20) * 3.16;
 lfeCoeff = exp(-2 * $pi * slider4 / srate);
@@ -174,15 +203,9 @@ lfeOut = lfeInput + (lfePrev - lfeInput) * lfeCoeff;
 lfePrev = lfeOut;
 
 // Output mapping (8 channels: FL,FR,C,RL,RR,LFE,TFL,TFR)
-(order==0) ? ( // UHJ-Pi: FL FR C RL RR LFE TFL TFR
-  spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
-  spl3 = decOut[3]; spl4 = decOut[4]; spl5 = lfeOut * lfeGain;
-  spl6 = decOut[5]; spl7 = decOut[6];
-) : (         // Dolby:  FL FR C LFE RL RR TFL TFR
-  spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
-  spl3 = lfeOut * lfeGain; spl4 = decOut[3]; spl5 = decOut[4];
-  spl6 = decOut[5]; spl7 = decOut[6];
-);
+spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
+spl3 = decOut[3]; spl4 = decOut[4]; spl5 = lfeOut * lfeGain;
+spl6 = decOut[5]; spl7 = decOut[6];
 
 // Peak metering
 ispl = 0;
