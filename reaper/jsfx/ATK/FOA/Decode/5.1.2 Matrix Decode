@@ -26,13 +26,14 @@ out_pin:LFE
 out_pin:TFL
 out_pin:TFR
 
-slider1:0<0,2,1{Equal, Focus, Four}>Mode
-slider2:0<-36,24,0.1>Centre trim (dB)
-slider3:-10<-36,0,0.1>LFE trim (dB)
-slider4:100<20,200,1>LFE LPF (Hz)
-slider5:5<0,10,1{20 ms, 30 ms, 50 ms, 100 ms, 200 ms, 300 ms, 500 ms, 1 sec, 3 sec, 6 secs}>Peak level decay half time
+slider1:0<0,1,1{UHJ-Pi,Dolby}>Output layout
+slider2:0<0,2,1{Equal, Focus, Four}>Mode
+slider3:0<-60,12,0.1>Centre trim (dB)
+slider4:-10<-60,12,0.1>LFE trim (dB)
+slider5:100<20,200,1>LFE LPF (Hz)
 slider6:45<30,90,1>Height elevation (deg)
-slider7:0<0,1,1{UHJ-Pi,Dolby}>Output layout
+slider7:0<-60,12,0.1>Height trim (dB)
+slider8:80<20,500,10>Height HPF (Hz)
 
 @init
 kMaxNumSpeakers = 8;
@@ -44,7 +45,23 @@ mPeaks = memCount; memCount += kMaxNumSpeakers+1;
 mDisplayPeaks = memCount; memCount += kMaxNumSpeakers+1;
 memset(mPeaks,0,kMaxNumSpeakers+1); memset(mDisplayPeaks,0,kMaxNumSpeakers+1);
 gfx_clear=-1; kRefreshRate = 0.05; mRefreshSampCount = 0; mDoRefresh = 1;
+mPrevLayout = -1; // Track layout changes to force redraw
 lfeCoeff = exp(-2 * $pi * 100 / srate); lfeGain = 3.16; lfePrev = 0;
+// Envelope follower for Z to control height speaker gain (post-processing)
+// Fast attack, slow release to avoid gating on momentary Z dips
+heightGateAttack = exp(-1 / (0.01 * srate)); // 10ms attack
+heightGateRelease = exp(-1 / (0.05 * srate)); // 50ms release (slower to avoid artifacts)
+heightGateEnv = 0;
+heightGateGain = 1.0;
+heightGateMin = 0.0; // Zero when Z=0 (no residual)
+heightGateThreshold = 0.0001; // Lower threshold to avoid gating on small dips
+// Height speaker trim and HPF
+heightTrim = 1.0;
+heightHPFCoeff = 0.0;
+heightHPFPrevL = 0.0;
+heightHPFPrevR = 0.0;
+heightLPFL = 0.0;
+heightLPFR = 0.0;
 
 // Lower ring 5x4 matrix - Equal (C,FL,RL,RR,FR)
 function set_equal_matrix() local(i) (
@@ -117,10 +134,11 @@ function set_heights_matrix() local(i, el, az, g1, norm, x_coef, y_coef, z_coef)
   // Calculate Z coefficient (elevation, raw value, not normalized)
   z_coef = g1 * sin(el);
   // W component (normalized omnidirectional)
+  // X removed for more ambient sound - height speakers should be ambient, not directional
   i = 5; // TFL - upper hemisphere with left-side width
-  matrixDSP[i*4+0] = 0.408248; matrixDSP[i*4+1] = x_coef; matrixDSP[i*4+2] = -y_coef; matrixDSP[i*4+3] = z_coef;
+  matrixDSP[i*4+0] = 0.408248; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = -y_coef; matrixDSP[i*4+3] = z_coef;
   i = 6; // TFR - upper hemisphere with right-side width
-  matrixDSP[i*4+0] = 0.408248; matrixDSP[i*4+1] = x_coef; matrixDSP[i*4+2] = y_coef; matrixDSP[i*4+3] = z_coef;
+  matrixDSP[i*4+0] = 0.408248; matrixDSP[i*4+1] = 0.0; matrixDSP[i*4+2] = y_coef; matrixDSP[i*4+3] = z_coef;
 );
 
 function determine512Geometry()
@@ -190,10 +208,10 @@ function calculateCoordinates512() local(lLedCount)
 
 @slider
 // Generate matrix based on mode
-slider1 == 0 ? (
+slider2 == 0 ? (
     set_equal_matrix();
 ) : (
-  slider1 == 1 ? (
+  slider2 == 1 ? (
     set_focused_matrix();
   ) : (
     set_four_matrix();
@@ -201,25 +219,19 @@ slider1 == 0 ? (
 );
 set_heights_matrix();
 
-centerGain = 10^(slider2/20);
-lfeGain = 10^(slider3/20) * 3.16;
-lfeCoeff = exp(-2 * $pi * slider4 / srate);
-(slider5 == 0) ? (mPeakScalar = 0.02) :
-(slider5 == 1) ? (mPeakScalar = 0.03) :
-(slider5 == 2) ? (mPeakScalar = 0.05) :
-(slider5 == 3) ? (mPeakScalar = 0.10) :
-(slider5 == 4) ? (mPeakScalar = 0.20) :
-(slider5 == 5) ? (mPeakScalar = 0.30) :
-(slider5 == 6) ? (mPeakScalar = 0.50) :
-(slider5 == 7) ? (mPeakScalar = 1.00) :
-(slider5 == 8) ? (mPeakScalar = 3.00) :
-(slider5 == 9) ? (mPeakScalar = 6.00);
-mPeakScalar = pow( 0.5, 1.0/(mPeakScalar * srate));
+centerGain = 10^(slider3/20);
+lfeGain = 10^(slider4/20) * 3.16;
+lfeCoeff = exp(-2 * $pi * slider5 / srate);
+heightTrim = 10^(slider7/20);
+heightHPFCoeff = exp(-2 * $pi * slider8 / srate);
+// Fixed peak meter decay (visual feedback only, not for mastering)
+mPeakScalar = pow( 0.5, 1.0/(0.30 * srate)); // 300ms default decay
 
 @sample
 wIn = spl0; xIn = spl1; yIn = spl2; zIn = spl3;
 
-// Decode lower ring (FL, FR, C, RL, RR) - indices 0-4
+// Full decode for all speakers - no conditional logic
+// Accept that there will be some W/X/Y output when Z=0, but decode correctly when Z is present
 i = 0;
 loop(7,
   decOut[i] = wIn * matrixDSP[i*4 + 0] + xIn * matrixDSP[i*4 + 1] + yIn * matrixDSP[i*4 + 2] + zIn * matrixDSP[i*4 + 3];
@@ -231,19 +243,42 @@ lfeInput = decOut[0] + decOut[1] + decOut[2] + decOut[3] + decOut[4];
 lfeOut = lfeInput + (lfePrev - lfeInput) * lfeCoeff;
 lfePrev = lfeOut;
 
+// Post-processing: envelope follower on Z to control height speaker gain
+// Track smoothed envelope, then use it for gate decision (avoids gating on momentary dips)
+zAbs = abs(zIn);
+// Smooth envelope follower on Z magnitude
+heightGateEnv = heightGateEnv < zAbs ? (heightGateEnv * heightGateAttack + zAbs * (1 - heightGateAttack)) : (heightGateEnv * heightGateRelease + zAbs * (1 - heightGateRelease));
+// Use smoothed envelope for gate decision (more stable, less artifacts)
+heightGateTarget = heightGateEnv > heightGateThreshold ? 1.0 : heightGateMin;
+heightGateGain = heightGateGain < heightGateTarget ? (heightGateGain * heightGateAttack + heightGateTarget * (1 - heightGateAttack)) : (heightGateGain * heightGateRelease + heightGateTarget * (1 - heightGateRelease));
+
+// Apply trim and HPF to height speakers (before gate, so HPF affects gated signal)
+heightL = decOut[5];
+heightR = decOut[6];
+// High-pass filter (simple 1-pole HPF: subtract low-passed signal)
+heightLPFL = heightL + (heightHPFPrevL - heightL) * heightHPFCoeff;
+heightHPFPrevL = heightLPFL;
+heightL = heightL - heightLPFL; // HPF = input - LPF
+heightLPFR = heightR + (heightHPFPrevR - heightR) * heightHPFCoeff;
+heightHPFPrevR = heightLPFR;
+heightR = heightR - heightLPFR; // HPF = input - LPF
+// Apply trim and gate
+heightL = heightL * heightTrim * heightGateGain;
+heightR = heightR * heightTrim * heightGateGain;
+
 // Output mapping based on layout selection
 // decOut indices: [0]=FL, [1]=FR, [2]=C, [3]=RL, [4]=RR, [5]=TFL, [6]=TFR
-layout = slider7|0; // 0=UHJ-Pi, 1=Dolby
+layout = slider1|0; // 0=UHJ-Pi, 1=Dolby
 layout == 0 ? (
   // UHJ-Pi layout: FL, FR, C, RL, RR, LFE, TFL, TFR
   spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
   spl3 = decOut[3]; spl4 = decOut[4]; spl5 = lfeOut * lfeGain;
-  spl6 = decOut[5]; spl7 = decOut[6];
+  spl6 = heightL; spl7 = heightR;
 ) : (
   // Dolby layout: L, R, C, LFE, Ls, Rs, TFL, TFR
   spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
   spl3 = lfeOut * lfeGain; spl4 = decOut[3]; spl5 = decOut[4];
-  spl6 = decOut[5]; spl7 = decOut[6];
+  spl6 = heightL; spl7 = heightR;
 );
 
 // Peak metering
@@ -264,25 +299,53 @@ loop(8,
 @gfx 500 600
 determine512Geometry();
 gRadius -= 30;
+// Force redraw if layout changed
+currentLayout = slider1|0;
+(currentLayout != mPrevLayout) ? (
+  mPrevLayout = currentLayout;
+  mPrevWidth = -1; // Force geometry recalc
+);
 geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   draw512LEDBackgroundImage();
   setSpeakerPositionFont();
   calculateCoordinates512();
   gfx_setfont(1,"Verdana", 12);
-  // Bottom layer 1-5
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterYLower - (gRadius+20)*sin(mAngles[0]), "1");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterYLower - (gRadius+20)*sin(mAngles[1]), "2");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterYLower - (gRadius+20)*sin(mAngles[2]), "3");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterYLower - (gRadius+20)*sin(mAngles[3]), "4");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterYLower - (gRadius+20)*sin(mAngles[4]), "5");
-  // Upper layer 7-8
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(120*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(120*kDeg2Rad), "7");
-  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(60*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(60*kDeg2Rad), "8");
-  // LFE label in center of lower circle (6)
-  gxColorSet(1.0, 0.9, 0.9, 0.9);
-  gfx_setfont(1,"Verdana", 11);
-  gfx_measurestr("6", lW, lH);
-  gfx_x = gCenterX - 0.5*lW; gfx_y = gCenterYLower - 0.5*lH; gfx_drawstr("6");
+  // Speaker labels change based on output layout
+  // UHJ-Pi: 1=FL, 2=FR, 3=C, 4=RL, 5=RR, 6=LFE, 7=TFL, 8=TFR
+  // Dolby:  1=L, 2=R, 3=C, 4=LFE, 5=Ls, 6=Rs, 7=TFL, 8=TFR
+  (slider1|0) == 0 ? (
+    // UHJ-Pi layout
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterYLower - (gRadius+20)*sin(mAngles[0]), "1"); // FL
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterYLower - (gRadius+20)*sin(mAngles[1]), "2"); // FR
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterYLower - (gRadius+20)*sin(mAngles[2]), "3"); // C
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterYLower - (gRadius+20)*sin(mAngles[3]), "4"); // RL
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterYLower - (gRadius+20)*sin(mAngles[4]), "5"); // RR
+    // LFE label in center of lower circle (6)
+    gxColorSet(1.0, 0.9, 0.9, 0.9);
+    gfx_setfont(1,"Verdana", 11);
+    gfx_measurestr("6", lW, lH);
+    gfx_x = gCenterX - 0.5*lW; gfx_y = gCenterYLower - 0.5*lH; gfx_drawstr("6"); // LFE
+    gfx_setfont(1,"Verdana", 12);
+    // Upper layer
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(120*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(120*kDeg2Rad), "7"); // TFL
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(60*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(60*kDeg2Rad), "8"); // TFR
+  ) : (
+    // Dolby layout
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterYLower - (gRadius+20)*sin(mAngles[0]), "1"); // L
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterYLower - (gRadius+20)*sin(mAngles[1]), "2"); // R
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterYLower - (gRadius+20)*sin(mAngles[2]), "3"); // C
+    // LFE label in center of lower circle (4)
+    gxColorSet(1.0, 0.9, 0.9, 0.9);
+    gfx_setfont(1,"Verdana", 11);
+    gfx_measurestr("4", lW, lH);
+    gfx_x = gCenterX - 0.5*lW; gfx_y = gCenterYLower - 0.5*lH; gfx_drawstr("4"); // LFE
+    gfx_setfont(1,"Verdana", 12);
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterYLower - (gRadius+20)*sin(mAngles[3]), "5"); // Ls
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterYLower - (gRadius+20)*sin(mAngles[4]), "6"); // Rs
+    // Upper layer
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(120*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(120*kDeg2Rad), "7"); // TFL
+    drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(60*kDeg2Rad), gCenterYUpper - (gRadius+20)*sin(60*kDeg2Rad), "8"); // TFR
+  );
   mPrevWidth = gfx_w; mPrevHeight = gfx_h; mDoRefresh = 1;
 );
 
