@@ -2,13 +2,13 @@
 ATK FOA Decode 5.1.2 Matrix
 FOA (W,X,Y,Z) → Dolby 5.1.2 (FL, FR, C, RL, RR, LFE, TFL, TFR)
 
-Based on 5_0 decoder with full spatial height channels and optional Z-gate
+Based on 5_0 decoder with periphonic height channels (W,X,Y,Z coefficients)
 
 Copyright the ATK Community and Joseph Anderson, Josh Parmenter, Trond Lossius, 2013
 Peak level metering based on code by Phil Burke
 */
 
-desc:ATK FOA 5.1.2 MATRIX
+desc:ATK FOA Dolby 5.1.2 Matrix v2
 
 import ../../libraries/atk/atk.jsfx-inc
 
@@ -31,7 +31,8 @@ slider2:0<-36,24,0.1>Centre trim (dB)
 slider3:-10<-36,0,0.1>LFE trim (dB)
 slider4:100<20,200,1>LFE LPF (Hz)
 slider5:5<0,10,1{20 ms, 30 ms, 50 ms, 100 ms, 200 ms, 300 ms, 500 ms, 1 sec, 3 sec, 6 secs}>Peak level decay half time
-slider6:1<0,1,1{Off,On}>Gate heights when Z=0
+slider6:45<30,90,1>Height elevation (deg)
+slider7:0<0,1,1{UHJ-Pi,Dolby}>Output layout
 
 @init
 kMaxNumSpeakers = 8;
@@ -87,12 +88,39 @@ function set_four_matrix() local(i) (
   matrixDSP[i*4+0] = 0.63; matrixDSP[i*4+1] = -0.275; matrixDSP[i*4+2] = -0.285; matrixDSP[i*4+3] = 0.0;
 );
 
-// Heights 2x4 matrix (TFL,TFR) - full spatial width
-function set_heights_matrix() local(i) (
-  i = 5; // TFL
-  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.61237243569579; matrixDSP[i*4+2] = -0.35355339059327; matrixDSP[i*4+3] = 0.70710678118655;
-  i = 6; // TFR
-  matrixDSP[i*4+0] = 0.0; matrixDSP[i*4+1] = 0.61237243569579; matrixDSP[i*4+2] = 0.35355339059327; matrixDSP[i*4+3] = 0.70710678118655;
+// Heights 2x4 matrix (TFL,TFR) - upper hemisphere decode with spatial width
+// Position: ±30° azimuth, variable elevation (adjustable via slider6)
+// X: front-back position (same to both, but scales with elevation - represents position change from front to overhead)
+// Y: left-right spatial width (opposite signs create stereo width) - scales with elevation
+// Z: elevation component - increases with elevation
+// W: ambient/omnidirectional component
+function set_heights_matrix() local(i, el, az, g1, norm, x_coef, y_coef, z_coef) (
+  // Elevation angle from slider (convert degrees to radians)
+  el = slider6 * 0.017453292519943; // π/180
+  // Azimuth: ±30° for left/right (fixed position)
+  az = 30 * 0.017453292519943;
+  // First-order gain
+  g1 = 1.4142135623731; // √2
+  // Normalization factor (same as used in original file)
+  norm = 0.577348;
+  // Calculate X coefficient (front-back position, normalized, same for both speakers)
+  // X scales with elevation: decreases from "in front" to "overhead"
+  x_coef = g1 * cos(el) * cos(az) * norm;
+  // Calculate Y coefficient (left-right width, normalized, opposite signs)
+  // Height speakers maintain same left/right positions (azimuth) regardless of elevation
+  // A wide-left sound should stay wide-left whether speakers are at 30° or 90° elevation
+  // So Y should remain constant (or nearly so) - speakers don't move left/right, just up/down
+  // At 30° elevation, Y matches front speakers (0.34)
+  y_at_30deg = 0.34; // Matches front speaker Y coefficient at 30° elevation
+  // Keep Y constant: speakers maintain horizontal separation regardless of elevation
+  y_coef = y_at_30deg;
+  // Calculate Z coefficient (elevation, raw value, not normalized)
+  z_coef = g1 * sin(el);
+  // W component (normalized omnidirectional)
+  i = 5; // TFL - upper hemisphere with left-side width
+  matrixDSP[i*4+0] = 0.408248; matrixDSP[i*4+1] = x_coef; matrixDSP[i*4+2] = -y_coef; matrixDSP[i*4+3] = z_coef;
+  i = 6; // TFR - upper hemisphere with right-side width
+  matrixDSP[i*4+0] = 0.408248; matrixDSP[i*4+1] = x_coef; matrixDSP[i*4+2] = y_coef; matrixDSP[i*4+3] = z_coef;
 );
 
 function determine512Geometry()
@@ -191,7 +219,7 @@ mPeakScalar = pow( 0.5, 1.0/(mPeakScalar * srate));
 @sample
 wIn = spl0; xIn = spl1; yIn = spl2; zIn = spl3;
 
-// Decode using matrix
+// Decode lower ring (FL, FR, C, RL, RR) - indices 0-4
 i = 0;
 loop(7,
   decOut[i] = wIn * matrixDSP[i*4 + 0] + xIn * matrixDSP[i*4 + 1] + yIn * matrixDSP[i*4 + 2] + zIn * matrixDSP[i*4 + 3];
@@ -203,13 +231,20 @@ lfeInput = decOut[0] + decOut[1] + decOut[2] + decOut[3] + decOut[4];
 lfeOut = lfeInput + (lfePrev - lfeInput) * lfeCoeff;
 lfePrev = lfeOut;
 
-// Gate heights when Z=0 (if enabled)
-heightGate = slider6 ? ((abs(zIn) < 0.0001) ? 0.0 : 1.0) : 1.0;
-
-// Output mapping (8 channels: FL,FR,C,RL,RR,LFE,TFL,TFR)
-spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
-spl3 = decOut[3]; spl4 = decOut[4]; spl5 = lfeOut * lfeGain;
-spl6 = decOut[5] * heightGate; spl7 = decOut[6] * heightGate;
+// Output mapping based on layout selection
+// decOut indices: [0]=FL, [1]=FR, [2]=C, [3]=RL, [4]=RR, [5]=TFL, [6]=TFR
+layout = slider7|0; // 0=UHJ-Pi, 1=Dolby
+layout == 0 ? (
+  // UHJ-Pi layout: FL, FR, C, RL, RR, LFE, TFL, TFR
+  spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
+  spl3 = decOut[3]; spl4 = decOut[4]; spl5 = lfeOut * lfeGain;
+  spl6 = decOut[5]; spl7 = decOut[6];
+) : (
+  // Dolby layout: L, R, C, LFE, Ls, Rs, TFL, TFR
+  spl0 = decOut[0]; spl1 = decOut[1]; spl2 = decOut[2] * centerGain;
+  spl3 = lfeOut * lfeGain; spl4 = decOut[3]; spl5 = decOut[4];
+  spl6 = decOut[5]; spl7 = decOut[6];
+);
 
 // Peak metering
 ispl = 0;
@@ -264,4 +299,3 @@ geometryHasChanged(mPrevWidth, mPrevHeight) ? (
   memset(mDisplayPeaks, 0., 8.);
   mRefreshSampCount = 0; mDoRefresh = 0;
 );
-
