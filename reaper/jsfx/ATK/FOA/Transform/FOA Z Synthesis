@@ -22,7 +22,7 @@ slider1:30<0,100,1>Amount %
 slider2:500<40,1200,1>HPF cutoff (Hz)
 slider3:7<0,30,0.1>Decorrelate delay (ms)
 slider4:0<-12,12,0.1>Z trim (dB)
-slider5:1<0,1,1{Replace Z,Add to Z}>Z mode
+slider5:50<0,100,1>Z crossfade % (0=orig Z, 100=synth Z)
 
 @init
 // Delay buffer (power of two for easy wrap)
@@ -62,6 +62,7 @@ function update_params()
   // Gains
   amt = slider1 * 0.01; // 0..1
   z_lin = exp(log(10) * (slider4 / 20));
+  z_xf = max(0, min(1, slider5 * 0.01));
 );
 
 update_params();
@@ -78,13 +79,10 @@ spl0 = W;
 spl1 = X;
 spl2 = Y;
 
-// Simple energy-based height cue from lateral components, with W subtraction to avoid centre-bass lift
-// Use soft abs and mix to keep sign variation minimal before decorrelation
-absX = abs(X);
-absY = abs(Y);
-absW = abs(W);
-
-z_src = (absX + absY) * 0.7071067811865476 - absW * 0.25;
+// Lateral cue without rectification to avoid fizz: sum X and Y
+// Subtract a little W to avoid centre-bass lift
+xy_sum = (X + Y) * 0.7071067811865476;
+z_src = xy_sum - (W * 0.25);
 
 // High-pass to avoid bass lift
 z_hpf = hpf_process(z_src);
@@ -94,10 +92,18 @@ mem[buf_base + (buf_w & buf_mask)] = z_hpf;
 z_decorr = mem[buf_base + ((buf_w - d_samp) & buf_mask)];
 buf_w = (buf_w + 1) & buf_mask;
 
-// Amount and trim
-z_add = z_decorr * amt * z_lin;
+// Blend some undelayed to reduce combing/fizz
+z_mix = z_decorr * 0.7 + z_hpf * 0.3;
 
-// Mode: 0 replace, 1 add
-spl3 = (slider5 <= 0.5) ? z_add : (Z + z_add);
+// Gentle soft clip to prevent overload without adding strong harmonics
+// y = tanh(k*x)/tanh(k), k≈1.5 is mild
+k = 1.5;
+z_soft = tanh(k * z_mix) / tanh(k);
+
+// Amount and trim
+z_add = z_soft * amt * z_lin;
+
+// Crossfade between original Z and synthesised Z
+spl3 = (1 - z_xf) * Z + z_xf * z_add;
 
 
