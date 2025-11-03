@@ -1,0 +1,103 @@
+desc:ATK FOA Z Synthesis
+author: ATK Community
+version: 1.0
+
+// Synthesise FOA Z (height) directly from W/X/Y without speaker-domain round trip.
+// - W/X/Y pass through unchanged
+// - Z_out = Z_in (+) HPF'd decorrelated energy derived from X/Y minus W
+
+import ../../libraries/atk/atk.jsfx-inc
+
+chans: 4
+in_pin:W in
+in_pin:X in
+in_pin:Y in
+in_pin:Z in
+out_pin:W out
+out_pin:X out
+out_pin:Y out
+out_pin:Z out
+
+slider1:30<0,100,1>Amount %
+slider2:500<40,1200,1>HPF cutoff (Hz)
+slider3:7<0,30,0.1>Decorrelate delay (ms)
+slider4:0<-12,12,0.1>Z trim (dB)
+slider5:1<0,1,1{Replace Z,Add to Z}>Z mode
+
+@init
+// Delay buffer (power of two for easy wrap)
+buf_len = 8192;
+buf_mask = buf_len - 1;
+buf_base = 0; // uses mem[] from 0..8191
+buf_w = 0;
+
+// HPF state (one-pole via complementary LPF)
+hpf_lpf = 0;
+hpf_a = 0; // decay coefficient
+
+function update_hpf()
+(
+  // One-pole LPF coefficient mapped from cutoff
+  // lpf = x + (lpf - x) * a ; hpf = x - lpf
+  // a = exp(-2*pi*fc/srate)
+  two_pi_fc = 6.283185307179586 * slider2;
+  hpf_a = exp(-(two_pi_fc / srate));
+);
+
+function hpf_process(x)
+(
+  // Anti-denormal guard
+  x += 0.000000000000000000000000000001;
+  hpf_lpf = x + (hpf_lpf - x) * hpf_a;
+  (x - hpf_lpf);
+);
+
+function update_params()
+(
+  // Update HPF
+  update_hpf();
+  // Delay in samples
+  d_samp = floor(max(0, min(30, slider3)) * 0.001 * srate);
+  d_samp = (d_samp > buf_len-1) ? (buf_len-1) : d_samp;
+  // Gains
+  amt = slider1 * 0.01; // 0..1
+  z_lin = exp(log(10) * (slider4 / 20));
+);
+
+update_params();
+
+@slider
+update_params();
+
+@sample
+// Inputs
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// Base pass-through
+spl0 = W;
+spl1 = X;
+spl2 = Y;
+
+// Simple energy-based height cue from lateral components, with W subtraction to avoid centre-bass lift
+// Use soft abs and mix to keep sign variation minimal before decorrelation
+absX = abs(X);
+absY = abs(Y);
+absW = abs(W);
+
+z_src = (absX + absY) * 0.7071067811865476 - absW * 0.25;
+
+// High-pass to avoid bass lift
+z_hpf = hpf_process(z_src);
+
+// Decorrelate with short delay
+mem[buf_base + (buf_w & buf_mask)] = z_hpf;
+z_decorr = mem[buf_base + ((buf_w - d_samp) & buf_mask)];
+buf_w = (buf_w + 1) & buf_mask;
+
+// Amount and trim
+z_add = z_decorr * amt * z_lin;
+
+// Mode: 0 replace, 1 add
+spl3 = (slider5 <= 0.5) ? z_add : (Z + z_add);
+
+
