@@ -1,0 +1,454 @@
+desc:ATK VHAP TRANSCODER 5.0
+author: ATK Community
+version: 7.0 (Clean start)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+chans: 4
+in_pin:W in
+in_pin:X in
+in_pin:Y in
+in_pin:Z in
+out_pin:W out
+out_pin:X out
+out_pin:Y out
+out_pin:Z out
+
+slider1:45<0,90,1>Upper Ring Elevation (deg)
+slider2:50<0,100,1>VHAP Amount (%)
+slider3:700<200,1500,10>Split f1 (Hz)
+slider4:4000<2500,8000,50>Split f2 (Hz)
+slider5:0.20<0,2,0.01>Decor Mid Delay (ms)
+slider6:0.40<0,2,0.01>Decor High Delay (ms)
+slider8:9.0<-6,10,0.1>Round Trip Comp (dB)
+
+@init
+// 5.0 Decode Matrix (D) - ATK Equal (Wiggins)
+// Order: FL, FR, C, RL, RR
+// Columns: W, X, Y, Z
+// Speaker positions (azimuth, elevation):
+// FL: 30°, 0°
+// FR: 330°, 0°
+// C: 0°, 0°
+// RL: 110°, 0°
+// RR: 250°, 0°
+
+D00 = 0.365; D01 = 0.435; D02 = 0.34;  D03 = 0.0;  // FL (30°, 0°)
+D10 = 0.365; D11 = 0.435; D12 = -0.34; D13 = 0.0;  // FR (330°, 0°)
+D20 = 0.0;   D21 = 0.085; D22 = 0.0;   D23 = 0.0;  // C  (0°, 0°)
+D30 = 0.555; D31 = -0.285; D32 = 0.405; D33 = 0.0;  // RL (110°, 0°)
+D40 = 0.555; D41 = -0.285; D42 = -0.405; D43 = 0.0; // RR (250°, 0°)
+
+// Speaker angles (azimuth in degrees)
+az_FL = 30.0;
+az_FR = 330.0;
+az_C = 0.0;
+az_RL = 110.0;
+az_RR = 250.0;
+
+// All speakers at elevation 0° (flat)
+
+// Periphonic Encoder - Matching ATK FOA Encode Periphonic3D
+// Lower ring: virtual mics at 0° elevation (same z-plane as virtual speakers)
+// Upper ring: virtual mics at elevated angle (adjustable via slider)
+// Each virtual mic encodes to B-Format, contributions are summed
+
+// Number of virtual microphone pairs (at least 4, can increase for quality)
+num_vmic_pairs = 8;  // Using 8 pairs = 16 total virtual mics (8 lower + 8 upper)
+
+// Virtual microphone azimuth spacing (matching ATK pattern)
+vmic_azi_delta = (2.0 * $pi) / num_vmic_pairs;
+
+// Speaker layout: "Flat" (centered on first speaker) matching ATK default
+vmic_start_azi = 0.5 * vmic_azi_delta;  // Offset by half delta for "flat" layout
+
+// Convert speaker azimuths to radians
+az_FL_rad = az_FL * $pi / 180.0;
+az_FR_rad = az_FR * $pi / 180.0;
+az_C_rad = az_C * $pi / 180.0;
+az_RL_rad = az_RL * $pi / 180.0;
+az_RR_rad = az_RR * $pi / 180.0;
+
+// Store speaker positions for panning
+spk_azi[0] = az_FL_rad;
+spk_azi[1] = az_FR_rad;
+spk_azi[2] = az_C_rad;
+spk_azi[3] = az_RL_rad;
+spk_azi[4] = az_RR_rad;
+
+// Initialize encoding matrix (will be recalculated in @slider)
+E00 = 0.0; E01 = 0.0; E02 = 0.0; E03 = 0.0;  // FL -> W,X,Y,Z
+E10 = 0.0; E11 = 0.0; E12 = 0.0; E13 = 0.0;  // FR -> W,X,Y,Z
+E20 = 0.0; E21 = 0.0; E22 = 0.0; E23 = 0.0;  // C  -> W,X,Y,Z
+E30 = 0.0; E31 = 0.0; E32 = 0.0; E33 = 0.0;  // RL -> W,X,Y,Z
+E40 = 0.0; E41 = 0.0; E42 = 0.0; E43 = 0.0;  // RR -> W,X,Y,Z
+
+function calculateEncoderMatrix()
+(
+  // Get elevation from slider
+  encoder_elevation = slider1 * $pi / 180.0;
+  mCosEle = cos(encoder_elevation);
+  mSinEle = sin(encoder_elevation);
+  
+  // Clear matrix
+  E00 = 0.0; E01 = 0.0; E02 = 0.0; E03 = 0.0;
+  E10 = 0.0; E11 = 0.0; E12 = 0.0; E13 = 0.0;
+  E20 = 0.0; E21 = 0.0; E22 = 0.0; E23 = 0.0;
+  E30 = 0.0; E31 = 0.0; E32 = 0.0; E33 = 0.0;
+  E40 = 0.0; E41 = 0.0; E42 = 0.0; E43 = 0.0;
+  
+  // Separate encoding matrices: lower ring (unprocessed) and upper ring (VHAP processed)
+// Initialize both matrices
+E00_lower = 0.0; E01_lower = 0.0; E02_lower = 0.0; E03_lower = 0.0; E04_lower = 0.0;
+E10_lower = 0.0; E11_lower = 0.0; E12_lower = 0.0; E13_lower = 0.0; E14_lower = 0.0;
+E20_lower = 0.0; E21_lower = 0.0; E22_lower = 0.0; E23_lower = 0.0; E24_lower = 0.0;
+E30_lower = 0.0; E31_lower = 0.0; E32_lower = 0.0; E33_lower = 0.0; E34_lower = 0.0;
+
+E00_upper = 0.0; E01_upper = 0.0; E02_upper = 0.0; E03_upper = 0.0; E04_upper = 0.0;
+E10_upper = 0.0; E11_upper = 0.0; E12_upper = 0.0; E13_upper = 0.0; E14_upper = 0.0;
+E20_upper = 0.0; E21_upper = 0.0; E22_upper = 0.0; E23_upper = 0.0; E24_upper = 0.0;
+E30_upper = 0.0; E31_upper = 0.0; E32_upper = 0.0; E33_upper = 0.0; E34_upper = 0.0;
+
+// Process each virtual microphone pair (matching ATK encoder structure)
+vmic_azi = vmic_start_azi;
+i = 0;
+loop(num_vmic_pairs,
+  // Upper ring virtual mic (at elevated angle) - encodes VHAP processed signals
+  vmic_w_upper = kInvSqrt2;
+  vmic_x_upper = cos(vmic_azi) * mCosEle;
+  vmic_y_upper = sin(vmic_azi) * mCosEle;
+  vmic_z_upper = mSinEle;  // Positive for upper ring
+  
+  // Lower ring virtual mic (at 0° elevation) - encodes UNPROCESSED signals
+  vmic_w_lower = kInvSqrt2;
+  vmic_x_lower = cos(vmic_azi);
+  vmic_y_lower = sin(vmic_azi);
+  vmic_z_lower = 0.0;  // sin(0°) = 0
+  
+  // For each speaker, compute how much it contributes to this virtual mic pair
+  spk_idx = 0;
+  loop(5,
+    // Angular distance from speaker to virtual mic
+    azi_diff = spk_azi[spk_idx] - vmic_azi;
+    // Normalize to [-pi, pi] range
+    (azi_diff > $pi) ? (azi_diff -= 2.0 * $pi);
+    (azi_diff < -$pi) ? (azi_diff += 2.0 * $pi);
+    // Cosine panning: 1.0 when aligned, 0.0 when opposite
+    pan_gain = 0.5 + 0.5 * cos(azi_diff);
+    
+    // Upper ring: encodes VHAP-processed signals (will be set in @sample)
+    (spk_idx == 0) ? (
+      E00_upper += pan_gain * vmic_w_upper;
+      E10_upper += pan_gain * vmic_x_upper;
+      E20_upper += pan_gain * vmic_y_upper;
+      E30_upper += pan_gain * vmic_z_upper;
+    ) : (spk_idx == 1) ? (
+      E01_upper += pan_gain * vmic_w_upper;
+      E11_upper += pan_gain * vmic_x_upper;
+      E21_upper += pan_gain * vmic_y_upper;
+      E31_upper += pan_gain * vmic_z_upper;
+    ) : (spk_idx == 2) ? (
+      E02_upper += pan_gain * vmic_w_upper;
+      E12_upper += pan_gain * vmic_x_upper;
+      E22_upper += pan_gain * vmic_y_upper;
+      E32_upper += pan_gain * vmic_z_upper;
+    ) : (spk_idx == 3) ? (
+      E03_upper += pan_gain * vmic_w_upper;
+      E13_upper += pan_gain * vmic_x_upper;
+      E23_upper += pan_gain * vmic_y_upper;
+      E33_upper += pan_gain * vmic_z_upper;
+    ) : (
+      E04_upper += pan_gain * vmic_w_upper;
+      E14_upper += pan_gain * vmic_x_upper;
+      E24_upper += pan_gain * vmic_y_upper;
+      E34_upper += pan_gain * vmic_z_upper;
+    );
+    
+    // Lower ring: encodes UNPROCESSED signals (raw/bypassed)
+    (spk_idx == 0) ? (
+      E00_lower += pan_gain * vmic_w_lower;
+      E10_lower += pan_gain * vmic_x_lower;
+      E20_lower += pan_gain * vmic_y_lower;
+    ) : (spk_idx == 1) ? (
+      E01_lower += pan_gain * vmic_w_lower;
+      E11_lower += pan_gain * vmic_x_lower;
+      E21_lower += pan_gain * vmic_y_lower;
+    ) : (spk_idx == 2) ? (
+      E02_lower += pan_gain * vmic_w_lower;
+      E12_lower += pan_gain * vmic_x_lower;
+      E22_lower += pan_gain * vmic_y_lower;
+    ) : (spk_idx == 3) ? (
+      E03_lower += pan_gain * vmic_w_lower;
+      E13_lower += pan_gain * vmic_x_lower;
+      E23_lower += pan_gain * vmic_y_lower;
+    ) : (
+      E04_lower += pan_gain * vmic_w_lower;
+      E14_lower += pan_gain * vmic_x_lower;
+      E24_lower += pan_gain * vmic_y_lower;
+    );
+    
+    spk_idx += 1;
+  );
+  
+  vmic_azi += vmic_azi_delta;
+  i += 1;
+);
+
+// Normalize both matrices
+total_vmics = num_vmic_pairs;
+norm = 1.0 / total_vmics;
+
+// Lower ring normalization
+E00_lower *= norm; E01_lower *= norm; E02_lower *= norm; E03_lower *= norm; E04_lower *= norm;
+E10_lower *= norm; E11_lower *= norm; E12_lower *= norm; E13_lower *= norm; E14_lower *= norm;
+E20_lower *= norm; E21_lower *= norm; E22_lower *= norm; E23_lower *= norm; E24_lower *= norm;
+
+// Upper ring normalization
+E00_upper *= norm; E01_upper *= norm; E02_upper *= norm; E03_upper *= norm; E04_upper *= norm;
+E10_upper *= norm; E11_upper *= norm; E12_upper *= norm; E13_upper *= norm; E14_upper *= norm;
+E20_upper *= norm; E21_upper *= norm; E22_upper *= norm; E23_upper *= norm; E24_upper *= norm;
+E30_upper *= norm; E31_upper *= norm; E32_upper *= norm; E33_upper *= norm; E34_upper *= norm;
+
+// Combine into final encoding matrix (E = E_lower + E_upper)
+E00 = E00_lower + E00_upper; E01 = E01_lower + E01_upper; E02 = E02_lower + E02_upper; E03 = E03_lower + E03_upper; E04 = E04_lower + E04_upper;
+E10 = E10_lower + E10_upper; E11 = E11_lower + E11_upper; E12 = E12_lower + E12_upper; E13 = E13_lower + E13_upper; E14 = E14_lower + E14_upper;
+E20 = E20_lower + E20_upper; E21 = E21_lower + E21_upper; E22 = E22_lower + E22_upper; E23 = E23_lower + E23_upper; E24 = E24_lower + E24_upper;
+E30 = E30_upper; E31 = E31_upper; E32 = E32_upper; E33 = E33_upper; E34 = E34_upper;  // Z only from upper ring
+);
+
+// Calculate initial encoder matrix
+calculateEncoderMatrix();
+
+// VHAP Processing - Band-splitting filters and delay lines
+// Using biquad LP filters for band-splitting (simpler than FIR)
+// Delay lines for decorrelation (mid and high bands)
+
+// Memory allocation for delay lines (triad: C, RL, RR)
+// Each speaker needs 2 delay lines (mid, high)
+dmid_C_base = 100000;
+dmid_RL_base = 101000;
+dmid_RR_base = 102000;
+dhigh_C_base = 103000;
+dhigh_RL_base = 104000;
+dhigh_RR_base = 105000;
+
+d_mask = 1024 - 1;  // Power-of-two mask
+
+// Delay line pointers
+dmid_C_ptr = 0;
+dmid_RL_ptr = 0;
+dmid_RR_ptr = 0;
+dhigh_C_ptr = 0;
+dhigh_RL_ptr = 0;
+dhigh_RR_ptr = 0;
+
+// Biquad filter states (need per-speaker states for triad)
+// Each speaker needs 2 filters (l1, l2), each with 4 states (x1, x2, y1, y2)
+// State layout: mem[base + speaker_idx*8 + filter_idx*4 + state_idx]
+// Speaker indices: C=0, RL=1, RR=2
+biquad_state_base = 200000;  // 3 speakers * 2 filters * 4 states = 24 floats
+
+// HPF not needed at speaker level - s2, s3, s4 are already mid/high only from VHAP processing
+
+// Initialize biquad coefficients (will be recalculated in @slider)
+l1_b0 = 0.0; l1_b1 = 0.0; l1_b2 = 0.0; l1_a1 = 0.0; l1_a2 = 0.0;
+l2_b0 = 0.0; l2_b1 = 0.0; l2_b2 = 0.0; l2_a1 = 0.0; l2_a2 = 0.0;
+
+function calculateVHAPFilters()
+(
+  // Calculate LP filter coefficients at f1 and f2
+  // Using standard biquad low-pass design (Q = 0.707, Butterworth)
+  f1 = slider3;
+  f2 = slider4;
+  Q = 0.707;  // Butterworth Q
+  
+  // LP at f1 (low-pass for first split)
+  w1 = 2.0 * $pi * f1 / srate;
+  sn1 = sin(w1);
+  cs1 = cos(w1);
+  alpha1 = sn1 / (2.0 * Q);
+  l1_b0 = (1.0 - cs1) / 2.0;
+  l1_b1 = 1.0 - cs1;
+  l1_b2 = l1_b0;
+  l1_a0 = 1.0 + alpha1;
+  l1_a1 = -2.0 * cs1;
+  l1_a2 = 1.0 - alpha1;
+  l1_b0 /= l1_a0; l1_b1 /= l1_a0; l1_b2 /= l1_a0;
+  l1_a1 /= l1_a0; l1_a2 /= l1_a0;
+  
+  // LP at f2 (low-pass for second split)
+  w2 = 2.0 * $pi * f2 / srate;
+  sn2 = sin(w2);
+  cs2 = cos(w2);
+  alpha2 = sn2 / (2.0 * Q);
+  l2_b0 = (1.0 - cs2) / 2.0;
+  l2_b1 = 1.0 - cs2;
+  l2_b2 = l2_b0;
+  l2_a0 = 1.0 + alpha2;
+  l2_a1 = -2.0 * cs2;
+  l2_a2 = 1.0 - alpha2;
+  l2_b0 /= l2_a0; l2_b1 /= l2_a0; l2_b2 /= l2_a0;
+  l2_a1 /= l2_a0; l2_a2 /= l2_a0;
+  
+);
+
+// Initialize filters
+calculateVHAPFilters();
+
+@slider
+calculateEncoderMatrix();
+calculateVHAPFilters();
+
+@sample
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// Decode to 5.0 speakers
+s0 = D00*W + D01*X + D02*Y + D03*Z;  // FL (unprocessed)
+s1 = D10*W + D11*X + D12*Y + D13*Z;  // FR (unprocessed)
+s2_raw = D20*W + D21*X + D22*Y + D23*Z;  // C (triad - will process)
+s3_raw = D30*W + D31*X + D32*Y + D33*Z;  // RL (triad - will process)
+s4_raw = D40*W + D41*X + D42*Y + D43*Z;  // RR (triad - will process)
+
+// Round trip compensation (adjustable slider to match bypass level)
+// Convert dB to linear gain
+round_trip_comp = exp(log(10) * (slider8 / 20.0));
+
+// Apply compensation to FL/FR (for lower ring W/X/Y)
+s0 *= round_trip_comp;
+s1 *= round_trip_comp;
+
+// Apply compensation to raw triad signals (for lower ring W/X/Y)
+s2_raw *= round_trip_comp;
+s3_raw *= round_trip_comp;
+s4_raw *= round_trip_comp;
+
+// Save compensated raw for lower ring encoding
+s2_raw_comp = s2_raw;
+s3_raw_comp = s3_raw;
+s4_raw_comp = s4_raw;
+
+// But use UNCOMPENSATED raw signals for VHAP processing (so height speakers don't get the compensation)
+s2_raw_uncomp = D20*W + D21*X + D22*Y + D23*Z;
+s3_raw_uncomp = D30*W + D31*X + D32*Y + D33*Z;
+s4_raw_uncomp = D40*W + D41*X + D42*Y + D43*Z;
+
+// === VHAP Processing (triad only: C, RL, RR) ===
+vhap_amount = slider2 * 0.01;  // 0.0 to 1.0
+
+// Delay times (in samples)
+Dmid = floor(slider5 * 0.001 * srate);
+Dhigh = floor(slider6 * 0.001 * srate);
+(Dmid > d_mask) ? Dmid = d_mask;
+(Dhigh > d_mask) ? Dhigh = d_mask;
+
+// Biquad processor (inline, matching Upper Ring VHAP pattern)
+function biquad_lp(x, b0, b1, b2, a1, a2, spk_idx, filter_idx)
+instance(y)
+(
+  state_base = biquad_state_base + spk_idx * 8 + filter_idx * 4;
+  x1 = mem[state_base + 0];
+  x2 = mem[state_base + 1];
+  y1 = mem[state_base + 2];
+  y2 = mem[state_base + 3];
+  
+  x += 0.000000000000000000000000000001; x -= 0.000000000000000000000000000001;  // Anti-denormal
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  
+  mem[state_base + 1] = x1;
+  mem[state_base + 0] = x;
+  mem[state_base + 3] = y1;
+  mem[state_base + 2] = y;
+  y;
+);
+
+// Process C (speaker 0) - using UNCOMPENSATED signal for VHAP
+// Band-split
+C_l1 = biquad_lp(s2_raw_uncomp, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2, 0, 0);
+C_l2 = biquad_lp(s2_raw_uncomp, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2, 0, 1);
+C_low = C_l1;
+C_mid = C_l2 - C_l1;
+C_hi = s2_raw_uncomp - C_l2;
+
+// Decorrelation delays on mid and high
+mem[dmid_C_base + (dmid_C_ptr & d_mask)] = C_mid;
+mem[dhigh_C_base + (dhigh_C_ptr & d_mask)] = C_hi;
+C_mid_d = mem[dmid_C_base + ((dmid_C_ptr - Dmid) & d_mask)];
+C_hi_d = mem[dhigh_C_base + ((dhigh_C_ptr - Dhigh) & d_mask)];
+dmid_C_ptr = (dmid_C_ptr + 1) & d_mask;
+dhigh_C_ptr = (dhigh_C_ptr + 1) & d_mask;
+
+// For height speakers: mid/high only (exclude low band)
+// Note: Bass removal handled at 5.1.2 decoder level
+s2 = (C_mid_d + C_hi_d) * vhap_amount;
+
+// Process RL (speaker 1) - using UNCOMPENSATED signal for VHAP
+RL_l1 = biquad_lp(s3_raw_uncomp, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2, 1, 0);
+RL_l2 = biquad_lp(s3_raw_uncomp, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2, 1, 1);
+RL_low = RL_l1;
+RL_mid = RL_l2 - RL_l1;
+RL_hi = s3_raw_uncomp - RL_l2;
+
+mem[dmid_RL_base + (dmid_RL_ptr & d_mask)] = RL_mid;
+mem[dhigh_RL_base + (dhigh_RL_ptr & d_mask)] = RL_hi;
+RL_mid_d = mem[dmid_RL_base + ((dmid_RL_ptr - Dmid) & d_mask)];
+RL_hi_d = mem[dhigh_RL_base + ((dhigh_RL_ptr - Dhigh) & d_mask)];
+dmid_RL_ptr = (dmid_RL_ptr + 1) & d_mask;
+dhigh_RL_ptr = (dhigh_RL_ptr + 1) & d_mask;
+
+// For height speakers: mid/high only
+// Note: Bass removal handled at 5.1.2 decoder level
+s3 = (RL_mid_d + RL_hi_d) * vhap_amount;
+
+// Process RR (speaker 2) - using UNCOMPENSATED signal for VHAP
+RR_l1 = biquad_lp(s4_raw_uncomp, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2, 2, 0);
+RR_l2 = biquad_lp(s4_raw_uncomp, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2, 2, 1);
+RR_low = RR_l1;
+RR_mid = RR_l2 - RR_l1;
+RR_hi = s4_raw_uncomp - RR_l2;
+
+mem[dmid_RR_base + (dmid_RR_ptr & d_mask)] = RR_mid;
+mem[dhigh_RR_base + (dhigh_RR_ptr & d_mask)] = RR_hi;
+RR_mid_d = mem[dmid_RR_base + ((dmid_RR_ptr - Dmid) & d_mask)];
+RR_hi_d = mem[dhigh_RR_base + ((dhigh_RR_ptr - Dhigh) & d_mask)];
+dmid_RR_ptr = (dmid_RR_ptr + 1) & d_mask;
+dhigh_RR_ptr = (dhigh_RR_ptr + 1) & d_mask;
+
+// For height speakers: mid/high only
+// Note: Bass removal handled at 5.1.2 decoder level
+s4 = (RR_mid_d + RR_hi_d) * vhap_amount;
+
+// Re-encode to B-Format using periphonic encoder
+// Lower ring (0°): encodes COMPENSATED raw signals (bypassed) - for lower speakers (W, X, Y only)
+Wp = E00_lower*s0 + E01_lower*s1 + E02_lower*s2_raw_comp + E03_lower*s3_raw_comp + E04_lower*s4_raw_comp;
+Xp = E10_lower*s0 + E11_lower*s1 + E12_lower*s2_raw_comp + E13_lower*s3_raw_comp + E14_lower*s4_raw_comp;
+Yp = E20_lower*s0 + E21_lower*s1 + E22_lower*s2_raw_comp + E23_lower*s3_raw_comp + E24_lower*s4_raw_comp;
+// Lower ring has no Z component (Zp stays 0 for lower ring)
+
+// Upper ring (elevated): encodes VHAP PROCESSED signals - for height speakers (Z only)
+// Exclude FL/FR (s0, s1) from Z to prevent bass leakage - only triad (s2, s3, s4) contributes
+Zp = E32_upper*s2 + E33_upper*s3 + E34_upper*s4;
+
+// Normalize by number of speakers (matching ATK encoder behavior)
+// Lower ring (W, X, Y): normalize by lower ring W row sum
+W_row_sum_lower = E00_lower + E01_lower + E02_lower + E03_lower + E04_lower;
+(W_row_sum_lower != 0) ? (
+  norm_lower = 1.0 / W_row_sum_lower;
+  Wp *= norm_lower;
+  Xp *= norm_lower;
+  Yp *= norm_lower;
+);
+
+// Upper ring (Z): normalize by triad sum only since FL/FR are excluded
+W_row_sum_upper = E32_upper + E33_upper + E34_upper;
+(W_row_sum_upper != 0) ? (
+  norm_upper = 1.0 / W_row_sum_upper;
+  Zp *= norm_upper;
+);
+
+// Note: Bass removal (HPF) handled at 5.1.2 decoder level, not in this transcoder
+
+// Output B-Format
+spl0 = Wp;
+spl1 = Xp;
+spl2 = Yp;
+spl3 = Zp;
