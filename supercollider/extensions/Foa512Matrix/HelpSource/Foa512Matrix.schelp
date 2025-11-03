@@ -1,0 +1,183 @@
+CLASS:: Foa512Matrix
+summary:: First Order Ambisonic (FOA) decoder matrix for 5.1.2 speaker layout
+categories:: Libraries>Ambisonic Toolkit>Matrix & Kernel>FOA
+related:: Classes/FoaDecoderMatrix, Classes/FoaDecode, Classes/Foa512Matrix
+
+DESCRIPTION::
+Foa512Matrix generates decoder matrices for converting FOA B-format (W, X, Y, Z) to a 5.1.2 speaker layout: 5 lower ring speakers (FL, FR, C, RL, RR), 2 height speakers (TFL, TFR), and an LFE channel.
+
+The decoder supports three lower-ring modes (Equal, Focus, Four) and dynamically calculates height speaker coefficients based on adjustable elevation angle. Height matrix design emphasizes ambient/upper-hemisphere content while preserving spatial width.
+
+This implementation matches the ATK JSFX plugin "5.1.2 Matrix Decode" and is designed to work seamlessly with the ATK framework.
+
+note:: This decoder provides matrix coefficients only. The matrix outputs 7 channels (5 lower ring + 2 height). LFE is derived separately by summing FL+FR with a lowpass filter (~120 Hz) and gain boost (+10 dB). Height HPF, height gate/trim, and output routing must be handled separately in the application layer.::
+
+CLASSMETHODS::
+
+METHOD:: new
+Create a new Foa512Matrix instance.
+
+argument:: mode
+Lower ring decode mode:
+strong::\equal:: - Balanced distribution (default)
+strong::\focus:: - Emphasizes centre channel for dialogue
+strong::\four:: - Eliminates centre, emphasizing corner speakers
+
+argument:: heightElevation
+Elevation angle for height speakers in degrees (30-90, default 45).
+
+argument:: outputLayout
+Output channel ordering:
+strong::\uhjpi:: - FL, FR, C, RL, RR, LFE, TFL, TFR (default)
+strong::\dolby:: - FL, FR, C, LFE, RL, RR, TFL, TFR
+
+returns:: A Foa512Matrix instance.
+
+discussion::
+The matrix is calculated once on initialization. Use the elevation and mode setters to update dynamically.
+
+code::
+// Create decoder with defaults (Equal mode, 45° elevation)
+decoder = Foa512Matrix.new;
+
+// Create with Focus mode and 60° elevation
+decoder = Foa512Matrix.new(\focus, 60);
+
+// Dolby layout output
+decoder = Foa512Matrix.new(\equal, 45, \dolby);
+::
+
+METHOD:: newFoaDecoder
+Create a standard ATK FoaDecoderMatrix instance compatible with link::Classes/FoaDecode::.
+
+argument:: mode
+Lower ring decode mode (\equal, \focus, \four, default \equal).
+
+argument:: heightElevation
+Elevation angle for height speakers in degrees (default 45).
+
+returns:: A link::Classes/FoaDecoderMatrix:: instance that can be used with link::Classes/FoaDecode::.
+
+discussion::
+This method wraps the Foa512Matrix matrix coefficients into an ATK-standard FoaDecoderMatrix, making it compatible with the standard ATK decoding chain.
+
+code::
+// Basic usage with FoaDecode
+(
+var decoder = Foa512Matrix.newFoaDecoder(\equal, 45);
+var input = [W, X, Y, Z]; // B-format input
+var output = FoaDecode.ar(input, decoder);
+// output is 7-channel array [FL, FR, C, RL, RR, TFL, TFR]
+// (LFE must be extracted separately)
+)
+
+// Different modes
+var decoderEqual = Foa512Matrix.newFoaDecoder(\equal, 45);
+var decoderFocus = Foa512Matrix.newFoaDecoder(\focus, 45);
+var decoderFour = Foa512Matrix.newFoaDecoder(\four, 45);
+
+// Adjustable elevation
+var decoder30deg = Foa512Matrix.newFoaDecoder(\equal, 30); // Forward
+var decoder90deg = Foa512Matrix.newFoaDecoder(\equal, 90); // Overhead
+::
+
+INSTANCEMETHODS::
+
+METHOD:: matrix
+Get the full 7x4 decoder matrix (5 lower ring + 2 height speakers).
+
+returns:: A Matrix object with 7 rows (speakers) and 4 columns (W, X, Y, Z coefficients).
+
+METHOD:: elevation
+Set height speaker elevation angle and recalculate height matrix.
+
+argument:: deg
+Elevation angle in degrees (30-90).
+
+METHOD:: mode
+Set lower ring decode mode and recalculate lower ring matrix.
+
+argument:: mode
+\equal, \focus, or \four.
+
+code::
+// Create decoder and adjust parameters
+decoder = Foa512Matrix.new;
+decoder.elevation_(60);  // Change to 60° elevation
+decoder.mode_(\focus);    // Switch to Focus mode
+::
+
+METHOD:: decode
+Decode B-format input to 7 output channels (lower ring + heights, no LFE).
+
+argument:: w
+W component (omnidirectional).
+
+argument:: x
+X component (left-right).
+
+argument:: y
+Y component (front-back).
+
+argument:: z
+Z component (elevation).
+
+returns:: Array of 7 signals [FL, FR, C, RL, RR, TFL, TFR].
+
+discussion::
+This is a convenience method for manual decoding. For real-time use with full processing, implement the post-processing chain separately: LFE is created by summing FL+FR, applying a one-pole lowpass filter (~120 Hz), and adding +10 dB gain. Height channels require HPF (~80 Hz default), envelope gating (optional), and trim controls. Output routing must map decoded channels to physical outputs based on layout (UHJ-Pi vs Dolby).
+
+EXAMPLES::
+
+code::
+// Basic decoder creation and matrix inspection
+(
+var decoder = Foa512Matrix.new;
+decoder.matrix.postln;  // View the 7x4 matrix
+decoder.printOn(Post);  // Print decoder info
+)
+
+// Use with ATK FoaDecode
+(
+s.boot;
+{
+    var w, x, y, z;
+    var decoder;
+    var decoded;
+    
+    // Test B-format input
+    w = WhiteNoise.ar(0.1);
+    x = SinOsc.ar(440) * 0.1;
+    y = SinOsc.ar(880) * 0.1;
+    z = SinOsc.ar(1320) * 0.1;
+    
+    // Create 5.1.2 decoder
+    decoder = Foa512Matrix.newFoaDecoder(\equal, 45);
+    
+    // Decode using ATK
+    decoded = FoaDecode.ar([w, x, y, z], decoder);
+    
+    // Output 7 channels (LFE must be added separately)
+    Out.ar(0, decoded);
+}.play;
+)
+
+// Compare different modes
+(
+var modes = [\equal, \focus, \four];
+var decoders = modes.collect({ |m| Foa512Matrix.newFoaDecoder(m, 45) });
+decoders.do({ |d| d.printOn(Post); "\n".post });
+)
+
+// Elevation sweep (requires GUI control for real-time)
+(
+var decoder = Foa512Matrix.new(\equal, 45);
+fork {
+    30.to(90).do({ |deg|
+        decoder.elevation_(deg);
+        ("Elevation: " ++ deg).postln;
+        0.1.wait;
+    });
+};
+)
+::

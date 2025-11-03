@@ -1,0 +1,366 @@
+desc:ATK FOA Transcoder — VHAP (Decode→VHAP→Encode in one)
+author: you (with ChatGPT)
+version: 0.9.1 (fixed JSFX params)
+chans: 4
+in_pin:W in
+in_pin:X in
+in_pin:Y in
+in_pin:Z in
+out_pin:W out
+out_pin:X out
+out_pin:Y out
+out_pin:Z out
+
+// ===============================================================
+//  FOA (FuMa) in → 8ch periphonic cube (internal) → VHAP → FOA out
+//  - Cube azimuths: 45°,135°,225°,315°; elevations: -35° (lower), +35° (upper)
+//  - VHAP per azimuth column: band-split, tiny decor, 850 Hz HPF on synthetic
+//  - Single-kernel band-split (LP @ 700 & 4000 Hz), TAPS=97 (linear-phase)
+//  - No meters (to be added later)
+// ===============================================================
+
+// ---------------- Controls ----------------
+slider1:50<0,100,1>Height send U (%)
+slider2:0.15<0,0.30,0.01>Mid height cap (βm max)
+slider3:0.40<0,0.60,0.01>High height cap (βh max)
+slider4:0.20<0,1.00,0.01>Mid diffusion (ms)
+slider5:0.40<0,1.00,0.01>High diffusion (ms)
+slider6:1.00<0,1.00,0.01>Z blend (post, Z only)
+
+// ---------------- Fixed VHAP design ----------------
+@init
+twoPi = 2*$pi;
+F1 = 700;           // split 1 (Hz)
+F2 = 4000;          // split 2 (Hz)
+TAPS = 97;          // odd taps → linear-phase; group delay = (TAPS-1)/2
+anti = 0.000000000000001;      // anti-denormal
+
+
+// ---- Internal speaker layout: 8ch cube (lower 0..3, upper 4..7) ----
+deg2rad = $pi/180;
+elev_lo = -35*deg2rad; elev_hi = 35*deg2rad;
+az45  =  45*deg2rad;  az135 = 135*deg2rad;
+az225 = 225*deg2rad;  az315 = 315*deg2rad;
+
+cos_el_lo = cos(elev_lo); sin_el_lo = sin(elev_lo);
+cos_el_hi = cos(elev_hi); sin_el_hi = sin(elev_hi);
+
+// Directions (ux,uy,uz) for 8 speakers — computed inline (no by-ref params)
+ux0 = cos(az45)  * cos_el_lo;  uy0 = sin(az45)  * cos_el_lo;  uz0 = sin_el_lo;
+ux1 = cos(az135) * cos_el_lo;  uy1 = sin(az135) * cos_el_lo;  uz1 = sin_el_lo;
+ux2 = cos(az225) * cos_el_lo;  uy2 = sin(az225) * cos_el_lo;  uz2 = sin_el_lo;
+ux3 = cos(az315) * cos_el_lo;  uy3 = sin(az315) * cos_el_lo;  uz3 = sin_el_lo;
+
+ux4 = cos(az45)  * cos_el_hi;  uy4 = sin(az45)  * cos_el_hi;  uz4 = sin_el_hi;
+ux5 = cos(az135) * cos_el_hi;  uy5 = sin(az135) * cos_el_hi;  uz5 = sin_el_hi;
+ux6 = cos(az225) * cos_el_hi;  uy6 = sin(az225) * cos_el_hi;  uz6 = sin_el_hi;
+ux7 = cos(az315) * cos_el_hi;  uy7 = sin(az315) * cos_el_hi;  uz7 = sin_el_hi;
+
+// ---------------- Decode matrix D (8x4) ----------------
+// Row i: [0.5, ux, uy, uz]  (FuMa-ish geometric; absolute gain cancels in pinv)
+D00=0.5; D01=ux0; D02=uy0; D03=uz0;
+D10=0.5; D11=ux1; D12=uy1; D13=uz1;
+D20=0.5; D21=ux2; D22=uy2; D23=uz2;
+D30=0.5; D31=ux3; D32=uy3; D33=uz3;
+D40=0.5; D41=ux4; D42=uy4; D43=uz4;
+D50=0.5; D51=ux5; D52=uy5; D53=uz5;
+D60=0.5; D61=ux6; D62=uy6; D63=uz6;
+D70=0.5; D71=ux7; D72=uy7; D73=uz7;
+
+// ---------------- Compute E = pinv(D) = (D^T D)^{-1} D^T (4x8) ----------------
+// Build G = D^T D (4x4)
+G00=G01=G02=G03=0;
+G10=G11=G12=G13=0;
+G20=G21=G22=G23=0;
+G30=G31=G32=G33=0;
+
+function acc_row(d0,d1,d2,d3)
+(
+  G00 += d0*d0; G01 += d0*d1; G02 += d0*d2; G03 += d0*d3;
+  G10 += d1*d0; G11 += d1*d1; G12 += d1*d2; G13 += d1*d3;
+  G20 += d2*d0; G21 += d2*d1; G22 += d2*d2; G23 += d2*d3;
+  G30 += d3*d0; G31 += d3*d1; G32 += d3*d2; G33 += d3*d3;
+);
+acc_row(D00,D01,D02,D03);
+acc_row(D10,D11,D12,D13);
+acc_row(D20,D21,D22,D23);
+acc_row(D30,D31,D32,D33);
+acc_row(D40,D41,D42,D43);
+acc_row(D50,D51,D52,D53);
+acc_row(D60,D61,D62,D63);
+acc_row(D70,D71,D72,D73);
+
+// 4x4 inverse (Gauss-Jordan, no row swapping — OK for well-conditioned cube)
+function m4_inv()
+(
+  a00=G00; a01=G01; a02=G02; a03=G03; b00=1; b01=0; b02=0; b03=0;
+  a10=G10; a11=G11; a12=G12; a13=G13; b10=0; b11=1; b12=0; b13=0;
+  a20=G20; a21=G21; a22=G22; a23=G23; b20=0; b21=0; b22=1; b23=0;
+  a30=G30; a31=G31; a32=G32; a33=G33; b30=0; b31=0; b32=0; b33=1;
+
+  i=0; loop(4,
+    p = (i==0)?a00:(i==1)?a11:(i==2)?a22:a33;
+    p == 0 ? p = 0.000000000001;
+
+    invp = 1/p;
+
+    // scale row i
+    (i==0)?(a00*=invp; a01*=invp; a02*=invp; a03*=invp; b00*=invp; b01*=invp; b02*=invp; b03*=invp):
+    (i==1)?(a10*=invp; a11*=invp; a12*=invp; a13*=invp; b10*=invp; b11*=invp; b12*=invp; b13*=invp):
+    (i==2)?(a20*=invp; a21*=invp; a22*=invp; a23*=invp; b20*=invp; b21*=invp; b22*=invp; b23*=invp):
+           (a30*=invp; a31*=invp; a32*=invp; a33*=invp; b30*=invp; b31*=invp; b32*=invp; b33*=invp);
+
+    // eliminate column i in other rows
+    // row 0
+    (i!=0)?(
+      f = (i==0)?0:(i==1)?a01:(i==2)?a02:a03;
+      a00 -= f*((i==0)?a00:(i==1)?a10:(i==2)?a20:a30);
+      a01 -= f*((i==0)?a01:(i==1)?a11:(i==2)?a21:a31);
+      a02 -= f*((i==0)?a02:(i==1)?a12:(i==2)?a22:a32);
+      a03 -= f*((i==0)?a03:(i==1)?a13:(i==2)?a23:a33);
+      b00 -= f*((i==0)?b00:(i==1)?b10:(i==2)?b20:b30);
+      b01 -= f*((i==0)?b01:(i==1)?b11:(i==2)?b21:b31);
+      b02 -= f*((i==0)?b02:(i==1)?b12:(i==2)?b22:b32);
+      b03 -= f*((i==0)?b03:(i==1)?b13:(i==2)?b23:b33);
+    );
+    // row 1
+    (i!=1)?(
+      f = (i==0)?a10:(i==1)?0:(i==2)?a12:a13;
+      a10 -= f*((i==0)?a00:(i==1)?a10:(i==2)?a20:a30);
+      a11 -= f*((i==0)?a01:(i==1)?a11:(i==2)?a21:a31);
+      a12 -= f*((i==0)?a02:(i==1)?a12:(i==2)?a22:a32);
+      a13 -= f*((i==0)?a03:(i==1)?a13:(i==2)?a23:a33);
+      b10 -= f*((i==0)?b00:(i==1)?b10:(i==2)?b20:b30);
+      b11 -= f*((i==0)?b01:(i==1)?b11:(i==2)?b21:b31);
+      b12 -= f*((i==0)?b02:(i==1)?b12:(i==2)?b22:b32);
+      b13 -= f*((i==0)?b03:(i==1)?b13:(i==2)?b23:b33);
+    );
+    // row 2
+    (i!=2)?(
+      f = (i==0)?a20:(i==1)?a21:(i==2)?0:a23;
+      a20 -= f*((i==0)?a00:(i==1)?a10:(i==2)?a20:a30);
+      a21 -= f*((i==0)?a01:(i==1)?a11:(i==2)?a21:a31);
+      a22 -= f*((i==0)?a02:(i==1)?a12:(i==2)?a22:a32);
+      a23 -= f*((i==0)?a03:(i==1)?a13:(i==2)?a23:a33);
+      b20 -= f*((i==0)?b00:(i==1)?b10:(i==2)?b20:b30);
+      b21 -= f*((i==0)?b01:(i==1)?b11:(i==2)?b21:b31);
+      b22 -= f*((i==0)?b02:(i==1)?b12:(i==2)?b22:b32);
+      b23 -= f*((i==0)?b03:(i==1)?b13:(i==2)?b23:b33);
+    );
+    // row 3
+    (i!=3)?(
+      f = (i==0)?a30:(i==1)?a31:(i==2)?a32:0;
+      a30 -= f*((i==0)?a00:(i==1)?a10:(i==2)?a20:a30);
+      a31 -= f*((i==0)?a01:(i==1)?a11:(i==2)?a21:a31);
+      a32 -= f*((i==0)?a02:(i==1)?a12:(i==2)?a22:a32);
+      a33 -= f*((i==0)?a03:(i==1)?a13:(i==2)?a23:a33);
+      b30 -= f*((i==0)?b00:(i==1)?b10:(i==2)?b20:b30);
+      b31 -= f*((i==0)?b01:(i==1)?b11:(i==2)?b21:b31);
+      b32 -= f*((i==0)?b02:(i==1)?b12:(i==2)?b22:b32);
+      b33 -= f*((i==0)?b03:(i==1)?b13:(i==2)?b23:b33);
+    );
+
+    i += 1;
+  );
+
+  // inverse now in B → H
+  H00=b00; H01=b01; H02=b02; H03=b03;
+  H10=b10; H11=b11; H12=b12; H13=b13;
+  H20=b20; H21=b21; H22=b22; H23=b23;
+  H30=b30; H31=b31; H32=b32; H33=b33;
+);
+m4_inv();
+
+// Build E = H * D^T (4x8)
+function set_E_col(col, d0,d1,d2,d3)
+(
+  E0 = H00*d0 + H01*d1 + H02*d2 + H03*d3;
+  E1 = H10*d0 + H11*d1 + H12*d2 + H13*d3;
+  E2 = H20*d0 + H21*d1 + H22*d2 + H23*d3;
+  E3 = H30*d0 + H31*d1 + H32*d2 + H33*d3;
+
+  (col==0)?(E00=E0;E10=E1;E20=E2;E30=E3):
+  (col==1)?(E01=E0;E11=E1;E21=E2;E31=E3):
+  (col==2)?(E02=E0;E12=E1;E22=E2;E32=E3):
+  (col==3)?(E03=E0;E13=E1;E23=E2;E33=E3):
+  (col==4)?(E04=E0;E14=E1;E24=E2;E34=E3):
+  (col==5)?(E05=E0;E15=E1;E25=E2;E35=E3):
+  (col==6)?(E06=E0;E16=E1;E26=E2;E36=E3):
+           (E07=E0;E17=E1;E27=E2;E37=E3);
+);
+set_E_col(0, D00,D01,D02,D03);
+set_E_col(1, D10,D11,D12,D13);
+set_E_col(2, D20,D21,D22,D23);
+set_E_col(3, D30,D31,D32,D33);
+set_E_col(4, D40,D41,D42,D43);
+set_E_col(5, D50,D51,D52,D53);
+set_E_col(6, D60,D61,D62,D63);
+set_E_col(7, D70,D71,D72,D73);
+
+// ---------------- FIR band-split (single kernel) ----------------
+coeff1_base = 0;       // LP @ F1
+coeff2_base = 4096;    // LP @ F2
+buf_base    = 8192;    // ring buffers for 8 speakers (8 * 4096)
+buf_stride  = 4096;
+buf_mask    = 4096 - 1;
+
+function sinc(x) ( x == 0 ? 1 : sin($pi*x)/($pi*x); );
+function design_lp(fc, taps, base)
+(
+  taps |= 1; M = taps - 1; fn = fc / (srate/2);
+  i=0; loop(taps,
+    n = i - M*0.5;
+    h = 2*fn * sinc(2*fn*n);
+    w = 0.54 - 0.46*cos(twoPi*i/M);
+    mem[base+i] = h*w;
+    i += 1;
+  );
+  sum=0; i=0; loop(taps, sum += mem[base+i]; i+=1;);
+  sum != 0 ? (g=1/sum; i=0; loop(taps, mem[base+i]*=g; i+=1;););
+);
+design_lp(F1, TAPS, coeff1_base);
+design_lp(F2, TAPS, coeff2_base);
+
+// ring pointers for 8 speaker signals
+p0=p1=p2=p3=p4=p5=p6=p7=0;
+
+// decor delay lines per column (mid/high), depth 1024 (use high mem offsets)
+dM0=0; dH0=0; dM1=0; dH1=0; dM2=0; dH2=0; dM3=0; dH3=0;
+dMask = 1024-1;
+
+// HPF states (mid/high) for 4 synth routes
+zM0=0; zH0=0; zM1=0; zH1=0; zM2=0; zH2=0; zM3=0; zH3=0;
+function hpfA(fc) ( exp(-2*$pi*fc/srate); );
+hpA = hpfA(850); hpB = 1 - hpA;
+
+// ------ helpers ------
+function rb_write(idx, x)
+(
+  x += anti; x -= anti;
+  mem[buf_base + idx] = x;
+);
+function rb_read(spk, head, k) // head = last written index
+(
+  mem[buf_base + spk*buf_stride + ((head - k) & buf_mask)];
+);
+function conv_lp(spk, head, coef_base)
+(
+  acc=0; i=0; loop(TAPS,
+    s = rb_read(spk, head, i);
+    s += anti; s -= anti;
+    acc += s * mem[coef_base + i];
+    i+=1;
+  );
+  acc;
+);
+
+// ------------- Sliders -------------
+@slider
+U = slider1/100.0;
+gamma = 1.2;
+beta_m = min(slider2,      pow(U, gamma));     // 0..~0.15
+beta_h = min(slider3, 1.2* pow(U, gamma));     // 0..~0.40
+
+Dmid = floor(slider4 * 0.001 * srate);
+Dhi  = floor(slider5 * 0.001 * srate);
+Dmid < 0 ? Dmid = 0;
+Dhi  < 0 ? Dhi  = 0;
+Dmid > dMask ? Dmid = dMask : Dmid;
+Dhi  > dMask ? Dhi  = dMask : Dhi;
+
+zblend = slider6;
+
+// ------------- Audio -------------
+@sample
+// ---- FOA in ----
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// ---- Decode to 8 speakers: s = D * b ----
+s0 = D00*W + D01*X + D02*Y + D03*Z;
+s1 = D10*W + D11*X + D12*Y + D13*Z;
+s2 = D20*W + D21*X + D22*Y + D23*Z;
+s3 = D30*W + D31*X + D32*Y + D33*Z;
+s4 = D40*W + D41*X + D42*Y + D43*Z;
+s5 = D50*W + D51*X + D52*Y + D53*Z;
+s6 = D60*W + D61*X + D62*Y + D63*Z;
+s7 = D70*W + D71*X + D72*Y + D73*Z;
+
+// ---- Push to ring buffers ----
+rb_write(p0, s0); p0 = (p0 + 1) & buf_mask;
+rb_write(p1, s1); p1 = (p1 + 1) & buf_mask;
+rb_write(p2, s2); p2 = (p2 + 1) & buf_mask;
+rb_write(p3, s3); p3 = (p3 + 1) & buf_mask;
+rb_write(p4, s4); p4 = (p4 + 1) & buf_mask;
+rb_write(p5, s5); p5 = (p5 + 1) & buf_mask;
+rb_write(p6, s6); p6 = (p6 + 1) & buf_mask;
+rb_write(p7, s7); p7 = (p7 + 1) & buf_mask;
+
+// heads (last written)
+h0=(p0-1)&buf_mask; h1=(p1-1)&buf_mask; h2=(p2-1)&buf_mask; h3=(p3-1)&buf_mask;
+h4=(p4-1)&buf_mask; h5=(p5-1)&buf_mask; h6=(p6-1)&buf_mask; h7=(p7-1)&buf_mask;
+
+// ---- Band-split lower ring (0..3) ----
+lp1_0 = conv_lp(0,h0,coeff1_base); lp2_0 = conv_lp(0,h0,coeff2_base);
+lp1_1 = conv_lp(1,h1,coeff1_base); lp2_1 = conv_lp(1,h1,coeff2_base);
+lp1_2 = conv_lp(2,h2,coeff1_base); lp2_2 = conv_lp(2,h2,coeff2_base);
+lp1_3 = conv_lp(3,h3,coeff1_base); lp2_3 = conv_lp(3,h3,coeff2_base);
+
+L0_low = lp1_0; L0_mid = lp2_0 - lp1_0; L0_hi = s0 - lp2_0;
+L1_low = lp1_1; L1_mid = lp2_1 - lp1_1; L1_hi = s1 - lp2_1;
+L2_low = lp1_2; L2_mid = lp2_2 - lp1_2; L2_hi = s2 - lp2_2;
+L3_low = lp1_3; L3_mid = lp2_3 - lp1_3; L3_hi = s3 - lp2_3;
+
+// ---- Decor delay write per column (mid/high) ----
+// columns: (0→4), (1→5), (2→6), (3→7) — use high mem offsets for delay lines
+mem[200000 + (dM0 & dMask)] = L0_mid; dM0 += 1;
+mem[210000 + (dM1 & dMask)] = L1_mid; dM1 += 1;
+mem[220000 + (dM2 & dMask)] = L2_mid; dM2 += 1;
+mem[230000 + (dM3 & dMask)] = L3_mid; dM3 += 1;
+
+mem[240000 + (dH0 & dMask)] = L0_hi;  dH0 += 1;
+mem[250000 + (dH1 & dMask)] = L1_hi;  dH1 += 1;
+mem[260000 + (dH2 & dMask)] = L2_hi;  dH2 += 1;
+mem[270000 + (dH3 & dMask)] = L3_hi;  dH3 += 1;
+
+// ---- Decor delay read with offsets (Dmid/Dhi) ----
+M0 = mem[200000 + ((dM0 - 1 - Dmid) & dMask)];
+M1 = mem[210000 + ((dM1 - 1 - Dmid) & dMask)];
+M2 = mem[220000 + ((dM2 - 1 - Dmid) & dMask)];
+M3 = mem[230000 + ((dM3 - 1 - Dmid) & dMask)];
+
+H0 = mem[240000 + ((dH0 - 1 - Dhi)  & dMask)];
+H1 = mem[250000 + ((dH1 - 1 - Dhi)  & dMask)];
+H2 = mem[260000 + ((dH2 - 1 - Dhi)  & dMask)];
+H3 = mem[270000 + ((dH3 - 1 - Dhi)  & dMask)];
+
+// ---- 1-pole HPF (~850 Hz) on synthesised paths (per column) ----
+ZsynM0 = hpA * zM0 + hpB * (M0 - zM0); zM0 = M0;
+ZsynH0 = hpA * zH0 + hpB * (H0 - zH0); zH0 = H0;
+ZsynM1 = hpA * zM1 + hpB * (M1 - zM1); zM1 = M1;
+ZsynH1 = hpA * zH1 + hpB * (H1 - zH1); zH1 = H1;
+ZsynM2 = hpA * zM2 + hpB * (M2 - zM2); zM2 = M2;
+ZsynH2 = hpA * zH2 + hpB * (H2 - zH2); zH2 = H2;
+ZsynM3 = hpA * zM3 + hpB * (M3 - zM3); zM3 = M3;
+ZsynH3 = hpA * zH3 + hpB * (H3 - zH3); zH3 = H3;
+
+// ---- Apply height send gains (U→βm,βh caps) and add to uppers ----
+s4 += beta_m*ZsynM0 + beta_h*ZsynH0; // 0→4
+s5 += beta_m*ZsynM1 + beta_h*ZsynH1; // 1→5
+s6 += beta_m*ZsynM2 + beta_h*ZsynH2; // 2→6
+s7 += beta_m*ZsynM3 + beta_h*ZsynH3; // 3→7
+
+// ---- Re-encode: b' = E * s ----
+Wp = E00*s0 + E01*s1 + E02*s2 + E03*s3 + E04*s4 + E05*s5 + E06*s6 + E07*s7;
+Xp = E10*s0 + E11*s1 + E12*s2 + E13*s3 + E14*s4 + E15*s5 + E16*s6 + E17*s7;
+Yp = E20*s0 + E21*s1 + E22*s2 + E23*s3 + E24*s4 + E25*s5 + E26*s6 + E27*s7;
+Zs = E30*s0 + E31*s1 + E32*s2 + E33*s3 + E34*s4 + E35*s5 + E36*s6 + E37*s7;
+
+// ---- Z post blend (Z only) ----
+Zout = (1 - zblend)*Z + zblend*Zs;
+
+// ---- Outputs ----
+spl0 = Wp;
+spl1 = Xp;
+spl2 = Yp;
+spl3 = Zout;
+

@@ -609,7 +609,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                         \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single'),
                         \stereo, FoaDecoderMatrix.newStereo,
-                        \fiveonetwo, FoaDecoderMatrix.new5_0(irregKind: 'focused')  // 5.1.2 decoder (using 5.0 for now)
+                        \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
                     ]);
 
                     // Get selected encoder and decoder
@@ -718,19 +718,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         
                         if(outputs == 8, {
                             if(configKeyD == \fiveonetwo, {
-                                // --- DOLBY ATMOS 5.1.2 OUTPUT MAPPING ---
-                                // 5.1.2 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TF_L, out[6]=TF_R, out[7]=LFE
-                                // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub, [7] TF_L, [8] TF_R
-                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                                // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
+                                // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL (correct for UHJ-Pi)
+                                // UHJ-Pi layout: [0] FL, [1] FR, [2] C, [3] RL, [4] RR, [5] LFE, [6] TFL, [7] TFR
+                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE
                                 out = [
                                     out[1], // FL (Speaker 1) - Front Left
                                     out[4], // FR (Speaker 2) - Front Right  
                                     out[0], // C  (Speaker 3) - Center
                                     out[2], // RL (Speaker 4) - Rear Left
                                     out[3], // RR (Speaker 5) - Rear Right
-                                    lowpass, // Sub (Speaker 6) - Subwoofer
-                                    out[5], // TF_L (Speaker 7) - Top Front Left
-                                    out[6]  // TF_R (Speaker 8) - Top Front Right
+                                    lowpass, // LFE (Speaker 6) - Low Frequency Effects
+                                    out[6], // TFL (Speaker 7) - Top Front Left
+                                    out[5]  // TFR (Speaker 8) - Top Front Right
                                 ];
                             }, {
                                 // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -814,7 +814,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                             \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single'),
                             \stereo, FoaDecoderMatrix.newStereo,
-                            \fiveonetwo, FoaDecoderMatrix.new5_0(irregKind: 'focused')  // 5.1.2 decoder (using 5.0 decoder for now)
+                            \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
                         ]);
 
                         // Get selected encoder and decoder
@@ -914,19 +914,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             
                             if(outputs == 8, {
                                 if(configKeyD == \fiveonetwo, {
-                                    // --- DOLBY ATMOS 5.1.2 OUTPUT MAPPING ---
-                                    // 5.1.2 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TF_L, out[6]=TF_R, out[7]=LFE
-                                    // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub, [7] TF_L, [8] TF_R
-                                    var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                                    // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
+                                    // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFL, out[6]=TFR (matches ATK 5.0 order)
+                                    // UHJ-Pi layout: [0] FL, [1] FR, [2] C, [3] RL, [4] RR, [5] LFE, [6] TFL, [7] TFR
+                                    var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE
                                     out = [
                                         out[1], // FL (Speaker 1) - Front Left
                                         out[4], // FR (Speaker 2) - Front Right  
                                         out[0], // C  (Speaker 3) - Center
                                         out[2], // RL (Speaker 4) - Rear Left
                                         out[3], // RR (Speaker 5) - Rear Right
-                                        lowpass, // Sub (Speaker 6) - Subwoofer
-                                        out[5], // TF_L (Speaker 7) - Top Front Left
-                                        out[6]  // TF_R (Speaker 8) - Top Front Right
+                                        lowpass, // LFE (Speaker 6) - Low Frequency Effects
+                                        out[5], // TFL (Speaker 7) - Top Front Left
+                                        out[6]  // TFR (Speaker 8) - Top Front Right
                                     ];
                                 }, {
                                     // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -2118,7 +2118,7 @@ win.front;
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
             StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
-                .string_("LAYOUT - " ++ (["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"][~dmenu.value ? 0]))
+                .string_("LAYOUT - " ++ (["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "DOLBY 5.1.2", "OCTAGON"][~dmenu.value ? 0]))
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
@@ -2318,8 +2318,8 @@ win.front;
                             var surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10;
                             var surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10;
                             var subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
-                            var topFrontLeftX = layoutLeft + (layoutSize / 4) - 10, topFrontLeftY = layoutTop - 40;
-                            var topFrontRightX = layoutLeft + (3 * layoutSize / 4) - 10, topFrontRightY = layoutTop - 40;
+                            var topFrontLeftX = frontLeftX, topFrontLeftY = layoutTop - 40;  // Directly above speaker 1 (FL)
+                            var topFrontRightX = frontRightX, topFrontRightY = layoutTop - 40;  // Directly above speaker 2 (FR)
                             
                             Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize)); Pen.stroke;
                             
@@ -2359,15 +2359,14 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("7", Point(topFrontLeftX + 7, topFrontLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("CEILING", Point(topFrontLeftX + 25, topFrontLeftY + 3), Font("Helvetica", 8).boldVariant, Color.cyan);
                             
                             // Speaker 8: Top Front Right (overhead) - positioned above front right
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("8", Point(topFrontRightX + 7, topFrontRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("CEILING", Point(topFrontRightX + 25, topFrontRightY + 3), Font("Helvetica", 8).boldVariant, Color.cyan);
                             
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub + [7,8] Ceiling", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("[1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub", Point(centerX - 112, 28), Font("Helvetica", 12), Color.cyan);
+                            Pen.stringAtPoint("[7] TFL, [8] TFR", Point(centerX - 42, 50), Font("Helvetica", 12), Color.cyan);
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;

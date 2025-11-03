@@ -1,0 +1,258 @@
+/*
+ATK FOA Transform - MaplinMatrix (FOA)
+Circuit-accurate emulation of MaplinMatrix for B-format workflow.
+
+FOA (FuMa) WXYZ -> decode to quad -> MaplinMatrix processing -> encode back to FOA.
+
+Based on SuperCollider MaplinMatrix class for compatibility with v27 app.
+Includes thermal noise, bandwidth limiting, op-amp saturation, multi-stage all-pass,
+band splitting, BBD modulation, and 80 Hz HPF.
+
+Controls:
+- Surround Level (%): rear channel amplitude with 2.2x boost
+- Effect Level (%): intensity of processedDiff contribution
+- Delay (normalized 0-1): maps to 5-50 ms for BBD delay
+- Active: bypass blend (1=full effect, 0=dry)
+
+Author: Michael Uwins (with ChatGPT)
+Version: 1.0 (MaplinMatrix-circuit-accurate)
+*/
+
+desc:ATK MaplinMatrix (FOA) MINIMAL
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W'
+out_pin:X'
+out_pin:Y'
+out_pin:Z'
+
+// -------------------- UI --------------------
+slider1:80<0,100,1>Surround Level (%)
+slider2:80<0,100,1>Effect Level (%)
+slider3:40<0,100,1>Delay (normalized 0-1)
+slider4:1<0,1,1{Inactive,Active}>Active
+
+options:no_meter
+
+// =====================================================
+//            MAPLIN MATRIX CIRCUIT-ACCURATE
+// =====================================================
+@init
+twoPi = 2*$pi;
+tiny = 0.000000000000001;
+
+// Decode FOA to quad
+kW = 0.70710678;
+az_LF_deg =  45;
+az_RF_deg = -45;
+
+cos_LF = cos(az_LF_deg * (twoPi/360));
+sin_LF = sin(az_LF_deg * (twoPi/360));
+cos_RF = cos(az_RF_deg * (twoPi/360));
+sin_RF = sin(az_RF_deg * (twoPi/360));
+
+// Delay line for L-R difference processing
+dlySize = 1024;
+dlyPtr = 0;
+dlyBuf = 65536*1;
+memset(dlyBuf, 0, dlySize);
+
+// Delay lines for band splitting (LOW, MID, HIGH)
+dlyBuf_LOW = 65536*2;
+dlyPtr_LOW = 0;
+dlyBuf_MID = 65536*3;
+dlyPtr_MID = 0;
+dlyBuf_HIGH = 65536*4;
+dlyPtr_HIGH = 0;
+memset(dlyBuf_LOW, 0, dlySize);
+memset(dlyBuf_MID, 0, dlySize);
+memset(dlyBuf_HIGH, 0, dlySize);
+
+// BBD delay buffers (rear channels with modulation)
+bbdL_BUF = 65536*5;
+bbdL_PTR = 0;
+bbdR_BUF = 65536*6;
+bbdR_PTR = 0;
+memset(bbdL_BUF, 0, dlySize);
+memset(bbdR_BUF, 0, dlySize);
+
+// Delay buffers use slots 1-1029 (each needs 1024 floats)
+// Filter states start at 1030 to avoid overlap
+
+// Filter states: HPF 80Hz (rear), LPF 800Hz, BPF 2kHz, HPF 4kHz, LPF 8kHz, LPF 20kHz (L/R), BBD LPF (L/R)
+// [x1, y1] per filter except bpf2k which has [x1,x2,y1,y2]
+hpf80_st_rear = 65536*1030;   // slots 1030-1031
+lpf800_st = 65536*1032;       // slots 1032-1033
+bpf2k_st = 65536*1034;        // slots 1034-1037 (4 floats)
+hpf4k_st = 65536*1038;        // slots 1038-1039
+lpf8k_st = 65536*1040;        // slots 1040-1041
+lpf20k_st_L = 65536*1042;     // slots 1042-1043
+lpf20k_st_R = 65536*1044;     // slots 1044-1045
+bbdL_lpf_st = 65536*1046;     // slots 1046-1047
+bbdR_lpf_st = 65536*1048;     // slots 1048-1049
+
+// All-pass chain states (4 stages, 2 floats each: x1, y1)
+ap_stage1 = 65536*1050;       // slots 1050-1051
+ap_stage2 = 65536*1052;       // slots 1052-1053
+ap_stage3 = 65536*1054;       // slots 1054-1055
+ap_stage4 = 65536*1056;       // slots 1056-1057
+
+// Clear all states: 1030 to 1057 = 28 floats
+memset(hpf80_st_rear, 0, 28);
+
+// Simple PRNG using JSFX built-in rand() - generates -1 to 1
+function prng()
+(
+  rand(1) * 2.0 - 1.0;
+);
+
+// One-pole HPF (80Hz, 4kHz)
+function hpf1_coeffs(fc, a1_out*, b0_out*, b1_out*)
+(
+  a = exp(-twoPi*fc/srate);
+  b0 = (1+a)*0.5;
+  b1 = -b0;
+  a1_out = a; b0_out = b0; b1_out = b1;
+);
+
+// One-pole LPF (800Hz, 20kHz for bandwidth limiting, 8kHz for BBD)
+function lpf1_coeffs(fc, a1_out*, b0_out*, b1_out*)
+(
+  a = exp(-twoPi*fc/srate);
+  b0 = (1-a);
+  b1 = 0;
+  a1_out = a; b0_out = b0; b1_out = b1;
+);
+
+// Biquad BPF (2kHz, Q=1.5)
+function bpf_coeffs(fc, Q)
+  instance(a0, a1, a2, b0, b1, b2)
+(
+  w = twoPi*fc/srate;
+  sn = sin(w);
+  cs = cos(w);
+  alpha = sn/(2*Q);
+  b0 = sn/2;
+  b1 = 0;
+  b2 = -sn/2;
+  a0 = 1 + alpha;
+  a1 = -2*cs;
+  a2 = 1 - alpha;
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+);
+
+// All-pass stage (for phase shifting)
+function allpass1(x, coeff, st*)
+(
+  x1 = st[0]; y1 = st[1];
+  y = coeff*x + x1 - coeff*y1;
+  st[0] = x;
+  st[1] = y;
+  y;
+);
+
+// Filter processing functions
+function hpf1_proc(x, a1, b0, b1, st*)
+(
+  x += tiny; x -= tiny;
+  x1 = st[0]; y1 = st[1];
+  y = b0*x + b1*x1 + a1*y1;
+  st[0] = x; st[1] = y;
+  y;
+);
+
+function lpf1_proc(x, a1, b0, b1, st*)
+(
+  x += tiny; x -= tiny;
+  y1 = st[1];
+  y = b0*x + a1*y1;
+  st[0] = x; st[1] = y;
+  y;
+);
+
+function bpf_proc(x, b0, b1, b2, a1, a2, st*)
+(
+  x += tiny; x -= tiny;
+  x1 = st[0]; x2 = st[2]; y1 = st[4]; y2 = st[6];
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  st[2] = x1; st[0] = x;
+  st[6] = y1; st[4] = y;
+  y;
+);
+
+// Compute filter coefficients
+hpf1_coeffs(80.0, hpf80_a1, hpf80_b0, hpf80_b1);
+lpf1_coeffs(800.0, lpf800_a1, lpf800_b0, lpf800_b1);
+bpf_coeffs(2000.0, 1.5);
+bpf2k_b0 = bpf_coeffs.b0;
+bpf2k_b1 = 0;
+bpf2k_b2 = bpf_coeffs.b2;
+bpf2k_a1 = bpf_coeffs.a1;
+bpf2k_a2 = bpf_coeffs.a2;
+hpf1_coeffs(4000.0, hpf4k_a1, hpf4k_b0, hpf4k_b1);
+lpf1_coeffs(20000.0, lpf20k_a1, lpf20k_b0, lpf20k_b1);
+lpf1_coeffs(8000.0, lpf8k_a1, lpf8k_b0, lpf8k_b1);
+
+// All-pass coefficients (SuperCollider: 0.0015, 0.0033, 0.0072, 0.0156)
+ap_coeff1 = 0.0015;
+ap_coeff2 = 0.0033;
+ap_coeff3 = 0.0072;
+ap_coeff4 = 0.0156;
+ap_delay_max = floor(0.02 * srate + 0.5);
+
+// Band delays (22ms LOW, 18ms MID, 12ms HIGH)
+delay_LOW = floor(0.022 * srate + 0.5);
+delay_MID = floor(0.018 * srate + 0.5);
+delay_HIGH = floor(0.012 * srate + 0.5);
+
+// Tanh saturation (emulate with polynomial: tanh(x) = x - x^3/3 for small x)
+function soft_tanh(x)
+(
+  (abs(x) < 0.5) ? (
+    x3 = x*x*x;
+    x - x3 * 0.333333;
+  ) : (
+    (x > 0) ? 0.761594 : -0.761594;
+  );
+);
+
+@slider
+surround = slider1 * 0.01;
+effect = slider2 * 0.01;
+delay_normalized = slider3 * 0.01;
+delay_ms = delay_normalized * 45.0 + 5.0;
+delay_samples = floor(delay_ms * 0.001 * srate + 0.5);
+delay_samples = max(1, min(delay_samples, dlySize-1));
+active = slider4;
+
+@sample
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// Decode to quad: extract L/R from FOA (simplified extraction from fronts)
+// Use X and Y to reconstruct left/right
+L = kW*W + X*cos_LF + Y*sin_LF;
+R = kW*W + X*cos_RF + Y*sin_RF;
+
+// === MINIMAL TEST: Just pass through the decoded quad ===
+frontLeft = L;
+frontRight = R;
+rearLeft = 0;
+rearRight = 0;
+
+// Encode quad back to FOA
+W_out = 0.5 * (frontLeft + frontRight + rearLeft + rearRight);
+X_out = 0.5 * ((frontLeft - frontRight) + (rearLeft - rearRight));
+Y_out = 0.5 * ((frontLeft + rearRight) - (frontRight + rearLeft));
+Z_out = Z;  // Preserve Z
+
+// Output
+spl0 = W_out;
+spl1 = X_out;
+spl2 = Y_out;
+spl3 = Z_out;

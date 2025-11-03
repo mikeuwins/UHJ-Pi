@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+# B-VHAP kernel builder — band-limited Hilbert (remez Type-III), FLOAT WAVs
+# Requires: numpy, scipy, soundfile
+
+import os, json, numpy as np, soundfile as sf
+from pathlib import Path
+from scipy.signal import remez, freqz
+
+# ---------- Config ----------
+FS_LIST   = [44100, 48000, 96000, 176400, 192000]
+N_LIST    = [256, 512, 1024, 2048, 4096, 8192]
+TAPS_BASE = 511                 # odd, Type-III (Hilbert) — tighter stopband for high fs
+MID_BAND  = (900.0, 4000.0)     # Hz
+HI_BAND   = (4000.0, 12000.0)   # Hz
+DELAY_MS  = {"mid": 4.5, "hi": 5.5}
+DONOR     = {"mid": {"W":0.60, "X":0.20,  "Y":0.20},
+             "hi":  {"W":0.65, "X":0.175, "Y":0.175}}
+BETA      = {"mid": 0.60, "hi": 0.90}   # band scalars per Lee-inspired spec
+PRESET    = "0100"
+
+def atk_root():
+    import platform
+    sys = platform.system()
+    if sys == "Darwin":
+        base = Path.home()/ "Library/Application Support/ATK"
+    elif sys == "Windows":
+        base = Path(os.path.expanduser("~")) / "AppData/Roaming/ATK"
+    else:
+        # Linux: ATK uses ~/.local/share/ATK
+        base = Path.home() / ".local/share/ATK"
+    return base / "kernels/FOA/transforms/b-vhap"
+
+def reaper_root():
+    """Return REAPER ATK kernel path (all platforms use same path structure)"""
+    import platform
+    sys = platform.system()
+    if sys == "Darwin":
+        base = Path.home() / "Library/Application Support/REAPER/Data"
+    elif sys == "Windows":
+        base = Path(os.path.expanduser("~")) / "AppData/Roaming/REAPER/Data"
+    else:
+        # Linux: REAPER uses ~/.config/REAPER/Data
+        base = Path.home() / ".config/REAPER/Data"
+    return base / "ATK/kernels/FOA/transforms/b-vhap"
+
+def _safe_edges(sr, f1, f2):
+    nyq = 0.5*sr
+    f1 = max(20.0, min(f1, nyq*0.95))
+    f2 = max(30.0, min(f2, nyq*0.98))
+    if f2 <= f1 + 10.0:
+        f2 = f1 + 10.0
+    return f1, f2
+
+def design_band_hilbert(sr, band, taps=TAPS_BASE, grid_density=128):
+    """
+    Robust Hilbert band design with explicit transition bands and retries.
+    Bands in Hz; 'fs' set to sr so remez sees absolute Hz.
+    """
+    nyq = 0.5*sr
+    f1, f2 = _safe_edges(sr, *band)
+    bw = f2 - f1
+
+    # initial transition width (5% of band or >=150 Hz)
+    tw = max(0.05*bw, 150.0)
+
+    # Up to 4 tries: widen transitions or bump taps if needed
+    for attempt in range(4):
+        # compute guarded edges
+        lo_stop_end  = max(20.0, f1 - tw)      # stop band end before pass
+        lo_pass_beg  = f1 + 0.0                # pass band start
+        hi_pass_end  = f2 - 0.0                # pass band end
+        hi_stop_beg  = min(nyq*0.98, f2 + tw)  # stop band start after pass
+
+        # Ensure ordering and spacing
+        if lo_stop_end >= lo_pass_beg:
+            lo_stop_end = max(20.0, lo_pass_beg - 10.0)
+        if hi_stop_beg <= hi_pass_end:
+            hi_stop_beg = min(nyq*0.98, hi_pass_end + 10.0)
+
+        # Bands & desired for remez in *Hz* with fs=sr
+        # [0 .. lo_stop_end] -> 0, [lo_pass_beg .. hi_pass_end] -> 1 (Hilbert), [hi_stop_beg .. nyq] -> 0
+        bands   = [0.0, lo_stop_end, lo_pass_beg, hi_pass_end, hi_stop_beg, nyq]
+        desired = [0.0, 1.0, 0.0]
+        weights = [12.0, 1.0, 12.0]  # even tighter stop-bands; bands unchanged
+
+        try:
+            # Must be odd taps for Type-III
+            M = taps | 1
+            h = remez(M, bands, desired, type='hilbert', fs=sr,
+                      weight=weights, grid_density=grid_density, maxiter=100)
+            # Normalise passband magnitude to ~1 (median in-band)
+            w, H = freqz(h, worN=65536, fs=sr)
+            mask = (w >= f1) & (w <= min(f2, nyq*0.98))
+            scale = np.median(np.abs(H[mask])) + 1e-18
+            h = (h/scale).astype(np.float32)
+            return h
+        except Exception as e:
+            # Widen transitions, or bump taps on last tries
+            if attempt < 2:
+                tw *= 1.8   # widen transitions
+            else:
+                taps += 48  # add taps on final attempts
+            if attempt == 3:
+                raise
+
+def write_wav(path, data, fs):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(str(path), data.astype(np.float32), fs, subtype="FLOAT")
+
+def build_all():
+    root = atk_root()
+    for fs in FS_LIST:
+        print(f"[fs={fs}] designing Hilbert-band FIRs (remez, guarded transitions)...")
+        h_mid = design_band_hilbert(fs, MID_BAND, TAPS_BASE)
+        h_hi  = design_band_hilbert(fs, HI_BAND,  TAPS_BASE)
+
+        Dmid0 = int(round(DELAY_MS["mid"]*0.001*fs))
+        Dhi0  = int(round(DELAY_MS["hi"] *0.001*fs))
+
+        for N in N_LIST:
+            # Primary ATK location (for SuperCollider)
+            outdir = root / f"{fs}" / f"{N}" / PRESET
+            # REAPER location
+            reaper_dir = reaper_root() / f"{fs}" / f"{N}" / PRESET
+            L = N
+            # Ensure clean overwrite: remove existing kernel files if present
+            for target_dir in [outdir, reaper_dir]:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                for fname in ("BVHAP_W.wav", "BVHAP_X.wav", "BVHAP_Y.wav", "BVHAP_Z.wav", "manifest.json"):
+                    fpath = target_dir / fname
+                    try:
+                        if fpath.exists():
+                            fpath.unlink()
+                    except Exception:
+                        pass
+            delta = np.zeros(L, dtype=np.float32); delta[0]=1.0
+            ZW = np.zeros(L, dtype=np.float32); ZX = np.zeros(L, dtype=np.float32); ZY = np.zeros(L, dtype=np.float32)
+
+            # clamp delays to avoid truncation
+            max_delay = max(0, L - len(h_mid) - 1)  # conservative based on mid length
+            Dmid = min(Dmid0, max_delay); Dhi = min(Dhi0, max_delay)
+
+            def place(dst, k, d):
+                Lk = len(k)
+                if d+Lk > L:  # shouldn't happen with clamp, but be safe
+                    Lk = max(0, L - d)
+                if Lk > 0:
+                    dst[d:d+Lk] += k[:Lk]
+
+            # donor gains
+            aWm,aXm,aYm = DONOR["mid"]["W"], DONOR["mid"]["X"], DONOR["mid"]["Y"]
+            aWh,aXh,aYh = DONOR["hi"]["W"],  DONOR["hi"]["X"],  DONOR["hi"]["Y"]
+
+            # place delayed injections (Hilbert band impulses; real odd-symmetric)
+            place(ZW, BETA["mid"]*aWm*h_mid, Dmid); place(ZW, BETA["hi"]*aWh*h_hi,  Dhi)
+            place(ZX, BETA["mid"]*aXm*h_mid, Dmid); place(ZX, BETA["hi"]*aXh*h_hi,  Dhi)
+            place(ZY, BETA["mid"]*aYm*h_mid, Dmid); place(ZY, BETA["hi"]*aYh*h_hi,  Dhi)
+
+            # Assemble 4-ch kernels (delta passthrough on Z)
+            W = np.stack([delta, np.zeros_like(delta), np.zeros_like(delta), np.zeros_like(delta)], axis=1)
+            X = np.stack([np.zeros_like(delta), delta, np.zeros_like(delta), np.zeros_like(delta)], axis=1)
+            Y = np.stack([np.zeros_like(delta), np.zeros_like(delta), delta, np.zeros_like(delta)], axis=1)
+            Z = np.stack([ZW, ZX, ZY, delta], axis=1)
+
+            # Write to ATK location (SuperCollider)
+            write_wav(outdir/"BVHAP_W.wav", W, fs)
+            write_wav(outdir/"BVHAP_X.wav", X, fs)
+            write_wav(outdir/"BVHAP_Y.wav", Y, fs)
+            write_wav(outdir/"BVHAP_Z.wav", Z, fs)
+
+            manifest = {
+                "algo": "B-VHAP-remez-hilbert", "version": "1.0",
+                "sr": fs, "prototype_taps": len(h_mid), "stored_length": N,
+                "designer": "scipy.signal.remez(type='hilbert') with guarded transitions",
+                "bands_hz": {"mid": MID_BAND, "hi": HI_BAND},
+                "delays_ms": DELAY_MS, "donor_gains": DONOR,
+                "beta": BETA,
+                "notes": "Band-limited Hilbert (Type-III); zero-padded to N; delays clamped for small N; beta applied per band."
+            }
+            (outdir/"manifest.json").write_text(json.dumps(manifest, indent=2))
+            
+            # Copy to REAPER location
+            write_wav(reaper_dir/"BVHAP_W.wav", W, fs)
+            write_wav(reaper_dir/"BVHAP_X.wav", X, fs)
+            write_wav(reaper_dir/"BVHAP_Y.wav", Y, fs)
+            write_wav(reaper_dir/"BVHAP_Z.wav", Z, fs)
+            (reaper_dir/"manifest.json").write_text(json.dumps(manifest, indent=2))
+            
+            print(f"  wrote {outdir}")
+            print(f"  wrote {reaper_dir}")
+
+if __name__ == "__main__":
+    build_all()

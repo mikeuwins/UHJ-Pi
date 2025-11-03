@@ -1,0 +1,178 @@
+/*
+ATK FOA Transform — Dimension Only
+FOA (FuMa) W,X,Y,Z → W',X',Y',Z' (feed to PHJ decoder)
+
+Stage 2 (only): Dimension (original) — Forward Preference (+HP) and Psycho Shelves (WXYZ, last)
+
+Author: you (with ChatGPT)
+Version: 1.0-dimension-only
+*/
+
+desc:FOA Dimension Only
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W'
+out_pin:X'
+out_pin:Y'
+out_pin:Z'
+
+// -------------------- UI --------------------
+slider1:0.00<0.00,0.70,0.01>Width (k)
+slider2:180<80,400,1>Width HP (Hz)
+
+slider3:0<0,2,1{Off,2D (WXY),3D (WXYZ)}>Psycho Shelves Mode
+slider4:0<0,1,1{Off,On}>Gerzon Presets
+slider5:400<100,3000,10>Transition Freq (Hz)
+slider6:0<-6,6,0.1>LF Gain (dB)
+slider7:0<-6,6,0.1>HF Gain (dB)
+
+slider8:0<-18,18,0.1>Output Trim (dB)
+
+options:no_meter
+
+// =====================================================
+//                  DIMENSION  (ORIGINAL)
+// =====================================================
+
+@init
+// ----- DIMENSION constants / buffers -----
+// Niemitalo (+90°) constants
+h_d1 = 0.4021921162426;
+h_d2 = 0.8561710882420;
+h_d3 = 0.9722909545651;
+h_d4 = 0.9952884791278;
+
+// AP states for +90°(X)
+x90_s1_xm=0; x90_s1_ym=0;
+x90_s2_xm=0; x90_s2_ym=0;
+x90_s3_xm=0; x90_s3_ym=0;
+x90_s4_xm=0; x90_s4_ym=0;
+
+// FP high-pass (on injected term) state/coeffs
+inj_lp=0; inj_hp_a=0; inj_hp_b=1;
+
+// Simple tilt (one-pole split) states & coeffs
+simp_a=0; simp_b=1;
+w_lp=0; x_lp=0; y_lp=0; z_lp=0;
+
+// Denormal preventer
+tiny = 0.000000000000000000000001; // 1e-24 equivalent
+
+@block
+// No block processing needed for Dimension only
+
+@slider
+// Forward Preference
+k    = slider1;
+fpHP = max(10, min(slider2, srate*0.333));
+
+// Shelves / mode / presets / gains
+shelves_mode = slider3|0;       // 0=Off, 1=2D, 2=3D
+psy_on       = slider4|0;
+tf           = max(10, min(slider5, srate*0.333));
+gLF          = slider6;
+gHF          = slider7;
+
+// Derived flags
+s_on = shelves_mode > 0;
+dim3 = shelves_mode == 2;
+
+// Output trim
+out_lin = exp(log(10)*(slider8/20));
+
+// FP HP coeffs
+inj_hp_a = exp(-2*$pi*fpHP/srate);
+inj_hp_b = 1 - inj_hp_a;
+
+// Psycho presets (per-channel dB offsets)
+psyW_HF=0; psyX_HF=0; psyY_HF=0; psyZ_HF=0;
+psyW_LF=0; psyX_LF=0; psyY_LF=0; psyZ_LF=0;
+
+psy_on ? (
+  // 2D vs 3D HF targets (Gerzon-ish)
+  psyW_HF = dim3 ? 3.01 : 1.76;
+  psyX_HF = dim3 ? 1.76 : -1.25;
+  psyY_HF = dim3 ? 1.76 : -1.25;
+  psyZ_HF = dim3 ? 1.76 : 0.00;
+  // gentle counter-LF to keep overall power closer
+  psyW_LF = -psyW_HF*0.6;
+  psyX_LF = -psyX_HF*0.6;
+  psyY_LF = -psyY_HF*0.6;
+  psyZ_LF = -psyZ_HF*0.6;
+);
+
+// Per-channel dB targets (global + preset offsets)
+gLF_W=gLF+psyW_LF; gHF_W=gHF+psyW_HF;
+gLF_X=gLF+psyX_LF; gHF_X=gHF+psyX_HF;
+gLF_Y=gLF+psyY_LF; gHF_Y=gHF+psyY_HF;
+gLF_Z=gLF+psyZ_LF; gHF_Z=gHF+psyZ_HF;
+
+// Tilt split coeffs
+simp_a = exp(-2*$pi*tf/srate);
+simp_b = 1 - simp_a;
+
+// Pre-calculate gain conversions (moved from @sample for performance)
+gLF_lin_W = exp(log(10)*(gLF_W/20)); gHF_lin_W = exp(log(10)*(gHF_W/20));
+gLF_lin_X = exp(log(10)*(gLF_X/20)); gHF_lin_X = exp(log(10)*(gHF_X/20));
+gLF_lin_Y = exp(log(10)*(gLF_Y/20)); gHF_lin_Y = exp(log(10)*(gHF_Y/20));
+gLF_lin_Z = exp(log(10)*(gLF_Z/20)); gHF_lin_Z = exp(log(10)*(gHF_Z/20));
+
+// ---------- Audio ----------
+@sample
+// --- Inputs ---
+W=spl0; X=spl1; Y=spl2; Z=spl3;
+
+// --- Stage 2: Dimension (original, unchanged) ---
+
+// +90°(X) via 4× first-order all-pass (inline)
+x90 = X;
+tmp = -h_d1*x90 + x90_s1_xm + h_d1*x90_s1_ym; x90_s1_xm=x90; x90_s1_ym=tmp; x90=tmp + tiny;
+tmp = -h_d2*x90 + x90_s2_xm + h_d2*x90_s2_ym; x90_s2_xm=x90; x90_s2_ym=tmp; x90=tmp + tiny;
+tmp = -h_d3*x90 + x90_s3_xm + h_d3*x90_s3_ym; x90_s3_xm=x90; x90_s3_ym=tmp; x90=tmp + tiny;
+tmp = -h_d4*x90 + x90_s4_xm + h_d4*x90_s4_ym; x90_s4_xm=x90; x90_s4_ym=tmp; x90=tmp + tiny;
+
+// HP on injected term (only), then inject into Y
+inj_lp = inj_hp_a*inj_lp + inj_hp_b*x90;
+inj = (x90 - inj_lp) * k;
+
+Wp=W; Xp=X; Yp=Y+inj; Zp=Z;
+
+// SIMPLE TILT shelves (first-order split), per channel
+// (gain conversions moved to @slider for performance)
+
+s_on ? (
+  // W
+  w_lp = simp_a*w_lp + simp_b*Wp;
+  Wp   = gLF_lin_W*w_lp + gHF_lin_W*(Wp - w_lp);
+  // X
+  x_lp = simp_a*x_lp + simp_b*Xp;
+  Xp   = gLF_lin_X*x_lp + gHF_lin_X*(Xp - x_lp);
+  // Y
+  y_lp = simp_a*y_lp + simp_b*Yp;
+  Yp   = gLF_lin_Y*y_lp + gHF_lin_Y*(Yp - y_lp);
+  // Z (3D only)
+  dim3 ? (
+    z_lp = simp_a*z_lp + simp_b*Zp;
+    Zp   = gLF_lin_Z*z_lp + gHF_lin_Z*(Zp - z_lp);
+  );
+);
+
+// Output (with trim)
+spl0 = Wp * out_lin;
+spl1 = Xp * out_lin;
+spl2 = Yp * out_lin;
+spl3 = Zp * out_lin;
+
+@gfx 100 50
+gfx_clear = 0x000000;
+gfx_set(0.5, 0.5, 0.5, 1.0);
+gfx_setfont(1, "Arial", 12);
+gfx_x = 10; gfx_y = 20;
+gfx_printf("Dimension Only - no meters");
+

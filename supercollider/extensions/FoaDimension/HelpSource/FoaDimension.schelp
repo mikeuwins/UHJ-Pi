@@ -1,0 +1,247 @@
+CLASS:: FoaDimension
+summary:: FOA Dimension Transform - Forward Preference and Psychoacoustic Shelves
+categories:: Libraries>Ambisonic Toolkit>Transform>FOA
+related:: Classes/FoaZSynthesis, Classes/FoaEncode, Classes/FoaDecode, Classes/FoaTransform
+
+DESCRIPTION::
+FoaDimension applies psychoacoustic processing to B-format signals to enhance spatial width and frequency response. It implements two main processing stages:
+
+strong::Forward Preference (Width Enhancement):: - Applies a +90° phase shift to the X channel using 4 cascaded first-order allpass filters (Niemitalo coefficients), then high-pass filters and injects the result into the Y channel. This creates a forward-preference effect that enhances perceived width and spaciousness.
+
+strong::Psychoacoustic Shelves:: - Applies per-channel low-frequency and high-frequency gain adjustments using first-order tilt filters. Available in 2D mode (W, X, Y only) or 3D mode (W, X, Y, Z). Gerzon presets provide optimized frequency response curves based on psychoacoustic research.
+
+This transform is typically placed in the processing chain after Z synthesis and before final decoding to binaural or speakers. It is designed to work with both UHJ/Pantaphonic (2D) and PHJ/Periphonic (3D) signals.
+
+note:: This is a port of the ATK JSFX plugin "Dimension Only". For best results, use 2D mode with UHJ/Pantaphonic signals and 3D mode with PHJ/Periphonic signals.::
+
+CLASSMETHODS::
+
+METHOD:: ar
+Main audio rate processing method.
+
+ARGUMENT:: in
+A 4-element array containing B-format components [W, X, Y, Z]. Can be a multi-channel UGen output or array.
+
+ARGUMENT:: width
+Forward Preference amount (k coefficient). Range: 0.0 to 0.70, default: 0.0.
+Controls the strength of the forward preference effect. Higher values increase perceived width and spaciousness. Set to 0.0 for no width enhancement (default).
+
+ARGUMENT:: widthHPF
+Forward Preference high-pass filter cutoff frequency in Hz. Range: 80 to 400 Hz, default: 180 Hz.
+The HPF is applied to the injected forward preference term only, not the main signal. Lower values reduce low-frequency injection, preventing bass buildup.
+
+ARGUMENT:: shelvesMode
+Psychoacoustic shelves mode. Integer: 0=Off, 1=2D (WXY), 2=3D (WXYZ), default: 0.
+- strong::0 (Off):: - No shelf processing applied
+- strong::1 (2D):: - Applies shelves to W, X, Y channels only (for UHJ/Pantaphonic)
+- strong::2 (3D):: - Applies shelves to all four channels W, X, Y, Z (for PHJ/Periphonic)
+
+ARGUMENT:: gerzonPresets
+Enable Gerzon psychoacoustic presets. 0=Off, 1=On, default: 0.
+When enabled, applies optimized frequency response curves based on Gerzon's psychoacoustic research. Different curves are used for 2D vs 3D mode. Should be used with shelvesMode > 0.
+
+ARGUMENT:: transitionFreq
+Transition frequency for the psychoacoustic shelves in Hz. Range: 100 to 3000 Hz, default: 400 Hz.
+This is the frequency where the low-frequency and high-frequency shelf responses cross over. Per Gerzon's recommendation, 400 Hz is the preferred transition point.
+
+ARGUMENT:: lfGain
+Low-frequency gain adjustment in dB. Range: -6.0 to +6.0 dB, default: 0.0.
+Applies gain to frequencies below the transition frequency. Used in combination with hfGain to fine-tune the frequency response.
+
+ARGUMENT:: hfGain
+High-frequency gain adjustment in dB. Range: -6.0 to +6.0 dB, default: 0.0.
+Applies gain to frequencies above the transition frequency. Used in combination with lfGain to fine-tune the frequency response.
+
+ARGUMENT:: outputTrim
+Output level trim in dB. Range: -18.0 to +18.0 dB, default: 0.0.
+Final gain adjustment applied to all output channels. Use to compensate for level changes introduced by the processing.
+
+ARGUMENT:: mul
+Multiplier for output amplitude. Default: 1.0.
+
+ARGUMENT:: add
+Additive offset for output amplitude. Default: 0.0.
+
+returns:: A 4-element array of processed B-format signals [W, X, Y, Z].
+
+discussion::
+The Forward Preference stage uses Niemitalo's +90° allpass coefficients (h_d1 through h_d4) to create a quadrature phase shift. This shifted signal is high-pass filtered and injected into the Y channel, creating a width enhancement effect that emphasizes forward sources.
+
+The Psychoacoustic Shelves use first-order one-pole filters to split each channel into low and high frequency bands. Separate gain controls are applied to each band, allowing precise frequency response shaping. When Gerzon presets are enabled, the system applies channel-specific offsets:
+- strong::2D mode:: - W: +1.76 dB HF, X/Y: -1.25 dB HF, Z: 0 dB
+- strong::3D mode:: - W: +3.01 dB HF, X/Y/Z: +1.76 dB HF
+
+These offsets are balanced by counter-LF adjustments (60% of the HF offset) to maintain overall power balance.
+
+EXAMPLES::
+
+code::
+// Basic usage - no processing (pass-through)
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),  // W
+        SinOsc.ar(440) * 0.1,  // X
+        SinOsc.ar(880) * 0.1,  // Y
+        SinOsc.ar(1320) * 0.1  // Z
+    ];
+    
+    FoaDimension.ar(input);
+}.play;
+)
+
+// Forward Preference only - width enhancement
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        SinOsc.ar(1320) * 0.1
+    ];
+    
+    // Moderate width enhancement
+    FoaDimension.ar(input, width: 0.35, widthHPF: 180);
+}.play;
+)
+
+// Psychoacoustic shelves - 2D mode for UHJ
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        0  // UHJ has no Z
+    ];
+    
+    // 2D mode with Gerzon presets
+    FoaDimension.ar(
+        input,
+        shelvesMode: 1,        // 2D mode
+        gerzonPresets: 1,       // Enable Gerzon presets
+        transitionFreq: 400,    // Standard transition
+        lfGain: 0,
+        hfGain: 0
+    );
+}.play;
+)
+
+// Psychoacoustic shelves - 3D mode for PHJ
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        SinOsc.ar(1320) * 0.1
+    ];
+    
+    // 3D mode with Gerzon presets
+    FoaDimension.ar(
+        input,
+        shelvesMode: 2,        // 3D mode
+        gerzonPresets: 1,       // Enable Gerzon presets
+        transitionFreq: 400,
+        lfGain: 0,
+        hfGain: 0
+    );
+}.play;
+)
+
+// Full processing chain: Forward Preference + Shelves
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        SinOsc.ar(1320) * 0.1
+    ];
+    
+    FoaDimension.ar(
+        input,
+        width: 0.5,             // Moderate width
+        widthHPF: 180,
+        shelvesMode: 2,          // 3D mode
+        gerzonPresets: 1,
+        transitionFreq: 400,
+        lfGain: 0,
+        hfGain: 0,
+        outputTrim: 0
+    );
+}.play;
+)
+
+// Integration with Z Synthesis and decoding
+(
+{
+    var input, zSynth, dimension, decoded;
+    var decoder;
+    
+    // Create test B-format input
+    input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        0  // No original Z
+    ];
+    
+    // Synthesize Z
+    zSynth = FoaZSynthesis.ar(input, heightAmount: 50);
+    
+    // Apply Dimension processing
+    dimension = FoaDimension.ar(
+        zSynth,
+        width: 0.0,              // No width enhancement
+        shelvesMode: 2,          // 3D mode for PHJ
+        gerzonPresets: 1,
+        transitionFreq: 400
+    );
+    
+    // Decode to binaural
+    decoder = FoaDecoderKernel.newListen(1053);
+    decoded = FoaDecode.ar(dimension, decoder);
+    
+    decoded;
+}.play;
+)
+
+// Parameter control with SynthDef
+(
+SynthDef(\dimensionTest, {
+    var input, output;
+    
+    input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        SinOsc.ar(1320) * 0.1
+    ];
+    
+    output = FoaDimension.ar(
+        input,
+        width: \width.kr(0.0),
+        widthHPF: \widthHPF.kr(180),
+        shelvesMode: \shelvesMode.kr(0),
+        gerzonPresets: \gerzonPresets.kr(0),
+        transitionFreq: \transitionFreq.kr(400),
+        lfGain: \lfGain.kr(0),
+        hfGain: \hfGain.kr(0),
+        outputTrim: \outputTrim.kr(0)
+    );
+    
+    Out.ar(0, output);
+}).add;
+)
+
+// Control the synth
+(
+var synth = Synth(\dimensionTest);
+synth.set(\width, 0.5);
+synth.set(\shelvesMode, 2);
+synth.set(\gerzonPresets, 1);
+synth.set(\hfGain, 2);
+synth.set(\outputTrim, -1);
+)
+::

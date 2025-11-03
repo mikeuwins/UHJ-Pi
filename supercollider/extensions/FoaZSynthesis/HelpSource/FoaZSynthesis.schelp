@@ -1,0 +1,313 @@
+CLASS:: FoaZSynthesis
+summary:: FOA Z Synthesis Transform - Synthesizes Height Channel from X/Y with Decorrelation and Ambience
+categories:: Libraries>Ambisonic Toolkit>Transform>FOA
+related:: Classes/FoaDimension, Classes/FoaEncode, Classes/FoaDecode, Classes/FoaVHAP
+
+DESCRIPTION::
+FoaZSynthesis synthesizes the Z (height) component of B-format audio from the horizontal channels (W, X, Y) without requiring a speaker-domain round trip. The W, X, and Y channels pass through unchanged, while Z is either the original input or a synthesized version created from lateral energy.
+
+The synthesis process includes:
+- strong::Lateral Energy Extraction:: - Combines X and Y channels, subtracts a small amount of W to avoid centre-bass lift
+- strong::Decorrelation:: - Applies short delays to create spatial separation
+- strong::VHAP-style Band Splitting:: - Splits the signal at ~1200 Hz, with lows passing direct and mid/high frequencies decorrelated
+- strong::B→A Conversion:: - Converts the synthesized Z to A-format (4-channel virtual speaker domain)
+- strong::Schroeder-style Ambience:: - Applies lightweight reverb with 4 parallel comb filters and 2 allpass stages per A-channel
+- strong::A→B Conversion:: - Converts back to B-format, extracting only the Z component
+- strong::Post-processing:: - Applies HPF, soft limiting, high-shelf filtering, and final trim
+
+This transform is particularly useful for:
+- Enhancing B-format signals derived from UHJ (where Z was discarded)
+- Adding perceptually plausible height to horizontal-only recordings
+- Creating spatial ambience and height illusion
+- Matching the height characteristics of PHJ-encoded signals
+
+note:: This is a port of the ATK JSFX plugin "FOA Z Synthesis". Default settings (size 2.5, damping 0.2, mix 70%) provide a balanced ambience effect.::
+
+CLASSMETHODS::
+
+METHOD:: ar
+Main audio rate processing method.
+
+ARGUMENT:: in
+A 4-element array containing B-format components [W, X, Y, Z]. Can be a multi-channel UGen output or array.
+
+ARGUMENT:: heightAmount
+Height synthesis amount as a percentage. Range: 0 to 100, default: 30.
+Controls the overall level of the synthesized Z component. Higher values create more pronounced height effects. At 0%, no synthesis occurs (only original Z is used if selected).
+
+ARGUMENT:: heightDelay
+Decorrelation delay in milliseconds. Range: 0 to 30 ms, default: 7 ms.
+The delay applied to decorrelate the mid/high frequency bands. Smaller delays create subtle spatial separation, larger delays can create more pronounced width but may cause combing artifacts.
+
+ARGUMENT:: heightTrim
+Height channel output trim in dB. Range: -12.0 to +12.0 dB, default: 0.0.
+Final gain adjustment applied to the selected Z output (original or synthesized). Use to match levels between original and synthesized Z, or to adjust overall height channel level.
+
+ARGUMENT:: heightSource
+Z source selection. 0=Original, 1=Synthesised, default: 0.
+- strong::0 (Original):: - Uses the original Z channel from input
+- strong::1 (Synthesised):: - Uses the synthesized Z created from X/Y processing
+
+ARGUMENT:: ambienceSize
+Ambience reverb size (RT60) in seconds. Range: 0.1 to 3.0 seconds, default: 2.5.
+Controls the reverberation time of the Schroeder-style reverb. Larger values create longer, more spacious ambience. Smaller values create shorter, tighter ambience.
+
+ARGUMENT:: ambienceDampening
+Ambience reverb damping factor. Range: 0.0 to 1.0, default: 0.2.
+Controls the frequency-dependent damping in the reverb feedback paths. Higher values (closer to 1.0) create darker, more damped reverb. Lower values create brighter, less damped reverb.
+
+ARGUMENT:: ambienceMix
+Ambience wet/dry mix as a percentage. Range: 0 to 100, default: 70.
+- strong::0%:: - No reverb (dry synthesized Z only)
+- strong::100%:: - Full reverb (no dry signal)
+- strong::70%:: - Recommended default for balanced ambience
+
+ARGUMENT:: mul
+Multiplier for output amplitude. Default: 1.0.
+
+ARGUMENT:: add
+Additive offset for output amplitude. Default: 0.0.
+
+returns:: A 4-element array of processed B-format signals [W, X, Y, Z]. W, X, Y are unchanged; Z is either original or synthesized based on heightSource.
+
+discussion::
+The synthesis process begins by extracting lateral energy from X and Y channels: (X + Y) * 0.707 - W * 0.25. This creates a decorrelated signal that represents spatial width information.
+
+The signal is then processed through a VHAP-style band split at ~1200 Hz. Low frequencies pass through directly, while mid/high frequencies are decorrelated using a short delay. This preserves bass content while creating spatial separation in the upper frequencies.
+
+The synthesized Z is high-pass filtered at ~1000 Hz before B→A conversion. The A-format conversion uses orientation 2 (FL, FR, BU, BD layout) with Z-only synthesis, creating four A-channels from the single Z component.
+
+Each A-channel is processed through a Schroeder-style reverb consisting of:
+- 4 parallel comb filters with different delay lengths (scaled by sample rate)
+- 2 cascaded allpass filters for diffusion
+- Damping applied to feedback paths
+- Wet/dry mix control
+
+The reverb output is then filtered:
+- One-pole LPF at ~4.5 kHz to reduce harshness
+- Peaking EQ cut at ~3 kHz, Q=1.0, -8 dB to tame mid resonances
+
+After A→B conversion (extracting only the Z component), the synthesized Z is:
+- Soft-limited to prevent overload (tanh with k=1.2)
+- Gain-reduced by -3 dB
+- High-shelf filtered at ~4 kHz, -5 dB to reduce presence
+
+The final Z output is selected between original and synthesized based on heightSource, then trimmed according to heightTrim.
+
+EXAMPLES::
+
+code::
+// Basic usage - synthesize Z from horizontal-only input
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),  // W
+        SinOsc.ar(440) * 0.1,  // X
+        SinOsc.ar(880) * 0.1,  // Y
+        0  // No original Z (e.g., from UHJ)
+    ];
+    
+    // Synthesize Z with default settings
+    FoaZSynthesis.ar(input, heightAmount: 30, heightSource: 1);
+}.play;
+)
+
+// Compare original vs synthesized Z
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        SinOsc.ar(1320) * 0.1  // Original Z
+    ];
+    
+    // Original Z
+    var original = FoaZSynthesis.ar(input, heightSource: 0);
+    
+    // Synthesized Z
+    var synthesized = FoaZSynthesis.ar(input, heightAmount: 50, heightSource: 1);
+    
+    // Switch between them (using a control)
+    Select.ar(\compare.kr(0), [original, synthesized]);
+}.play;
+)
+
+// Adjust ambience parameters
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        0
+    ];
+    
+    // Large, bright ambience
+    FoaZSynthesis.ar(
+        input,
+        heightAmount: 50,
+        heightSource: 1,
+        ambienceSize: 3.0,        // Large space
+        ambienceDampening: 0.1,   // Bright (low damping)
+        ambienceMix: 80           // More reverb
+    );
+}.play;
+)
+
+// Tight, dark ambience
+(
+{
+    var input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        0
+    ];
+    
+    FoaZSynthesis.ar(
+        input,
+        heightAmount: 40,
+        heightSource: 1,
+        ambienceSize: 1.0,        // Small space
+        ambienceDampening: 0.5,    // Dark (high damping)
+        ambienceMix: 60            // Less reverb
+    );
+}.play;
+)
+
+// Integration with Dimension and decoding
+(
+{
+    var input, zSynth, dimension, decoded;
+    var decoder;
+    
+    // Create test B-format input (no Z)
+    input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        0
+    ];
+    
+    // Synthesize Z with default ambience
+    zSynth = FoaZSynthesis.ar(
+        input,
+        heightAmount: 30,
+        heightSource: 1,
+        ambienceSize: 2.5,
+        ambienceDampening: 0.2,
+        ambienceMix: 70
+    );
+    
+    // Apply Dimension processing
+    dimension = FoaDimension.ar(
+        zSynth,
+        width: 0.0,
+        shelvesMode: 2,
+        gerzonPresets: 1
+    );
+    
+    // Decode to binaural
+    decoder = FoaDecoderKernel.newListen(1053);
+    decoded = FoaDecode.ar(dimension, decoder);
+    
+    decoded;
+}.play;
+)
+
+// Processing chain: UHJ → Z Synthesis → Dimension → 5.1.2 Decode
+(
+{
+    var stereo, encoded, zSynth, dimension, decoded;
+    var decoder;
+    
+    // Start with stereo source
+    stereo = [SinOsc.ar([440, 880]) * 0.1].flatten;
+    
+    // Encode to B-format using UHJ (no Z)
+    encoded = FoaEncode.ar(stereo, FoaEncoderKernel.newUHJ);
+    
+    // Synthesize Z
+    zSynth = FoaZSynthesis.ar(
+        encoded,
+        heightAmount: 30,
+        heightSource: 1
+    );
+    
+    // Apply Dimension
+    dimension = FoaDimension.ar(
+        zSynth,
+        shelvesMode: 1,  // 2D mode for UHJ
+        gerzonPresets: 1
+    );
+    
+    // Decode to 5.1.2
+    decoder = Foa512Matrix.newFoaDecoder(\equal, 45);
+    decoded = FoaDecode.ar(dimension, decoder);
+    
+    // Output 7 channels (add LFE separately)
+    Out.ar(0, decoded);
+}.play;
+)
+
+// Parameter control with SynthDef
+(
+SynthDef(\zSynthesisTest, {
+    var input, output;
+    
+    input = [
+        WhiteNoise.ar(0.1),
+        SinOsc.ar(440) * 0.1,
+        SinOsc.ar(880) * 0.1,
+        SinOsc.ar(1320) * 0.1
+    ];
+    
+    output = FoaZSynthesis.ar(
+        input,
+        heightAmount: \heightAmount.kr(30),
+        heightDelay: \heightDelay.kr(7),
+        heightTrim: \heightTrim.kr(0),
+        heightSource: \heightSource.kr(0),
+        ambienceSize: \ambienceSize.kr(2.5),
+        ambienceDampening: \ambienceDampening.kr(0.2),
+        ambienceMix: \ambienceMix.kr(70)
+    );
+    
+    Out.ar(0, output);
+}).add;
+)
+
+// Control the synth
+(
+var synth = Synth(\zSynthesisTest);
+synth.set(\heightAmount, 50);
+synth.set(\heightSource, 1);
+synth.set(\ambienceSize, 2.5);
+synth.set(\ambienceDampening, 0.2);
+synth.set(\ambienceMix, 70);
+synth.set(\heightTrim, -1);
+)
+
+// A/B comparison: Original Z vs Synthesized Z
+(
+var input = [
+    WhiteNoise.ar(0.1),
+    SinOsc.ar(440) * 0.1,
+    SinOsc.ar(880) * 0.1,
+    SinOsc.ar(1320) * 0.1
+];
+
+// Original Z
+var original = FoaZSynthesis.ar(input, heightSource: 0);
+Out.ar(0, original);  // Left channel
+
+// Synthesized Z
+var synthesized = FoaZSynthesis.ar(
+    input,
+    heightAmount: 50,
+    heightSource: 1
+);
+Out.ar(2, synthesized);  // Right channel (if available)
+)
+::

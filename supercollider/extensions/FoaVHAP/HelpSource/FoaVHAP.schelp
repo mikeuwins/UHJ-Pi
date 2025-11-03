@@ -154,13 +154,3 @@ synth.set(\solo, 0);     // Back to normal
 // Clean up when done
 FoaVHAP.cleanup;
 ::
-
-NOTES::
-- Requires ATK kernels to be installed in the standard ATK kernel directory
-- The BVHAP_Z.wav kernel files must be present for the target sample rate and partition size
-- Uses global buffers for efficiency - call cleanup() when done to free memory
-- Solo mode is intended for monitoring/QA purposes only
-- The transform maintains FOA orthogonality by keeping W, X, Y unchanged
-
-IMPLEMENTATION::
-This implementation uses ATK's multi-channel kernel approach with PartConv channel indexing to properly access the 4-lane BVHAP_Z.wav kernel. Each B-format input channel (W, X, Y, Z) is convolved with its corresponding kernel lane (Zw, Zx, Zy, ZΔ) and the results are summed to synthesize the height channel Z'. This provides the full psychoacoustic benefits of the complete B-VHAP algorithm as implemented in the JSFX version.

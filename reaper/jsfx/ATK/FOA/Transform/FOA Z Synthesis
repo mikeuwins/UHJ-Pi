@@ -1,6 +1,6 @@
 desc:ATK FOA Z Synthesis
 author: ATK Community
-version: 1.0
+version: 1.1
 
 // Synthesise FOA Z (height) directly from W/X/Y without speaker-domain round trip.
 // - W/X/Y pass through unchanged
@@ -18,11 +18,15 @@ out_pin:X out
 out_pin:Y out
 out_pin:Z out
 
-slider1:30<0,100,1>Amount %
-slider2:500<40,1200,1>HPF cutoff (Hz)
-slider3:7<0,30,0.1>Decorrelate delay (ms)
-slider4:0<-12,12,0.1>Z trim (dB)
-slider5:50<0,100,1>Z crossfade % (0=orig Z, 100=synth Z)
+slider1:30<0,100,1>Height amount %
+slider2:7<0,30,0.1>Height delay (ms)
+slider3:0<-12,12,0.1>Height trim (dB)
+slider4:1<0,1,1{Original,Synthesised}>Height source
+
+slider6:2.5<0.1,3,0.01>Ambience size
+slider7:0.2<0,1,0.01>Ambience dampening
+slider8:70<0,100,1>Ambience mix (%)
+
 
 @init
 // Delay buffer (power of two for easy wrap)
@@ -31,44 +35,234 @@ buf_mask = buf_len - 1;
 buf_base = 0; // uses mem[] from 0..8191
 buf_w = 0;
 
-// HPF state (one-pole via complementary LPF)
-hpf_lpf = 0;
-hpf_a = 0; // decay coefficient
+// (no conditional HPF defaults)
 
-function update_hpf()
-(
-  // One-pole LPF coefficient mapped from cutoff
-  // lpf = x + (lpf - x) * a ; hpf = x - lpf
-  // a = exp(-2*pi*fc/srate)
-  two_pi_fc = 6.283185307179586 * slider2;
-  hpf_a = exp(-(two_pi_fc / srate));
+// (Removed Z-path pre HPF per request)
+
+// No crossfade; simple toggle handled at @sample
+
+// B<->A matrices (4x4) and A-channel HPF states
+b2a0=0; b2a1=0; b2a2=0; b2a3=0;
+b2a4=0; b2a5=0; b2a6=0; b2a7=0;
+b2a8=0; b2a9=0; b2a10=0; b2a11=0;
+b2a12=0; b2a13=0; b2a14=0; b2a15=0;
+
+a2b0=0; a2b1=0; a2b2=0; a2b3=0;
+a2b4=0; a2b5=0; a2b6=0; a2b7=0;
+a2b8=0; a2b9=0; a2b10=0; a2b11=0;
+a2b12=0; a2b13=0; a2b14=0; a2b15=0;
+
+// (No HPF in this plugin)
+
+// Lightweight ambience (Schroeder-style) per A channel: 2 comb + 1 allpass
+// Delay line layout per channel: [comb1, comb2, allpass1]
+// Allocate buffers
+rev_base = 40000;
+function rev_setup() (
+  // derive lengths (scaled by sample rate)
+  scale = srate / 44100;
+  c1 = max(32, floor(1116 * scale));
+  c2 = max(32, floor(1277 * scale));
+  c3 = max(32, floor(1422 * scale));
+  c4 = max(32, floor(1557 * scale));
+  ap1 = max(16, floor(225 * scale)); // ~5 ms
+  ap2 = max(16, floor(341 * scale)); // ~7.7 ms
+  pre = max(16, floor(0.015 * srate)); // 15 ms predelay
+  // store per channel base, lengths, indices
+  // ch0
+  r0_c1_len=c1; r0_c1_idx=0; r0_c1_base=rev_base; rev_base+=r0_c1_len;
+  r0_c2_len=c2; r0_c2_idx=0; r0_c2_base=rev_base; rev_base+=r0_c2_len;
+  r0_c3_len=c3; r0_c3_idx=0; r0_c3_base=rev_base; rev_base+=r0_c3_len;
+  r0_c4_len=c4; r0_c4_idx=0; r0_c4_base=rev_base; rev_base+=r0_c4_len;
+  r0_ap1_len=ap1; r0_ap1_idx=0; r0_ap1_base=rev_base; rev_base+=r0_ap1_len;
+  r0_ap2_len=ap2; r0_ap2_idx=0; r0_ap2_base=rev_base; rev_base+=r0_ap2_len;
+  r0_pre_len=pre; r0_pre_idx=0; r0_pre_base=rev_base; rev_base+=r0_pre_len;
+  // ch1
+  r1_c1_len=c1+23; r1_c1_idx=0; r1_c1_base=rev_base; rev_base+=r1_c1_len;
+  r1_c2_len=c2+19; r1_c2_idx=0; r1_c2_base=rev_base; rev_base+=r1_c2_len;
+  r1_c3_len=c3+29; r1_c3_idx=0; r1_c3_base=rev_base; rev_base+=r1_c3_len;
+  r1_c4_len=c4+31; r1_c4_idx=0; r1_c4_base=rev_base; rev_base+=r1_c4_len;
+  r1_ap1_len=ap1+11; r1_ap1_idx=0; r1_ap1_base=rev_base; rev_base+=r1_ap1_len;
+  r1_ap2_len=ap2+9; r1_ap2_idx=0; r1_ap2_base=rev_base; rev_base+=r1_ap2_len;
+  r1_pre_len=pre; r1_pre_idx=0; r1_pre_base=rev_base; rev_base+=r1_pre_len;
+  // ch2
+  r2_c1_len=c1+41; r2_c1_idx=0; r2_c1_base=rev_base; rev_base+=r2_c1_len;
+  r2_c2_len=c2+37; r2_c2_idx=0; r2_c2_base=rev_base; rev_base+=r2_c2_len;
+  r2_c3_len=c3+17; r2_c3_idx=0; r2_c3_base=rev_base; rev_base+=r2_c3_len;
+  r2_c4_len=c4+13; r2_c4_idx=0; r2_c4_base=rev_base; rev_base+=r2_c4_len;
+  r2_ap1_len=ap1+7; r2_ap1_idx=0; r2_ap1_base=rev_base; rev_base+=r2_ap1_len;
+  r2_ap2_len=ap2+5; r2_ap2_idx=0; r2_ap2_base=rev_base; rev_base+=r2_ap2_len;
+  r2_pre_len=pre; r2_pre_idx=0; r2_pre_base=rev_base; rev_base+=r2_pre_len;
+  // ch3
+  r3_c1_len=c1+59; r3_c1_idx=0; r3_c1_base=rev_base; rev_base+=r3_c1_len;
+  r3_c2_len=c2+53; r3_c2_idx=0; r3_c2_base=rev_base; rev_base+=r3_c2_len;
+  r3_c3_len=c3+23; r3_c3_idx=0; r3_c3_base=rev_base; rev_base+=r3_c3_len;
+  r3_c4_len=c4+19; r3_c4_idx=0; r3_c4_base=rev_base; rev_base+=r3_c4_len;
+  r3_ap1_len=ap1+5; r3_ap1_idx=0; r3_ap1_base=rev_base; rev_base+=r3_ap1_len;
+  r3_ap2_len=ap2+3; r3_ap2_idx=0; r3_ap2_base=rev_base; rev_base+=r3_ap2_len;
+  r3_pre_len=pre; r3_pre_idx=0; r3_pre_base=rev_base; rev_base+=r3_pre_len;
 );
 
-function hpf_process(x)
+rev_setup();
+
+// RMS trackers for auto level-match between Original Z and Synth Z
+rmsZorig = 0; rmsZp = 0; rmsXY = 0; // (leftover, not used when AGC disabled)
+
+// 2nd-order HPF for Synth Z pre B->A (remove LF/LMF)
+zhp_b0=0; zhp_b1=0; zhp_b2=0; zhp_a1=0; zhp_a2=0;
+zhp_x1=0; zhp_x2=0; zhp_y1=0; zhp_y2=0;
+// Gentle LPF for Synth Z pre B->A (tame brightness)
+zlp_a = 0; zlp_lpf = 0;
+// Peaking EQ cut for Synth Z pre B->A (tame harsh HMF)
+zpeq_b0=0; zpeq_b1=0; zpeq_b2=0; zpeq_a1=0; zpeq_a2=0;
+zpeq_x1=0; zpeq_x2=0; zpeq_y1=0; zpeq_y2=0;
+// High-shelf for Synth Z pre selection (subtle presence trim)
+zhs_b0=0; zhs_b1=0; zhs_b2=0; zhs_a1=0; zhs_a2=0;
+zhs_x1=0; zhs_x2=0; zhs_y1=0; zhs_y2=0;
+
+// Mid resonance tame: single peaking EQ cut in A-domain after ambience
+// Coeffs and states per A channel
+peq_b0=0; peq_b1=0; peq_b2=0; peq_a1=0; peq_a2=0;
+peqA0_x1=0; peqA0_x2=0; peqA0_y1=0; peqA0_y2=0;
+peqA1_x1=0; peqA1_x2=0; peqA1_y1=0; peqA1_y2=0;
+peqA2_x1=0; peqA2_x2=0; peqA2_y1=0; peqA2_y2=0;
+peqA3_x1=0; peqA3_x2=0; peqA3_y1=0; peqA3_y2=0;
+
+function update_ba_mats()
 (
-  // Anti-denormal guard
-  x += 0.000000000000000000000000000001;
-  hpf_lpf = x + (hpf_lpf - x) * hpf_a;
-  (x - hpf_lpf);
+  // Orientation 2: [FL FR BU BD], canonical weight (1)
+  generateBtoAMatrix(20000, 2, 1);
+  b2a0=20000[0]; b2a1=20000[1]; b2a2=20000[2]; b2a3=20000[3];
+  b2a4=20000[4]; b2a5=20000[5]; b2a6=20000[6]; b2a7=20000[7];
+  b2a8=20000[8]; b2a9=20000[9]; b2a10=20000[10]; b2a11=20000[11];
+  b2a12=20000[12]; b2a13=20000[13]; b2a14=20000[14]; b2a15=20000[15];
+  // Invert for A->B
+  20020[0]=b2a0; 20020[1]=b2a1; 20020[2]=b2a2; 20020[3]=b2a3;
+  20020[4]=b2a4; 20020[5]=b2a5; 20020[6]=b2a6; 20020[7]=b2a7;
+  20020[8]=b2a8; 20020[9]=b2a9; 20020[10]=b2a10; 20020[11]=b2a11;
+  20020[12]=b2a12; 20020[13]=b2a13; 20020[14]=b2a14; 20020[15]=b2a15;
+  invertMatrix(20020);
+  a2b0=20020[0]; a2b1=20020[1]; a2b2=20020[2]; a2b3=20020[3];
+  a2b4=20020[4]; a2b5=20020[5]; a2b6=20020[6]; a2b7=20020[7];
+  a2b8=20020[8]; a2b9=20020[9]; a2b10=20020[10]; a2b11=20020[11];
+  a2b12=20020[12]; a2b13=20020[13]; a2b14=20020[14]; a2b15=20020[15];
 );
+
+// (update_hpf removed)
+
+// (biquad HPF functions removed)
 
 function update_params()
 (
-  // Update HPF
-  update_hpf();
   // Delay in samples
-  d_samp = floor(max(0, min(30, slider3)) * 0.001 * srate);
+  d_samp = floor(max(0, min(30, slider2)) * 0.001 * srate);
   d_samp = (d_samp > buf_len-1) ? (buf_len-1) : d_samp;
   // Gains
   amt = slider1 * 0.01; // 0..1
-  z_lin = exp(log(10) * (slider4 / 20));
-  z_xf = max(0, min(1, slider5 * 0.01));
+  z_lin = exp(log(10) * (slider3 / 20));
+  // (no HPF params)
+  // Compute 2x biquad HPF for B-domain Z processing (Butterworth)
+  fc = max(20, slider10);
+  w0 = 6.283185307179586 * fc / srate;
+  cw = cos(w0); sw = sin(w0);
+  Q = 0.7071067811865476; alpha = sw / (2*Q);
+  b0 = (1 + cw) * 0.5; b1 = -(1 + cw); b2 = (1 + cw) * 0.5;
+  a0 = 1 + alpha; a1 = -2*cw; a2 = 1 - alpha;
+  inva0 = 1 / a0;
+  nb0 = b0*inva0; nb1 = b1*inva0; nb2 = b2*inva0; na1 = a1*inva0; na2 = a2*inva0;
+  z_b1_b0=nb0; z_b1_b1=nb1; z_b1_b2=nb2; z_b1_a1=na1; z_b1_a2=na2;
+  z_b2_b0=nb0; z_b2_b1=nb1; z_b2_b2=nb2; z_b2_a1=na1; z_b2_a2=na2;
+  rev_wet = max(0, min(1, slider8 * 0.01));
+  rev_rt60 = max(0.1, slider6);
+  rev_damp = max(0, min(0.99, slider7));
+  // Compute per-comb feedback from RT60: g = 10^(-3 * t_delay / RT60)
+  r0_c1_g = exp(log(10) * (-3.0 * (r0_c1_len / srate) / rev_rt60));
+  r0_c2_g = exp(log(10) * (-3.0 * (r0_c2_len / srate) / rev_rt60));
+  r1_c1_g = exp(log(10) * (-3.0 * (r1_c1_len / srate) / rev_rt60));
+  r1_c2_g = exp(log(10) * (-3.0 * (r1_c2_len / srate) / rev_rt60));
+  r2_c1_g = exp(log(10) * (-3.0 * (r2_c1_len / srate) / rev_rt60));
+  r2_c2_g = exp(log(10) * (-3.0 * (r2_c2_len / srate) / rev_rt60));
+  r3_c1_g = exp(log(10) * (-3.0 * (r3_c1_len / srate) / rev_rt60));
+  r3_c2_g = exp(log(10) * (-3.0 * (r3_c2_len / srate) / rev_rt60));
+  // (AGC disabled)
+  // Peaking EQ coeffs: Fc ~ 3000 Hz, Q ~ 1.0, Gain = -8 dB
+  peq_fc = 3000;
+  peq_Q = 1.0;
+  peq_gain_db = -8.0;
+  peq_A = pow(10, (peq_gain_db/40));
+  peq_w0 = 6.283185307179586 * peq_fc / srate;
+  peq_c = cos(peq_w0);
+  peq_s = sin(peq_w0);
+  peq_alpha = peq_s/(2*peq_Q);
+  b0 = 1 + peq_alpha*peq_A;
+  b1 = -2*peq_c;
+  b2 = 1 - peq_alpha*peq_A;
+  a0 = 1 + peq_alpha/peq_A;
+  a1 = -2*peq_c;
+  a2 = 1 - peq_alpha/peq_A;
+  inva0 = 1/a0;
+  peq_b0 = b0*inva0; peq_b1 = b1*inva0; peq_b2 = b2*inva0; peq_a1 = a1*inva0; peq_a2 = a2*inva0;
+
+  // Synth Z HPF (2nd-order Butterworth) at ~1000 Hz
+  zhp_fc = 1000;
+  z_w0 = 6.283185307179586 * zhp_fc / srate;
+  z_c = cos(z_w0); z_s = sin(z_w0);
+  z_Q = 0.7071067811865476;
+  z_alpha = z_s / (2 * z_Q);
+  zb0 = (1 + z_c) * 0.5;
+  zb1 = -(1 + z_c);
+  zb2 = (1 + z_c) * 0.5;
+  za0 = 1 + z_alpha;
+  za1 = -2 * z_c;
+  za2 = 1 - z_alpha;
+  zinv = 1 / za0;
+  zhp_b0 = zb0 * zinv; zhp_b1 = zb1 * zinv; zhp_b2 = zb2 * zinv; zhp_a1 = za1 * zinv; zhp_a2 = za2 * zinv;
+  // LPF ~6 kHz for synth Z
+  zlp_fc = 6000;
+  zlp_a = exp(-(6.283185307179586 * zlp_fc / srate));
+  // Peaking EQ ~3 kHz, Q 1.2, -5 dB for synth Z
+  zpeq_fc = 3000;
+  zpeq_Q = 1.2;
+  zpeq_gain_db = -5.0;
+  zpeq_A = pow(10, (zpeq_gain_db/40));
+  zpeq_w0 = 6.283185307179586 * zpeq_fc / srate;
+  zpeq_c = cos(zpeq_w0);
+  zpeq_s = sin(zpeq_w0);
+  zpeq_alpha = zpeq_s/(2*zpeq_Q);
+  zb0 = 1 + zpeq_alpha*zpeq_A;
+  zb1 = -2*zpeq_c;
+  zb2 = 1 - zpeq_alpha*zpeq_A;
+  za0 = 1 + zpeq_alpha/zpeq_A;
+  za1 = -2*zpeq_c;
+  za2 = 1 - zpeq_alpha/zpeq_A;
+  zinva0 = 1/za0;
+  zpeq_b0 = zb0*zinva0; zpeq_b1 = zb1*zinva0; zpeq_b2 = zb2*zinva0; zpeq_a1 = za1*zinva0; zpeq_a2 = za2*zinva0;
+
+  // High-shelf at ~4 kHz, -5 dB (RBJ)
+  zhs_fc = 4000;
+  zhs_gain_db = -5.0;
+  zhs_A = sqrt(pow(10, (zhs_gain_db/20)));
+  zhs_w0 = 6.283185307179586 * zhs_fc / srate;
+  zhs_c = cos(zhs_w0);
+  zhs_s = sin(zhs_w0);
+  zhs_S = 1.0; // shelf slope
+  zhs_alpha = zhs_s/2 * sqrt( (zhs_A + 1/zhs_A)*(1/zhs_S - 1) + 2 );
+  b0 =    zhs_A*((zhs_A+1) + (zhs_A-1)*zhs_c + 2*sqrt(zhs_A)*zhs_alpha);
+  b1 = -2*zhs_A*((zhs_A-1) + (zhs_A+1)*zhs_c);
+  b2 =    zhs_A*((zhs_A+1) + (zhs_A-1)*zhs_c - 2*sqrt(zhs_A)*zhs_alpha);
+  a0 =        (zhs_A+1) - (zhs_A-1)*zhs_c + 2*sqrt(zhs_A)*zhs_alpha;
+  a1 =  2*(   (zhs_A-1) - (zhs_A+1)*zhs_c);
+  a2 =        (zhs_A+1) - (zhs_A-1)*zhs_c - 2*sqrt(zhs_A)*zhs_alpha;
+  inva0 = 1/a0;
+  zhs_b0 = b0*inva0; zhs_b1 = b1*inva0; zhs_b2 = b2*inva0; zhs_a1 = a1*inva0; zhs_a2 = a2*inva0;
 );
 
 update_params();
+update_ba_mats();
 
 @slider
 update_params();
+update_ba_mats();
 
 @sample
 // Inputs
@@ -84,26 +278,187 @@ spl2 = Y;
 xy_sum = (X + Y) * 0.7071067811865476;
 z_src = xy_sum - (W * 0.25);
 
-// High-pass to avoid bass lift
-z_hpf = hpf_process(z_src);
+// (No pre HPF on Z synth)
 
 // Decorrelate with short delay
-mem[buf_base + (buf_w & buf_mask)] = z_hpf;
+mem[buf_base + (buf_w & buf_mask)] = z_src;
 z_decorr = mem[buf_base + ((buf_w - d_samp) & buf_mask)];
 buf_w = (buf_w + 1) & buf_mask;
 
 // Blend some undelayed to reduce combing/fizz
-z_mix = z_decorr * 0.7 + z_hpf * 0.3;
+z_mix = z_decorr; // keep minimal path per VHAP guidance
 
 // Gentle soft clip to prevent overload without adding strong harmonics
 // y = tanh(k*x)/tanh(k), k≈1.5 is mild
 k = 1.5;
 z_soft = tanh(k * z_mix) / tanh(k);
 
-// Amount and trim
-z_add = z_soft * amt * z_lin;
+// Build a dry synthesised Z from lateral energy so it exists even with Ambience mix at 0%
+// VHAP-style fixed two-band split: lows pass direct, mid/high decorrelated
+// Scale by Height amount (amt)
+z_synth = z_src * amt;
+// Fixed VHAP split cutoff (~1200 Hz)
+vhap_fc = 1200;
+vhap_a = exp(-(6.283185307179586 * vhap_fc / srate));
+// One-pole LPF for lows
+z_lpf = z_synth + (z_lpf - z_synth) * vhap_a;
+z_low = z_lpf;
+z_midhigh = z_synth - z_low;
+// Decorrelate mid/high with existing delay line
+mem[buf_base + (buf_w & buf_mask)] = z_midhigh;
+z_midhigh_d = mem[buf_base + ((buf_w - d_samp) & buf_mask)];
+// Do not advance buf_w here (advanced later below), so add a shadow read advance
+// Advance a shadow pointer to avoid interfering with main buf_w timing
+// (We reuse buf_w; duplicate read before main increment below is acceptable)
+// Send only mid/high into the synth path (remove low band)
+z_vhap = z_midhigh_d;
+// Pass original Z downstream for selection later
+spl3 = Z;
 
-// Crossfade between original Z and synthesised Z
-spl3 = (1 - z_xf) * Z + z_xf * z_add;
 
+// End-of-chain: Z-only B->A->Ambience->A->B using VHAP-processed synth Z
+Worig = spl0; Xorig = spl1; Yorig = spl2; Zorig = spl3;
+// Apply 2nd-order HPF to Synth Z before B->A
+_zx = z_vhap;
+_zy = zhp_b0*_zx + zhp_b1*zhp_x1 + zhp_b2*zhp_x2 - zhp_a1*zhp_y1 - zhp_a2*zhp_y2;
+zhp_x2 = zhp_x1; zhp_x1 = _zx; zhp_y2 = zhp_y1; zhp_y1 = _zy;
+// (no pre-B->A LPF/EQ on Synth Z; darkness handled on reverb return only)
+Bw = 0; Bx = 0; By = 0; Bz = _zy;
+// A = b2a * B (full)
+A0 = b2a0*Bw + b2a1*Bx + b2a2*By + b2a3*Bz;
+A1 = b2a4*Bw + b2a5*Bx + b2a6*By + b2a7*Bz;
+A2 = b2a8*Bw + b2a9*Bx + b2a10*By + b2a11*Bz;
+A3 = b2a12*Bw + b2a13*Bx + b2a14*By + b2a15*Bz;
 
+// Lightweight ambience on A (wet/dry controls blend; no separate enable)
+(
+  // per-channel combs with damping in feedback, then allpass
+  // Linear crossfade per request: dry = 1 - mix, wet = mix
+  dry_w = 1 - rev_wet;
+  wet_w = rev_wet;
+  rev_norm = 0.5;
+  // ch0 with predelay and 4 parallel combs
+  // Predelay disabled: feed combs directly from A0
+  r0_pre_y = A0;
+  r0_c1_y = mem[r0_c1_base + r0_c1_idx]; r0_c1_fb = r0_c1_y * (r0_c1_g * (1 - rev_damp));
+  mem[r0_c1_base + r0_c1_idx] = r0_pre_y + r0_c1_fb; r0_c1_idx = (r0_c1_idx + 1) % r0_c1_len;
+  r0_c2_y = mem[r0_c2_base + r0_c2_idx]; r0_c2_fb = r0_c2_y * (r0_c2_g * (1 - rev_damp));
+  mem[r0_c2_base + r0_c2_idx] = r0_pre_y + r0_c2_fb; r0_c2_idx = (r0_c2_idx + 1) % r0_c2_len;
+  r0_c3_y = mem[r0_c3_base + r0_c3_idx]; r0_c3_fb = r0_c3_y * (r0_c1_g * (1 - rev_damp));
+  mem[r0_c3_base + r0_c3_idx] = r0_pre_y + r0_c3_fb; r0_c3_idx = (r0_c3_idx + 1) % r0_c3_len;
+  r0_c4_y = mem[r0_c4_base + r0_c4_idx]; r0_c4_fb = r0_c4_y * (r0_c2_g * (1 - rev_damp));
+  mem[r0_c4_base + r0_c4_idx] = r0_pre_y + r0_c4_fb; r0_c4_idx = (r0_c4_idx + 1) % r0_c4_len;
+  r0_comb = (r0_c1_y + r0_c2_y + r0_c3_y + r0_c4_y) * 0.5;
+  r0_apd = mem[r0_ap1_base + r0_ap1_idx];
+  r0_apout = -r0_comb + r0_apd; mem[r0_ap1_base + r0_ap1_idx] = r0_comb + r0_apd * 0.5; r0_ap1_idx = (r0_ap1_idx + 1) % r0_ap1_len;
+  r0_apd2 = mem[r0_ap2_base + r0_ap2_idx];
+  r0_apout2 = -r0_apout + r0_apd2; mem[r0_ap2_base + r0_ap2_idx] = r0_apout + r0_apd2 * 0.5; r0_ap2_idx = (r0_ap2_idx + 1) % r0_ap2_len;
+  r0_rev = (r0_comb + r0_apout2) * rev_norm;
+  A0 = dry_w * A0 + wet_w * r0_rev;
+  // ch1
+  // Predelay disabled: feed combs directly from A1
+  r1_pre_y = A1;
+  r1_c1_y = mem[r1_c1_base + r1_c1_idx]; r1_c1_fb = r1_c1_y * (r1_c1_g * (1 - rev_damp));
+  mem[r1_c1_base + r1_c1_idx] = r1_pre_y + r1_c1_fb; r1_c1_idx = (r1_c1_idx + 1) % r1_c1_len;
+  r1_c2_y = mem[r1_c2_base + r1_c2_idx]; r1_c2_fb = r1_c2_y * (r1_c2_g * (1 - rev_damp));
+  mem[r1_c2_base + r1_c2_idx] = r1_pre_y + r1_c2_fb; r1_c2_idx = (r1_c2_idx + 1) % r1_c2_len;
+  r1_c3_y = mem[r1_c3_base + r1_c3_idx]; r1_c3_fb = r1_c3_y * (r1_c1_g * (1 - rev_damp));
+  mem[r1_c3_base + r1_c3_idx] = r1_pre_y + r1_c3_fb; r1_c3_idx = (r1_c3_idx + 1) % r1_c3_len;
+  r1_c4_y = mem[r1_c4_base + r1_c4_idx]; r1_c4_fb = r1_c4_y * (r1_c2_g * (1 - rev_damp));
+  mem[r1_c4_base + r1_c4_idx] = r1_pre_y + r1_c4_fb; r1_c4_idx = (r1_c4_idx + 1) % r1_c4_len;
+  r1_comb = (r1_c1_y + r1_c2_y + r1_c3_y + r1_c4_y) * 0.5;
+  r1_apd = mem[r1_ap1_base + r1_ap1_idx];
+  r1_apout = -r1_comb + r1_apd; mem[r1_ap1_base + r1_ap1_idx] = r1_comb + r1_apd * 0.5; r1_ap1_idx = (r1_ap1_idx + 1) % r1_ap1_len;
+  r1_apd2 = mem[r1_ap2_base + r1_ap2_idx];
+  r1_apout2 = -r1_apout + r1_apd2; mem[r1_ap2_base + r1_ap2_idx] = r1_apout + r1_apd2 * 0.5; r1_ap2_idx = (r1_ap2_idx + 1) % r1_ap2_len;
+  r1_rev = (r1_comb + r1_apout2) * rev_norm;
+  A1 = dry_w * A1 + wet_w * r1_rev;
+  // ch2
+  // Predelay disabled: feed combs directly from A2
+  r2_pre_y = A2;
+  r2_c1_y = mem[r2_c1_base + r2_c1_idx]; r2_c1_fb = r2_c1_y * (r2_c1_g * (1 - rev_damp));
+  mem[r2_c1_base + r2_c1_idx] = r2_pre_y + r2_c1_fb; r2_c1_idx = (r2_c1_idx + 1) % r2_c1_len;
+  r2_c2_y = mem[r2_c2_base + r2_c2_idx]; r2_c2_fb = r2_c2_y * (r2_c2_g * (1 - rev_damp));
+  mem[r2_c2_base + r2_c2_idx] = r2_pre_y + r2_c2_fb; r2_c2_idx = (r2_c2_idx + 1) % r2_c2_len;
+  r2_c3_y = mem[r2_c3_base + r2_c3_idx]; r2_c3_fb = r2_c3_y * (r2_c1_g * (1 - rev_damp));
+  mem[r2_c3_base + r2_c3_idx] = r2_pre_y + r2_c3_fb; r2_c3_idx = (r2_c3_idx + 1) % r2_c3_len;
+  r2_c4_y = mem[r2_c4_base + r2_c4_idx]; r2_c4_fb = r2_c4_y * (r2_c2_g * (1 - rev_damp));
+  mem[r2_c4_base + r2_c4_idx] = r2_pre_y + r2_c4_fb; r2_c4_idx = (r2_c4_idx + 1) % r2_c4_len;
+  r2_comb = (r2_c1_y + r2_c2_y + r2_c3_y + r2_c4_y) * 0.5;
+  r2_apd = mem[r2_ap1_base + r2_ap1_idx];
+  r2_apout = -r2_comb + r2_apd; mem[r2_ap1_base + r2_ap1_idx] = r2_comb + r2_apd * 0.5; r2_ap1_idx = (r2_ap1_idx + 1) % r2_ap1_len;
+  r2_apd2 = mem[r2_ap2_base + r2_ap2_idx];
+  r2_apout2 = -r2_apout + r2_apd2; mem[r2_ap2_base + r2_ap2_idx] = r2_apout + r2_apd2 * 0.5; r2_ap2_idx = (r2_ap2_idx + 1) % r2_ap2_len;
+  r2_rev = (r2_comb + r2_apout2) * rev_norm;
+  A2 = dry_w * A2 + wet_w * r2_rev;
+  // ch3
+  // Predelay disabled: feed combs directly from A3
+  r3_pre_y = A3;
+  r3_c1_y = mem[r3_c1_base + r3_c1_idx]; r3_c1_fb = r3_c1_y * (r3_c1_g * (1 - rev_damp));
+  mem[r3_c1_base + r3_c1_idx] = r3_pre_y + r3_c1_fb; r3_c1_idx = (r3_c1_idx + 1) % r3_c1_len;
+  r3_c2_y = mem[r3_c2_base + r3_c2_idx]; r3_c2_fb = r3_c2_y * (r3_c2_g * (1 - rev_damp));
+  mem[r3_c2_base + r3_c2_idx] = r3_pre_y + r3_c2_fb; r3_c2_idx = (r3_c2_idx + 1) % r3_c2_len;
+  r3_c3_y = mem[r3_c3_base + r3_c3_idx]; r3_c3_fb = r3_c3_y * (r3_c1_g * (1 - rev_damp));
+  mem[r3_c3_base + r3_c3_idx] = r3_pre_y + r3_c3_fb; r3_c3_idx = (r3_c3_idx + 1) % r3_c3_len;
+  r3_c4_y = mem[r3_c4_base + r3_c4_idx]; r3_c4_fb = r3_c4_y * (r3_c2_g * (1 - rev_damp));
+  mem[r3_c4_base + r3_c4_idx] = r3_pre_y + r3_c4_fb; r3_c4_idx = (r3_c4_idx + 1) % r3_c4_len;
+  r3_comb = (r3_c1_y + r3_c2_y + r3_c3_y + r3_c4_y) * 0.5;
+  r3_apd = mem[r3_ap1_base + r3_ap1_idx];
+  r3_apout = -r3_comb + r3_apd; mem[r3_ap1_base + r3_ap1_idx] = r3_comb + r3_apd * 0.5; r3_ap1_idx = (r3_ap1_idx + 1) % r3_ap1_len;
+  r3_apd2 = mem[r3_ap2_base + r3_ap2_idx];
+  r3_apout2 = -r3_apout + r3_apd2; mem[r3_ap2_base + r3_ap2_idx] = r3_apout + r3_apd2 * 0.5; r3_ap2_idx = (r3_ap2_idx + 1) % r3_ap2_len;
+  r3_rev = (r3_comb + r3_apout2) * rev_norm;
+  A3 = dry_w * A3 + wet_w * r3_rev;
+);
+
+// Gentle post-ambience LPF to reduce squeal/harshness (fixed ~4.5 kHz)
+out_lpf_fc = 4500;
+out_lpf_a = exp(-(6.283185307179586 * out_lpf_fc / srate));
+A0 = A0 + (A0 - A0) * 0; // no-op to keep structure
+A0_lpf = A0_lpf + (A0 - A0_lpf) * (1 - out_lpf_a);
+A0 = A0_lpf;
+A1_lpf = A1_lpf + (A1 - A1_lpf) * (1 - out_lpf_a);
+A1 = A1_lpf;
+A2_lpf = A2_lpf + (A2 - A2_lpf) * (1 - out_lpf_a);
+A2 = A2_lpf;
+A3_lpf = A3_lpf + (A3 - A3_lpf) * (1 - out_lpf_a);
+A3 = A3_lpf;
+
+// Peaking EQ cut around 2.5 kHz to tame mid resonances (applied per A channel)
+_x = A0; _y = peq_b0*_x + peq_b1*peqA0_x1 + peq_b2*peqA0_x2 - peq_a1*peqA0_y1 - peq_a2*peqA0_y2;
+peqA0_x2 = peqA0_x1; peqA0_x1 = _x; peqA0_y2 = peqA0_y1; peqA0_y1 = _y; A0 = _y;
+_x = A1; _y = peq_b0*_x + peq_b1*peqA1_x1 + peq_b2*peqA1_x2 - peq_a1*peqA1_y1 - peq_a2*peqA1_y2;
+peqA1_x2 = peqA1_x1; peqA1_x1 = _x; peqA1_y2 = peqA1_y1; peqA1_y1 = _y; A1 = _y;
+_x = A2; _y = peq_b0*_x + peq_b1*peqA2_x1 + peq_b2*peqA2_x2 - peq_a1*peqA2_y1 - peq_a2*peqA2_y2;
+peqA2_x2 = peqA2_x1; peqA2_x1 = _x; peqA2_y2 = peqA2_y1; peqA2_y1 = _y; A2 = _y;
+_x = A3; _y = peq_b0*_x + peq_b1*peqA3_x1 + peq_b2*peqA3_x2 - peq_a1*peqA3_y1 - peq_a2*peqA3_y2;
+peqA3_x2 = peqA3_x1; peqA3_x1 = _x; peqA3_y2 = peqA3_y1; peqA3_y1 = _y; A3 = _y;
+
+// (no HPF stage; handled in downstream 5.1.2 decoder)
+
+// Back to B for processed path (compute Z only)
+Zp = a2b12*A0 + a2b13*A1 + a2b14*A2 + a2b15*A3;
+
+// Mild soft limiter to avoid overload on Z
+lim_k = 1.2;
+Zp = tanh(lim_k * Zp) / tanh(lim_k);
+
+// (no Z-domain HPF here)
+
+// Apply fixed gain to Synthesised Z (-3 dB)
+Zp *= exp(log(10) * (-3 / 20));
+
+// Apply high-shelf to Synth Z (~4 kHz, -3 dB)
+_x = Zp;
+_y = zhs_b0*_x + zhs_b1*zhs_x1 + zhs_b2*zhs_x2 - zhs_a1*zhs_y1 - zhs_a2*zhs_y2;
+zhs_x2 = zhs_x1; zhs_x1 = _x; zhs_y2 = zhs_y1; zhs_y1 = _y;
+Zp = _y;
+
+// Select Z source via dropdown; W/X/Y pass through
+spl0 = Worig;
+spl1 = Xorig;
+spl2 = Yorig;
+// Select Synth/Original Z (no extra gain; AGC disabled)
+spl3 = (slider4 >= 0.5) ? Zp : Zorig;
+// Apply Height trim
+spl3 *= exp(log(10) * (slider3 / 20));

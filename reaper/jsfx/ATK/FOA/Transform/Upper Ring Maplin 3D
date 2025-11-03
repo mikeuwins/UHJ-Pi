@@ -1,0 +1,120 @@
+/*
+ATK FOA Transform — Upper Ring Maplin 3D
+3D VHAP-like: fixed mid/high bands from lower → inject to upper; remove same from lower.
+
+- Fixed bands: Mid 700–4000 Hz, High >4000 Hz
+- Amount maps to β_mid≈0.15 and β_hi≈0.40 with gentle U^1.2 curve
+- Gain applies only to injected (upper) and inverse (lower) amounts
+
+Author: you (with ChatGPT)
+Version: 2.0 - Fixed bands mid/high
+*/
+
+desc:ATK Upper Ring Maplin 3D
+
+import ../../libraries/atk/atk.jsfx-inc
+
+// 8 channels
+in_pin:Speaker 1
+in_pin:Speaker 2
+in_pin:Speaker 3
+in_pin:Speaker 4
+in_pin:Speaker 5
+in_pin:Speaker 6
+in_pin:Speaker 7
+in_pin:Speaker 8
+out_pin:Speaker 1
+out_pin:Speaker 2
+out_pin:Speaker 3
+out_pin:Speaker 4
+out_pin:Speaker 5
+out_pin:Speaker 6
+out_pin:Speaker 7
+out_pin:Speaker 8
+
+// ---------------- UI ----------------
+slider1:50<0,100,1>Height Amount (%)
+slider2:0<-6,6,0.1>Inject Gain (dB)
+slider3:0<0,1,1{Solo Off,Solo Injected}>Solo Injected
+
+options:no_meter
+
+// ---------------- Constants/State ----------------
+@init
+pi2 = 2*$pi;
+// Band edges
+F1 = 700;   // LP1 cutoff
+F2 = 4000;  // LP2 cutoff
+Qn = 0.7071;
+
+// Shared LP biquad coeffs
+function biquad_lp_set(fc, Q, b0* b1* b2* a1* a2*) (
+  w = pi2*fc/srate; sn = sin(w); cs = cos(w);
+  alpha = sn/(2*Q);
+  b0t = (1-cs)*0.5; b1t = 1-cs; b2t = (1-cs)*0.5;
+  a0t = 1+alpha; a1t = -2*cs; a2t = 1-alpha;
+  b0 = b0t/a0t; b1 = b1t/a0t; b2 = b2t/a0t; a1 = a1t/a0t; a2 = a2t/a0t;
+);
+
+biquad_lp_set(F1, Qn, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2);
+biquad_lp_set(F2, Qn, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2);
+
+// States per lower channel for two LPs (LP1, LP2)
+kMaxCh = 32;
+state_base = 65536*1; memset(state_base, 0, kMaxCh*8);
+
+function biquad_proc(x, b0,b1,b2,a1,a2, ch, filt) (
+  idx = filt*(kMaxCh*4) + ch*4;
+  x1 = mem[state_base+idx+0]; x2 = mem[state_base+idx+1];
+  y1 = mem[state_base+idx+2]; y2 = mem[state_base+idx+3];
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  mem[state_base+idx+1]=x1; mem[state_base+idx+0]=x;
+  mem[state_base+idx+3]=y1; mem[state_base+idx+2]=y;
+  y;
+);
+
+@slider
+U = slider1/100; // 0..1
+inj_gain = exp(log(10)*(slider2/20));
+solo_inj = slider3|0;
+
+// Map U to betas (VHAP-like)
+gamma = 1.2;
+mid_cap = 0.15; hi_cap = 0.40;
+beta_m = min(mid_cap, pow(U, gamma));
+beta_h = min(hi_cap,  1.2*pow(U, gamma));
+
+@sample
+// Process each upper/lower pair (4 azimuth columns)
+col = 0;
+loop(4,
+  up_idx = col;
+  dn_idx = col + 4;
+  
+  up_in = (up_idx < num_ch) ? spl(up_idx) : 0;
+  dn_in = (dn_idx < num_ch) ? spl(dn_idx) : 0;
+  
+  // Band-split LOWER into mid/high using fixed LPs
+  lp1 = biquad_proc(dn_in, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, dn_idx, 0);
+  lp2 = biquad_proc(dn_in, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, dn_idx, 1);
+  dn_mid = lp2 - lp1;
+  dn_hi  = dn_in - lp2;
+  
+  // Inject mid/high to UPPER; remove same from LOWER
+  inj = beta_m * dn_mid + beta_h * dn_hi;
+  up_out = up_in + inj * inj_gain;
+  dn_out = dn_in - inj * inj_gain;
+  
+  (solo_inj) ? (
+    spl(up_idx) = inj * inj_gain * 1.77827941; // +5 dB audition
+    spl(dn_idx) = 0;
+  ) : (
+    spl(up_idx) = up_out;
+    spl(dn_idx) = dn_out;
+  );
+  
+  col += 1;
+);
+
+// Pass-through any remaining channels unchanged
+c = 8; loop(max(0, num_ch-8), spl(c)=spl(c); c+=1);

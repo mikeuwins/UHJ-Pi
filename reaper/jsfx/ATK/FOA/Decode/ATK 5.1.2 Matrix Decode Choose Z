@@ -1,0 +1,317 @@
+desc:ATK FOA -> 5.1.2 (Top-Front) [equal/focused/four + W->Height + meters + output order]
+
+// Inputs (FuMa): W (ch1), X (ch2), Y (ch3), Z (ch4)
+in_pin:left (W)
+in_pin:right (X)
+in_pin:aux1 (Y)
+in_pin:aux2 (Z)
+
+// Outputs: 8 channels (mapping selectable by slider at bottom)
+
+// ---------------- Sliders ----------------
+slider1:0<0,2,1{equal,focused,four}> Lower-ring mode
+slider2:1<0,2,1{Matrix,Force 0,Custom dB}> W->Heights mode
+slider3:-20<-60,0,0.1> W->Heights (Custom dB)
+slider4:-10<-24,0,0.1> LFE trim (dB)
+slider5:80<40,200,1>   LFE LPF cutoff (Hz)
+slider6:0<0,2,1{Both,Lower,Heights}> Meter view
+slider7:250<100,1000,10> Meter ball size
+slider8:300<100,1000,10> Lower ring radius
+slider9:200<80,600,10>   Height ring radius
+slider10:0.95<0.80,0.999,0.001> Meter falloff
+slider11:0<0,1,1{UHJ-Pi,Dolby}> Output order
+slider12:0<0,1,1{Off,On}> Gentle HF shelf (tiny voicing)
+slider13:700<300,1200,10> Shelf split Hz
+
+@init
+
+// ---- PATHS (edit this base if your home path differs) ----
+#base = "/home/michael-uwins/.config/REAPER/Data/ATK/matrices/FOA/decoders/5_1_2/";
+sprintf(#equal_path,   "%sequal.txt",           #base);
+sprintf(#focused_path, "%sfocused.txt",         #base);
+sprintf(#four_path,    "%sfour.txt",            #base);
+sprintf(#heights_path, "%sheights_topfront.txt",#base);
+ 
+// lower-ring decode matrix (5x4) rows: L R C Ls Rs ; cols: W X Y Z
+m00=m01=m02=m03=0;  // L
+m10=m11=m12=m13=0;  // R
+m20=m21=m22=m23=0;  // C
+m30=m31=m32=m33=0;  // Ls
+m40=m41=m42=m43=0;  // Rs
+
+// heights (2x4): Ltf, Rtf ; cols: W X Y Z
+m50_W=m51=m52=m53=0; // Ltf
+m60_W=m61=m62=m63=0; // Rtf
+
+// fallback embedded (projection placeholders)
+function load_fallback_lower(mode) (
+  w = 0.70710678118655;
+
+  // equal placeholder (front: -30,+30; center 0; surrounds about +-110)
+  equal_LRCsRs_0 =  w;   equal_LRCsRs_1 =  0.866025404;  equal_LRCsRs_2 = -0.500000000;  equal_LRCsRs_3 = 0.0;
+  equal_LRCsRs_4 =  w;   equal_LRCsRs_5 =  0.866025404;  equal_LRCsRs_6 =  0.500000000;  equal_LRCsRs_7 = 0.0;
+  equal_LRCsRs_8 =  w;   equal_LRCsRs_9 =  1.000000000;  equal_LRCsRs_10=  0.000000000;  equal_LRCsRs_11= 0.0;
+  equal_LRCsRs_12=  w;   equal_LRCsRs_13= -0.342020143;  equal_LRCsRs_14= -0.939692621;  equal_LRCsRs_15= 0.0;
+  equal_LRCsRs_16=  w;   equal_LRCsRs_17= -0.342020143;  equal_LRCsRs_18=  0.939692621;  equal_LRCsRs_19= 0.0;
+
+  // focused placeholder = same as equal here (will be replaced by file if present)
+  focus_LRCsRs_0 = equal_LRCsRs_0;  focus_LRCsRs_1 = equal_LRCsRs_1;  focus_LRCsRs_2 = equal_LRCsRs_2;  focus_LRCsRs_3 = 0.0;
+  focus_LRCsRs_4 = equal_LRCsRs_4;  focus_LRCsRs_5 = equal_LRCsRs_5;  focus_LRCsRs_6 = equal_LRCsRs_6;  focus_LRCsRs_7 = 0.0;
+  focus_LRCsRs_8 = equal_LRCsRs_8;  focus_LRCsRs_9 = equal_LRCsRs_9;  focus_LRCsRs_10= equal_LRCsRs_10; focus_LRCsRs_11= 0.0;
+  focus_LRCsRs_12= equal_LRCsRs_12; focus_LRCsRs_13= equal_LRCsRs_13; focus_LRCsRs_14= equal_LRCsRs_14; focus_LRCsRs_15= 0.0;
+  focus_LRCsRs_16= equal_LRCsRs_16; focus_LRCsRs_17= equal_LRCsRs_17; focus_LRCsRs_18= equal_LRCsRs_18; focus_LRCsRs_19= 0.0;
+
+  // four placeholder (centre off)
+  four_LRCsRs_0 =  equal_LRCsRs_0;   four_LRCsRs_1 =  equal_LRCsRs_1;   four_LRCsRs_2 =  equal_LRCsRs_2;   four_LRCsRs_3 = 0.0;
+  four_LRCsRs_4 =  equal_LRCsRs_4;   four_LRCsRs_5 =  equal_LRCsRs_5;   four_LRCsRs_6 =  equal_LRCsRs_6;   four_LRCsRs_7 = 0.0;
+  four_LRCsRs_8 =  0.0;              four_LRCsRs_9 =  0.0;              four_LRCsRs_10=  0.0;              four_LRCsRs_11= 0.0;
+  four_LRCsRs_12=  equal_LRCsRs_12;  four_LRCsRs_13=  equal_LRCsRs_13;  four_LRCsRs_14=  equal_LRCsRs_14;  four_LRCsRs_15= 0.0;
+  four_LRCsRs_16=  equal_LRCsRs_16;  four_LRCsRs_17=  equal_LRCsRs_17;  four_LRCsRs_18=  equal_LRCsRs_18;  four_LRCsRs_19= 0.0;
+
+  // pick
+  (mode==0) ? (
+    m00=equal_LRCsRs_0;  m01=equal_LRCsRs_1;  m02=equal_LRCsRs_2;  m03=equal_LRCsRs_3;
+    m10=equal_LRCsRs_4;  m11=equal_LRCsRs_5;  m12=equal_LRCsRs_6;  m13=equal_LRCsRs_7;
+    m20=equal_LRCsRs_8;  m21=equal_LRCsRs_9;  m22=equal_LRCsRs_10; m23=equal_LRCsRs_11;
+    m30=equal_LRCsRs_12; m31=equal_LRCsRs_13; m32=equal_LRCsRs_14; m33=equal_LRCsRs_15;
+    m40=equal_LRCsRs_16; m41=equal_LRCsRs_17; m42=equal_LRCsRs_18; m43=equal_LRCsRs_19;
+  );
+  (mode==1) ? (
+    m00=focus_LRCsRs_0;  m01=focus_LRCsRs_1;  m02=focus_LRCsRs_2;  m03=focus_LRCsRs_3;
+    m10=focus_LRCsRs_4;  m11=focus_LRCsRs_5;  m12=focus_LRCsRs_6;  m13=focus_LRCsRs_7;
+    m20=focus_LRCsRs_8;  m21=focus_LRCsRs_9;  m22=focus_LRCsRs_10; m23=focus_LRCsRs_11;
+    m30=focus_LRCsRs_12; m31=focus_LRCsRs_13; m32=focus_LRCsRs_14; m33=focus_LRCsRs_15;
+    m40=focus_LRCsRs_16; m41=focus_LRCsRs_17; m42=focus_LRCsRs_18; m43=focus_LRCsRs_19;
+  );
+  (mode==2) ? (
+    m00=four_LRCsRs_0;  m01=four_LRCsRs_1;  m02=four_LRCsRs_2;  m03=four_LRCsRs_3;
+    m10=four_LRCsRs_4;  m11=four_LRCsRs_5;  m12=four_LRCsRs_6;  m13=four_LRCsRs_7;
+    m20=four_LRCsRs_8;  m21=four_LRCsRs_9;  m22=four_LRCsRs_10; m23=four_LRCsRs_11;
+    m30=four_LRCsRs_12; m31=four_LRCsRs_13; m32=four_LRCsRs_14; m33=four_LRCsRs_15;
+    m40=four_LRCsRs_16; m41=four_LRCsRs_17; m42=four_LRCsRs_18; m43=four_LRCsRs_19;
+  );
+);
+
+// fallback heights = Top-Front at az +-30, el +45, with W=0
+function load_fallback_heights() (
+  m50_W=0.0; m51=0.612372436; m52=-0.353553391; m53=0.707106781;
+  m60_W=0.0; m61=0.612372436; m62= 0.353553391; m63=0.707106781;
+);
+
+// parse a single line "w x y z" into 4 floats (pads missing with 0)
+function parse_row(line, #retval(w,x,y,z)) (
+  line = match("%s+", line, 0, 0); // trim leading spaces
+  w = x = y = z = 0;
+  i=0; p=0; loop(4,
+    p = match("%S+", line, p, 1);
+    p >= 0 ? (
+      token = str_getchar(line, p, 0);
+      // read token into tmp string
+      q = match("%s", line, p, 1);
+      q < 0 ? q = strlen(line);
+      section = str_getslice(line, p, q);
+      val = str_to_var(section);
+      i==0 ? w=val;
+      i==1 ? x=val;
+      i==2 ? y=val;
+      i==3 ? z=val;
+      p = q;
+    );
+    i += 1;
+  );
+);
+
+// try to load a 5x4 file into m00..m43 (rows L R C Ls Rs)
+function load_lower_from_file(path$) (
+  fh = file_open(path$);
+  fh >= 0 ? (
+    // read 5 lines
+    parse_row(file_read(fh), m00,m01,m02,m03);
+    parse_row(file_read(fh), m10,m11,m12,m13);
+    parse_row(file_read(fh), m20,m21,m22,m23);
+    parse_row(file_read(fh), m30,m31,m32,m33);
+    parse_row(file_read(fh), m40,m41,m42,m43);
+    file_close(fh);
+    1;
+  ) : 0;
+);
+
+// try to load a 2x4 heights file into m50..m63
+function load_heights_from_file(path$) (
+  fh = file_open(path$);
+  fh >= 0 ? (
+    parse_row(file_read(fh), m50_W,m51,m52,m53);
+    parse_row(file_read(fh), m60_W,m61,m62,m63);
+    file_close(fh);
+    1;
+  ) : 0;
+);
+
+// meters
+i=0; loop(8, env[i]=0; i+=1;);
+
+// one-pole states
+lfe_s=0;
+Wlp_s=0; Xlp_s=0; Ylp_s=0; Zlp_s=0;
+
+// initial load
+loaded_lower = load_lower_from_file(equal_path);
+loaded_heights = load_heights_from_file(heights_path);
+loaded_lower ? 1 : ( load_fallback_lower(0); );
+loaded_heights ? 1 : ( load_fallback_heights(); );
+
+// ---------------- Slider calc ----------------
+@slider
+mode = slider1|0;           // 0=equal 1=focused 2=four
+wht_mode = slider2|0;       // 0=Matrix 1=Force0 2=Custom
+wht_custom = (slider3<=-150) ? 0 : pow(10, slider3/20);
+lfetrim = (slider4<=-150) ? 0 : pow(10, slider4/20);
+fc_lfe = max(20, slider5);
+a_lfe  = exp(-2*$pi*fc_lfe/srate);
+meter_smooth = slider10;
+out_order = slider11|0;     // 0=UHJ-Pi, 1=Dolby
+shelf_on = slider12|0;
+fc_sh = max(100, slider13);
+a_sh  = exp(-2*$pi*fc_sh/srate);
+
+// reload lower matrix if mode changed and file exists; else fallback set for that mode
+(mode==0) ? (
+  loaded_lower = load_lower_from_file(equal_path);
+  loaded_lower ? 1 : ( load_fallback_lower(0); );
+);
+(mode==1) ? (
+  loaded_lower = load_lower_from_file(focused_path);
+  loaded_lower ? 1 : ( load_fallback_lower(1); );
+);
+(mode==2) ? (
+  loaded_lower = load_lower_from_file(four_path);
+  loaded_lower ? 1 : ( load_fallback_lower(2); );
+);
+
+// reload heights file each time (in case user edits on disk)
+loaded_heights = load_heights_from_file(heights_path);
+loaded_heights ? 1 : ( load_fallback_heights(); );
+
+// compute effective W into heights
+m50_W_eff = (wht_mode==0) ? m50_W : (wht_mode==1) ? 0 : wht_custom;
+m60_W_eff = (wht_mode==0) ? m60_W : (wht_mode==1) ? 0 : wht_custom;
+
+// ---------------- Audio ----------------
+@sample
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// very gentle shelves (optional)
+Wlp_s += (1 - a_sh) * (W - Wlp_s);  Whf = W - Wlp_s;
+Xlp_s += (1 - a_sh) * (X - Xlp_s);  Xhf = X - Xlp_s;
+Ylp_s += (1 - a_sh) * (Y - Ylp_s);  Yhf = Y - Ylp_s;
+Zlp_s += (1 - a_sh) * (Z - Zlp_s);  Rhf = Z - Zlp_s;
+
+voicing = shelf_on ? 1 : 0;
+Wv = W - voicing*0.15*Whf;
+Xv = X + voicing*0.15*Xhf;
+Yv = Y + voicing*0.15*Yhf;
+Zv = Z + voicing*0.15*Rhf;
+
+// lower ring
+L   = m00*Wv + m01*Xv + m02*Yv + m03*Zv;
+R   = m10*Wv + m11*Xv + m12*Yv + m13*Zv;
+C   = m20*Wv + m21*Xv + m22*Yv + m23*Zv;
+Ls  = m30*Wv + m31*Xv + m32*Yv + m33*Zv;
+Rs  = m40*Wv + m41*Xv + m42*Yv + m43*Zv;
+
+// heights
+Ltf = (m50_W_eff*Wv + m51*Xv + m52*Yv + m53*Zv);
+Rtf = (m60_W_eff*Wv + m61*Xv + m62*Yv + m63*Zv);
+
+// LFE from W
+lfe_s += (1 - a_lfe) * (W - lfe_s);
+LFE = lfe_s * lfetrim;
+
+// output mapping
+(out_order==0) ? ( // UHJ-Pi: L R C Ls Rs LFE Ltf Rtf
+  spl0=L; spl1=R; spl2=C; spl3=Ls; spl4=Rs; spl5=LFE; spl6=Ltf; spl7=Rtf;
+) : ( // Dolby: L R C LFE Ls Rs Ltf Rtf
+  spl0=L; spl1=R; spl2=C; spl3=LFE; spl4=Ls; spl5=Rs; spl6=Ltf; spl7=Rtf;
+);
+
+// meters
+env[0] = max(abs(L),   env[0]*meter_smooth);
+env[1] = max(abs(R),   env[1]*meter_smooth);
+env[2] = max(abs(C),   env[2]*meter_smooth);
+env[3] = max(abs(Ls),  env[3]*meter_smooth);
+env[4] = max(abs(Rs),  env[4]*meter_smooth);
+env[5] = max(abs(LFE), env[5]*meter_smooth);
+env[6] = max(abs(Ltf), env[6]*meter_smooth);
+env[7] = max(abs(Rtf), env[7]*meter_smooth);
+
+// ---------------- Graphics ----------------
+@gfx 600 440
+gfx_a = 1;
+gfx_clear = 0x202020;
+
+cx = gfx_w*0.5;
+cy_lo = gfx_h*0.70;
+cy_hi = gfx_h*0.28;
+
+r_lo = min(gfx_w, gfx_h)*(slider8*0.01)*0.5;
+r_hi = min(gfx_w, gfx_h)*(slider9*0.01)*0.5;
+
+view = slider6;
+
+ball = max(4, min(28, slider7*0.01));
+gfx_setfont(1, "Arial", 18);
+
+// labels
+gfx_r=gfx_g=gfx_b=1; gfx_a=0.9;
+gfx_x = 10; gfx_y = 10;
+gfx_printf("Mode: %s   W->Ht: %s   Order: %s",
+  (slider1==0)?"equal":(slider1==1)?"focused":"four",
+  (slider2==0)?"Matrix":(slider2==1)?"Force0":"Custom",
+  (slider11==0)?"UHJ-Pi":"Dolby"
+);
+
+// lower ring diagram
+(view==0 || view==1) ? (
+  gfx_r=0.7; gfx_g=0.7; gfx_b=0.7; gfx_a=0.25; gfx_circle(cx, cy_lo, r_lo, 0);
+
+  thL  = -30*$pi/180; xL  = cx + r_lo * sin(thL);  yL  = cy_lo - r_lo * cos(thL);
+  thR  = +30*$pi/180; xR  = cx + r_lo * sin(thR);  yR  = cy_lo - r_lo * cos(thR);
+  thC  =   0*$pi/180; xC  = cx + r_lo * sin(thC);  yC  = cy_lo - r_lo * cos(thC);
+  thLs = -110*$pi/180; xLs = cx + r_lo * sin(thLs); yLs = cy_lo - r_lo * cos(thLs);
+  thRs = +110*$pi/180; xRs = cx + r_lo * sin(thRs); yRs = cy_lo - r_lo * cos(thRs);
+
+  // draw helper
+  function drawpt(x,y,idx,label$)(
+    gfx_r=0.7; gfx_g=0.7; gfx_b=0.7; gfx_a=0.25; gfx_circle(x,y,ball,1);
+    m = min(1, env[idx]*2);
+    gfx_r=0.0; gfx_g=0.9; gfx_b=0.6; gfx_a=0.9; gfx_circle(x,y,ball*m,1);
+    gfx_r=gfx_g=gfx_b=1; gfx_a=1; gfx_x=x-6; gfx_y=y-8; gfx_printf(label$);
+  );
+
+  drawpt(xL,yL,0,"L");
+  drawpt(xR,yR,1,"R");
+  drawpt(xC,yC,2,"C");
+  drawpt(xLs,yLs,3,"Ls");
+  drawpt(xRs,yRs,4,"Rs");
+
+  // LFE indicator at center of lower ring
+  drawpt(cx,cy_lo,5,"LFE");
+);
+
+// heights diagram
+(view==0 || view==2) ? (
+  gfx_r=0.7; gfx_g=0.7; gfx_b=0.7; gfx_a=0.25; gfx_circle(cx, cy_hi, r_hi, 0);
+
+  thLh = -30*$pi/180; xLh = cx + r_hi * sin(thLh); yLh = cy_hi - r_hi * cos(thLh);
+  thRh = +30*$pi/180; xRh = cx + r_hi * sin(thRh); yRh = cy_hi - r_hi * cos(thRh);
+
+  function drawpth(x,y,idx,label$)(
+    gfx_r=0.7; gfx_g=0.7; gfx_b=0.7; gfx_a=0.25; gfx_circle(x,y,ball,1);
+    m = min(1, env[idx]*2);
+    gfx_r=0.0; gfx_g=0.9; gfx_b=0.6; gfx_a=0.9; gfx_circle(x,y,ball*m,1);
+    gfx_r=gfx_g=gfx_b=1; gfx_a=1; gfx_x=x-10; gfx_y=y-8; gfx_printf(label$);
+  );
+  drawpth(xLh,yLh,6,"Ltf");
+  drawpth(xRh,yRh,7,"Rtf");
+);
+

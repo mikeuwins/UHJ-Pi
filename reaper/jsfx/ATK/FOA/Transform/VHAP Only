@@ -1,0 +1,276 @@
+/*
+ATK FOA Transform — VHAP Only
+FOA (FuMa) W,X,Y,Z → W,X,Y,Z' (synthesise pseudo-height Z′ from W/X/Y via FFT convolution)
+
+Stage 1 (only): B-VHAP (Lee) — synthesise pseudo-height Z′ from W/X/Y via FFT overlap-add (1024 taps, 512-sample chunks)
+
+Kernels (Linux default paths):
+  ~/.config/REAPER/Data/ATK/kernels/FOA/transforms/b-vhap/<fs>/1024/0100/BVHAP_Z.wav
+    Interleaved per tap: [ZW, ZX, ZY, ZΔ]
+
+Author: you (with ChatGPT)
+Version: 4.0-vhap-only-fft-stable
+*/
+
+desc:FOA VHAP Only (FFT Stable)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+in_pin:W
+in_pin:X
+in_pin:Y
+in_pin:Z
+
+out_pin:W
+out_pin:X
+out_pin:Y
+out_pin:Z'
+
+// -------------------- UI --------------------
+slider1:0.0<-12.0,12.0,0.1>VHAP Trim (dB)
+slider2:100<0,100,1>VHAP Morph (%)
+slider3:0<0,1,1{VHAP Solo Off,VHAP Solo On}>VHAP Solo
+
+options:no_meter
+
+// =====================================================
+//            B-VHAP FFT-ONLY (OVERLAP-ADD)
+// =====================================================
+@init
+BV_N = 1024;  // Kernel size
+BV_EPS = 0.000000001;
+
+// File paths
+bvFN = 1;
+// Interleaved impulse: [ZW, ZX, ZY, ZΔ] per tap
+bvImp = 65536*1;  // BV_N * 4 floats
+
+// Deinterleaved real kernels (real-valued FIRs)
+bvZW = 65536*2;
+bvZX = 65536*3;
+bvZY = 65536*4;
+bvZD = 65536*5;
+
+// FFT buffers: complex (real,imag pairs) for each lane
+// Cur/Next pattern for overlap-add
+bvFftSize = 0;
+bvChunkSize = 0;
+bvPrevSR = -1;
+bvFftNewRequired = 1;
+
+// W lane
+bvCur_W = 65536*6;   bvNext_W = 65536*7;
+bvK_W = 65536*8;
+// X lane
+bvCur_X = 65536*9;   bvNext_X = 65536*10;
+bvK_X = 65536*11;
+// Y lane
+bvCur_Y = 65536*12;  bvNext_Y = 65536*13;
+bvK_Y = 65536*14;
+// Z lane (for ZΔ)
+bvCur_Z = 65536*15;  bvNext_Z = 65536*16;
+bvK_Z = 65536*17;
+
+// Buffer position counter
+bvBufPos = 0;
+
+// Normalizer
+BV_G = 1.0;
+
+// Simplified soft limiter (faster, no abs call)
+function softlim(x)
+(
+  // More aggressive limiting: cap at ±0.8 to prevent distortion
+  (x > 0.8) ? 0.8 : ((x < -0.8) ? -0.8 : x);
+);
+
+// Helper: deinterleave 4-lane impulse into separate real lanes
+function bv_deint(base, N, dstZW, dstZX, dstZY, dstZD)
+(
+  i=0;
+  loop(N,
+    mem[dstZW + i] = mem[base + i*4 + 0];  // ZW
+    mem[dstZX + i] = mem[base + i*4 + 1];  // ZX
+    mem[dstZY + i] = mem[base + i*4 + 2];  // ZY
+    mem[dstZD + i] = mem[base + i*4 + 3];  // ZΔ
+    i += 1;
+  );
+);
+
+// Helper: prepare real FIR kernel for FFT convolution
+// Normalize kernels by BV_G to match time-domain behavior
+function bv_prepKernel(realKernel, complexKernel, kernelSize, fftSize, normGain)
+(
+  i2=0; i3=0;
+  loop(kernelSize,
+    complexKernel[i2  ] = realKernel[i3] * normGain;  // Real (apply BV_G normalization)
+    complexKernel[i2+1] = 0;                           // Imag
+    i2 += 2; i3 += 1;
+  );
+  memset(complexKernel + kernelSize*2, 0, (fftSize - kernelSize)*2);
+  fft(complexKernel, fftSize);
+  
+  inv = 1.0 / fftSize;
+  i2=0; loop(fftSize*2, complexKernel[i2] *= inv; i2 += 1;);
+);
+
+// Helper: compute L2 norm for normalization
+function bv_l2(base, n)
+(
+  acc=0; i=0; loop(n, acc += mem[base+i]*mem[base+i]; i += 1;); acc;
+);
+
+// Load kernels and prepare for FFT convolution
+function bv_load()
+(
+  fs_i = floor(srate+0.5);
+  sprintf(bvFN, "ATK/kernels/FOA/transforms/b-vhap/%i/%i/0100/BVHAP_Z.wav", fs_i, BV_N);
+  total = BV_N*4;
+  memset(bvImp, 0, total);
+  readKernelImpulseFromFile(bvFN, bvImp);
+
+  bv_deint(bvImp, BV_N, bvZW, bvZX, bvZY, bvZD);
+
+  // Normalization: include all four lanes as per B-VHAP spec
+  eZW = bv_l2(bvZW, BV_N);
+  eZX = bv_l2(bvZX, BV_N);
+  eZY = bv_l2(bvZY, BV_N);
+  eZD = bv_l2(bvZD, BV_N);
+  eTot = eZW + eZX + eZY + eZD; (eTot<=0) ? (eTot=1):0;
+  BV_G = 1/sqrt(eTot);
+  (BV_G<0.25) ? BV_G=0.25 : 0;
+  (BV_G>8.0)  ? BV_G=8.0  : 0;
+  
+  bvFftNewRequired = 1;
+);
+
+bv_load();
+
+@block
+(bvPrevSR != srate) ? (
+  bvPrevSR = srate;
+  bv_load();
+) : 0;
+
+bvFftNewRequired ? (
+  bvFftSize = 2*BV_N;
+  bvChunkSize = 512;  // Stable chunk size (~11.6ms @ 44.1kHz)
+  
+  // Prepare kernels (real → complex, FFT) - apply BV_G normalization here
+  bv_prepKernel(bvZW, bvK_W, BV_N, bvFftSize, BV_G);
+  bv_prepKernel(bvZX, bvK_X, BV_N, bvFftSize, BV_G);
+  bv_prepKernel(bvZY, bvK_Y, BV_N, bvFftSize, BV_G);
+  bv_prepKernel(bvZD, bvK_Z, BV_N, bvFftSize, BV_G);
+  
+  // Clear buffers
+  memset(bvCur_W, 0, bvFftSize*2); memset(bvNext_W, 0, bvFftSize*2);
+  memset(bvCur_X, 0, bvFftSize*2); memset(bvNext_X, 0, bvFftSize*2);
+  memset(bvCur_Y, 0, bvFftSize*2); memset(bvNext_Y, 0, bvFftSize*2);
+  memset(bvCur_Z, 0, bvFftSize*2); memset(bvNext_Z, 0, bvFftSize*2);
+  
+  pdc_delay = bvChunkSize;
+  pdc_bot_ch=0; pdc_top_ch=4;
+  
+  bvBufPos = 0;
+  bvFftNewRequired = 0;
+);
+
+@slider
+vhap_trim   = exp(log(10)*(slider1/20));
+vhap_morph  = pow(slider2 * 0.01, 0.5);
+vhap_solo   = slider3|0;
+vhap_enable = 1;
+
+@sample
+// Inputs
+W_in = spl0; X_in = spl1; Y_in = spl2; Z_in = spl3;
+
+// Convolution tick: process chunk when buffer full
+(bvBufPos >= bvChunkSize) ? (
+  // W → Zw
+  mTemp=bvNext_W; bvNext_W=bvCur_W; bvCur_W=mTemp;
+  memset(bvCur_W + bvChunkSize*2, 0, (bvFftSize - bvChunkSize)*2);
+  fft(bvCur_W, bvFftSize);
+  convolve_c(bvCur_W, bvK_W, bvFftSize);
+  ifft(bvCur_W, bvFftSize);
+  
+  // X → Zx
+  mTemp=bvNext_X; bvNext_X=bvCur_X; bvCur_X=mTemp;
+  memset(bvCur_X + bvChunkSize*2, 0, (bvFftSize - bvChunkSize)*2);
+  fft(bvCur_X, bvFftSize);
+  convolve_c(bvCur_X, bvK_X, bvFftSize);
+  ifft(bvCur_X, bvFftSize);
+  
+  // Y → Zy
+  mTemp=bvNext_Y; bvNext_Y=bvCur_Y; bvCur_Y=mTemp;
+  memset(bvCur_Y + bvChunkSize*2, 0, (bvFftSize - bvChunkSize)*2);
+  fft(bvCur_Y, bvFftSize);
+  convolve_c(bvCur_Y, bvK_Y, bvFftSize);
+  ifft(bvCur_Y, bvFftSize);
+  
+  // Z → ZΔ
+  mTemp=bvNext_Z; bvNext_Z=bvCur_Z; bvCur_Z=mTemp;
+  memset(bvCur_Z + bvChunkSize*2, 0, (bvFftSize - bvChunkSize)*2);
+  fft(bvCur_Z, bvFftSize);
+  convolve_c(bvCur_Z, bvK_Z, bvFftSize);
+  ifft(bvCur_Z, bvFftSize);
+  
+  bvBufPos = 0;
+);
+
+// Buffer inputs into next FFT buffers (real lanes)
+bp2 = bvBufPos*2;
+bvNext_W[bp2] = W_in; bvNext_W[bp2+1] = 0;
+bvNext_X[bp2] = X_in; bvNext_X[bp2+1] = 0;
+bvNext_Y[bp2] = Y_in; bvNext_Y[bp2+1] = 0;
+bvNext_Z[bp2] = Z_in; bvNext_Z[bp2+1] = 0;
+
+// Read outputs from current buffers (overlap-add)
+bv_zw = bvCur_W[bp2];
+bv_zx = bvCur_X[bp2];
+bv_zy = bvCur_Y[bp2];
+bv_zd = bvCur_Z[bp2];
+
+// Overlap-add: add from next buffer if in overlap region
+(bvBufPos < bvFftSize - bvChunkSize) ? (
+  bv_zw += bvNext_W[bvChunkSize*2 + bp2];
+  bv_zx += bvNext_X[bvChunkSize*2 + bp2];
+  bv_zy += bvNext_Y[bvChunkSize*2 + bp2];
+  bv_zd += bvNext_Z[bvChunkSize*2 + bp2];
+);
+
+// Synthesize Z' from all four lanes (kernels already normalized by BV_G)
+Z_prime_full = (bv_zw + bv_zx + bv_zy + bv_zd);
+
+// Soft limit BEFORE applying trim to prevent distortion
+Z_prime_full = softlim(Z_prime_full);
+// +3 dB makeup gain
+Z_prime_trimmed = Z_prime_full * vhap_trim * exp(log(10)*(3/20));
+
+// Also compute donors-only version (exclude ZΔ) for Solo path
+Z_prime_donors_full = (bv_zw + bv_zx + bv_zy);
+Z_prime_donors_full = softlim(Z_prime_donors_full);
+Z_prime_donors = Z_prime_donors_full * vhap_trim * exp(log(10)*(3/20));
+
+// Correct B-VHAP: Z_out = Z + morph × (Z' - Z)
+Z_delta = Z_prime_trimmed - Z_in;
+Z_morph = Z_in + vhap_morph * Z_delta;
+
+// VHAP Solo modes
+vhap_solo ? (
+  spl0=0; spl1=0; spl2=0; spl3=Z_prime_donors;
+) : (
+  spl0=W_in;
+  spl1=X_in;
+  spl2=Y_in;
+  spl3=Z_morph;
+);
+
+bvBufPos += 1;
+
+@gfx 100 50
+gfx_clear = 0x000000;
+gfx_set(0.5, 0.5, 0.5, 1.0);
+gfx_setfont(1, "Arial", 12);
+gfx_x = 10; gfx_y = 20;
+gfx_printf("VHAP Only (FFT: 512 chunks, stable)");

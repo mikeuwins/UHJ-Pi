@@ -1,0 +1,223 @@
+desc:ATK VHAP (Field) - Algorithmic (no kernels), FOA Z Pseudo-Height, r1
+author: you (with ChatGPT)
+version: 1.0
+chans: 4
+in_pin:W in
+in_pin:X in
+in_pin:Y in
+in_pin:Z in
+out_pin:W out
+out_pin:X out
+out_pin:Y out
+out_pin:Z out
+
+// ------------------------------------------------------------
+// Algorithmic VHAP (no kernels): biquad bandsplit + decor + Z synth
+// FuMa FOA (W,X,Y,Z). Fixed splits: f1=700 Hz, f2=4000 Hz.
+// Tuned to keep height cues airy (no boxy low-mid in Z).
+// ------------------------------------------------------------
+
+// ---------------- Controls ----------------
+slider1:50<0,100,1>Height send (%)
+slider2:0.15<0,0.30,0.01>Mid height cap
+slider3:0.40<0,0.60,0.01>High height cap
+slider4:0.20<0,0.80,0.01>Mid diffusion (ms)
+slider5:0.40<0,1.00,0.01>High diffusion (ms)
+slider6:1.00<0,1,0.01>Z blend (%)
+
+// ---------------- Constants ----------------
+@init
+pi2 = 2*$pi;
+tiny = 0.000000000000001; // anti-denormal epsilon
+
+// Fixed split frequencies
+F1 = 700;    // LP1 cutoff
+F2 = 4000;   // LP2 cutoff
+Qn = 0.7071; // gentle split (Butterworth-ish)
+
+// Donor balances (psychoacoustic-tuned)
+gW_mid = 0.00;  gX_mid = 0.18;  gY_mid = 0.18;   // no W in mid band
+gW_hi  = 0.65;  gX_hi  = 0.175; gY_hi  = 0.175;
+
+// One-pole HPF on synthesised Z paths only (~850 Hz)
+HPF_fc = 850;
+
+// Decor delay buffers (power of two)
+DLEN = 2048; DMASK = DLEN - 1;
+dXm_ptr = 0; dYm_ptr = 0; dXh_ptr = 0; dYh_ptr = 0;
+
+// LP biquad coeffs shared across channels
+function biquad_lp_set(fc, Q, 
+  b0_out* b1_out* b2_out* a1_out* a2_out*)
+(
+  w = pi2*fc/srate; sn = sin(w); cs = cos(w);
+  alpha = sn/(2*Q);
+  b0 = (1 - cs) * 0.5;
+  b1 = 1 - cs;
+  b2 = (1 - cs) * 0.5;
+  a0 = 1 + alpha;
+  a1 = -2*cs;
+  a2 = 1 - alpha;
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+  b0_out = b0; b1_out = b1; b2_out = b2; a1_out = a1; a2_out = a2;
+);
+
+// One-pole HPF (RBJ form rewritten)
+function hpf1_set(fc, a1_out* b0_out* b1_out*)
+(
+  // y[n] = b0*x[n] + b1*x[n-1] + a1*y[n-1] ; (with b1 = -b0)
+  // Using simple exp form for stability:
+  a = exp(-2*$pi*fc/srate);
+  b0 = (1 + a) * 0.5;
+  b1 = -(1 + a) * 0.5;
+  a1 = a;
+  a1_out = a; b0_out = b0; b1_out = b1;
+);
+
+// ---- Coefficients ----
+biquad_lp_set(F1, Qn, l1_b0, l1_b1, l1_b2, l1_a1, l1_a2);
+biquad_lp_set(F2, Qn, l2_b0, l2_b1, l2_b2, l2_a1, l2_a2);
+hpf1_set(HPF_fc, hpa1, hpb0, hpb1);
+
+// ---- States: LP1/LP2 per channel (W,X,Y,Z) ----
+// LP1
+W1_x1=0; W1_x2=0; W1_y1=0; W1_y2=0;
+X1_x1=0; X1_x2=0; X1_y1=0; X1_y2=0;
+Y1_x1=0; Y1_x2=0; Y1_y1=0; Y1_y2=0;
+Z1_x1=0; Z1_x2=0; Z1_y1=0; Z1_y2=0;
+// LP2
+W2_x1=0; W2_x2=0; W2_y1=0; W2_y2=0;
+X2_x1=0; X2_x2=0; X2_y1=0; X2_y2=0;
+Y2_x1=0; Y2_x2=0; Y2_y1=0; Y2_y2=0;
+Z2_x1=0; Z2_x2=0; Z2_y1=0; Z2_y2=0;
+
+// HPF states for synthesised Z paths (mid/high)
+Zhm_x1=0; Zhm_y1=0; // mid synth HPF
+Zhh_x1=0; Zhh_y1=0; // high synth HPF
+
+// Decor buffers
+memset(0, 0, 1); // no-op placeholder
+
+// ---------------- Helpers ----------------
+function biquad_proc(x, b0,b1,b2,a1,a2, x1* x2* y1* y2*)
+(
+  // de-denormal
+  x += tiny; x -= tiny;
+  y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+  x2 = x1; x1 = x;
+  y2 = y1; y1 = y;
+  y;
+);
+
+function hpf1_proc(x, a1,b0,b1, x1* y1*)
+(
+  x += tiny; x -= tiny;
+  y = b0*x + b1*x1 + a1*y1;
+  x1 = x;
+  y1 = y;
+  y;
+);
+
+// decor delay push/read
+function dpush(base, ptr, mask, v)
+(
+  v += tiny; v -= tiny;
+  mem[base + ptr] = v;
+  (ptr + 1) & mask;
+);
+function dread(base, ptr, mask, D)
+(
+  mem[base + ((ptr - 1 - D) & mask)];
+);
+
+// Assign fixed memory bases for decor lines
+dXm_base = 0;          // we don't use other mem; just offset these large
+dYm_base = dXm_base + DLEN;
+dXh_base = dYm_base + DLEN;
+dYh_base = dXh_base + DLEN;
+
+// Warm-up to avoid reading unfilled decor buffers
+warm = 512;
+
+// ---------------- Sliders ----------------
+@slider
+U = slider1 / 100.0;
+
+// gentle curve for U → betas
+gamma = 1.2;
+beta_m_cap = slider2;
+beta_h_cap = slider3;
+beta_m = min(beta_m_cap,      pow(U, gamma));
+beta_h = min(beta_h_cap, 1.2* pow(U, gamma));
+
+Dmid = floor(slider4 * 0.001 * srate);
+Dhi  = floor(slider5 * 0.001 * srate);
+Dmid < 0 ? Dmid = 0;
+Dhi  < 0 ? Dhi  = 0;
+Dmid > DMASK ? Dmid = DMASK : Dmid;
+Dhi  > DMASK ? Dhi  = DMASK : Dhi;
+
+zblend = slider6; // 0..1
+
+// ---------------- Sample loop ----------------
+@sample
+// Inputs
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// LP1 per channel
+W_l1 = biquad_proc(W, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, W1_x1,W1_x2,W1_y1,W1_y2);
+X_l1 = biquad_proc(X, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, X1_x1,X1_x2,X1_y1,X1_y2);
+Y_l1 = biquad_proc(Y, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, Y1_x1,Y1_x2,Y1_y1,Y1_y2);
+Z_l1 = biquad_proc(Z, l1_b0,l1_b1,l1_b2,l1_a1,l1_a2, Z1_x1,Z1_x2,Z1_y1,Z1_y2);
+
+// LP2 per channel
+W_l2 = biquad_proc(W, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, W2_x1,W2_x2,W2_y1,W2_y2);
+X_l2 = biquad_proc(X, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, X2_x1,X2_x2,X2_y1,X2_y2);
+Y_l2 = biquad_proc(Y, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, Y2_x1,Y2_x2,Y2_y1,Y2_y2);
+Z_l2 = biquad_proc(Z, l2_b0,l2_b1,l2_b2,l2_a1,l2_a2, Z2_x1,Z2_x2,Z2_y1,Z2_y2);
+
+// Bands via parallel path (LP2 - LP1; input - LP2)
+W_low = W_l1;             W_mid = W_l2 - W_l1;       W_hi = W - W_l2;
+X_low = X_l1;             X_mid = X_l2 - X_l1;       X_hi = X - X_l2;
+Y_low = Y_l1;             Y_mid = Y_l2 - Y_l1;       Y_hi = Y - Y_l2;
+Z_low = Z_l1;             Z_mid = Z_l2 - Z_l1;       Z_hi = Z - Z_l2;
+
+// Decor (apply to X/Y mid/high bands)
+if (warm > 0) (
+  Dm = 0; Dh = 0; warm -= 1;
+) else (
+  Dm = Dmid; Dh = Dhi;
+);
+
+dXm_ptr = dpush(dXm_base, dXm_ptr, DMASK, X_mid);
+dYm_ptr = dpush(dYm_base, dYm_ptr, DMASK, Y_mid);
+dXh_ptr = dpush(dXh_base, dXh_ptr, DMASK, X_hi);
+dYh_ptr = dpush(dYh_base, dYh_ptr, DMASK, Y_hi);
+
+X_mid_d = dread(dXm_base, dXm_ptr, DMASK, Dm);
+Y_mid_d = dread(dYm_base, dYm_ptr, DMASK, Dm);
+X_hi_d  = dread(dXh_base, dXh_ptr, DMASK, Dh);
+Y_hi_d  = dread(dYh_base, dYh_ptr, DMASK, Dh);
+
+// Synthesised Z from donors
+Z_syn_mid = gW_mid*W_mid + gX_mid*X_mid_d + gY_mid*Y_mid_d;   // W excluded in mid
+Z_syn_hi  = gW_hi *W_hi  + gX_hi *X_hi_d  + gY_hi *Y_hi_d;
+
+// High-pass only the synthesised Z paths (keep Z_low intact)
+Z_syn_mid_hp = hpf1_proc(Z_syn_mid, hpa1, hpb0, hpb1, Zhm_x1, Zhm_y1);
+Z_syn_hi_hp  = hpf1_proc(Z_syn_hi,  hpa1, hpb0, hpb1, Zhh_x1, Zhh_y1);
+
+// Apply caps via U mapping
+Z_mid_out = Z_mid + beta_m * Z_syn_mid_hp;
+Z_hi_out  = Z_hi  + beta_h * Z_syn_hi_hp;
+Z_new     = Z_low + Z_mid_out + Z_hi_out;
+
+// Z-only blend
+Z_out = (1 - zblend)*Z + zblend*Z_new;
+
+// Outputs (W/X/Y passthrough)
+spl0 = W;
+spl1 = X;
+spl2 = Y;
+spl3 = Z_out;
+

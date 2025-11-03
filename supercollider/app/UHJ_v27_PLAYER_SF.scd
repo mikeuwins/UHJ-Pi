@@ -1250,12 +1250,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                         \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'dual'),
                         \stereo, FoaDecoderMatrix.newStereo,
-                        \fiveonetwo, FoaDecoderMatrix.newDiametric([
-                            [0, 0],      // Center
-                            [-30, 0],    // Front Left  
-                            [30, 0],     // Front Right
-                            [-30, 45]    // Top Front Left
-                        ].collect { |pos| [pos[0].degrad, pos[1].degrad] })  // 5.1.2 decoder (4 positions = 8 speakers)
+                        \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45)  // 5.1.2 matrix decoder (Equal mode, 45° elevation)
                     ]);
 
                     // Get selected encoder and decoder
@@ -1457,6 +1452,11 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                 });
             }, {
                 if(needReboot, {
+                    // Free synth before reboot to avoid "Node not found" errors
+                    if(~synth.notNil and: { s.serverRunning }) {
+                        ~synth.free;
+                    };
+                    ~synth = nil; // Always nil the reference
                     s.options.memSize = 65536;
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
@@ -1494,12 +1494,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                             \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'dual'),
                             \stereo, FoaDecoderMatrix.newStereo,
-                            \fiveonetwo, FoaDecoderMatrix.newDiametric([
-                            [0, 0],      // Center
-                            [-30, 0],    // Front Left  
-                            [30, 0],     // Front Right
-                            [-30, 45]    // Top Front Left
-                        ].collect { |pos| [pos[0].degrad, pos[1].degrad] })  // 5.1.2 decoder (4 positions = 8 speakers)
+                            \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45)  // 5.1.2 matrix decoder (Equal mode, 45° elevation)
                         ]);
 
                         // Get selected encoder and decoder

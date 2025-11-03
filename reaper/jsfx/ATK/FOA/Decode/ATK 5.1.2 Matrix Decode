@@ -1,0 +1,158 @@
+desc:ATK FOA -> 5.1.2 (Top-Front) [Z-only heights + 5_0 meters] this?
+
+import ../../libraries/atk/atk.jsfx-inc
+
+// ===== IO =====
+in_pin:left (W)
+in_pin:right (X)
+in_pin:aux1 (Y)
+in_pin:aux2 (Z)
+
+out_pin:Left
+out_pin:Right
+out_pin:Center
+out_pin:LFE
+out_pin:Left Surround
+out_pin:Right Surround
+out_pin:Top-Front Left
+out_pin:Top-Front Right
+
+// ===== Sliders (kept minimal) =====
+slider1:0<0,1,1{UHJ-Pi,Dolby}>Output order
+slider2:-10<-36,0,0.1>LFE trim (dB)
+slider3:100<20,200,1>LFE LPF (Hz)
+slider4:0.92<0.80,0.999,0.001>Meter falloff
+
+// ===================================================
+// ====================== INIT =======================
+// ===================================================
+@init
+// Lower ring 5x4 (rows: L,R,C,Ls,Rs ; cols: W,X,Y,Z)
+m00=m01=m02=m03=0;  // L
+m10=m11=m12=m13=0;  // R
+m20=m21=m22=m23=0;  // C
+m30=m31=m32=m33=0;  // Ls
+m40=m41=m42=m43=0;  // Rs
+
+// Heights 2x4 (rows: Ltf,Rtf ; cols: W,X,Y,Z)
+m50=m51=m52=m53=0;  // Ltf
+m60=m61=m62=m63=0;  // Rtf
+
+// ----- Equal matrix with small W taps to L & R (so W-only → equal L and R) -----
+function set_equal_matrix() (
+  // L   (add 0.2*W so W-only gives audible/equal L)
+  m00=0.2;   m01=0.085;  m02=0.0;    m03=0.0;
+  // R   (add 0.2*W so W-only gives audible/equal R)
+  m10=0.2;   m11=0.435;  m12=0.34;   m13=0.0;
+  // C   (as per common 5_0 equal; keep W=0 here unless you want W spread)
+  m20=0.0;   m21=-0.285; m22=0.405;  m23=0.0;
+  // Ls
+  m30=0.0;   m31=-0.285; m32=-0.405; m33=0.0;
+  // Rs
+  m40=0.0;   m41=0.435;  m42=-0.34;  m43=0.0;
+);
+
+// ----- Z-only heights (Top-Front ±30/+45): only Z contributes -----
+function set_heights_matrix_z_only() (
+  // W and X/Y are zeroed; only Z contributes
+  // Ltf
+  m50=0.0; m51=0.0; m52=0.0; m53=0.707106781;
+  // Rtf
+  m60=0.0; m61=0.0; m62=0.0; m63=0.707106781;
+);
+
+// meters & LFE state
+i=0; loop(8, env[i]=0; i+=1;);
+lfe_z = 0;
+
+// load constants
+set_equal_matrix();
+set_heights_matrix_z_only();
+
+// ===================================================
+// =================== SLIDERS =======================
+// ===================================================
+@slider
+order   = slider1|0;     // 0 UHJ-Pi, 1 Dolby
+lfelin  = 10^(slider2/20);
+fc_lfe  = max(10, slider3);
+a_lfe   = exp(-2*3.14159265359*fc_lfe/srate);
+meter_a = slider4;
+
+// ===================================================
+// ===================== AUDIO =======================
+// ===================================================
+@sample
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// Lower ring
+L  = m00*W + m01*X + m02*Y + m03*Z;
+R  = m10*W + m11*X + m12*Y + m13*Z;
+C  = m20*W + m21*X + m22*Y + m23*Z;
+Ls = m30*W + m31*X + m32*Y + m33*Z;
+Rs = m40*W + m41*X + m42*Y + m43*Z;
+
+// Heights (Z-only): silent if Z=0
+Ltf = m53 * Z;
+Rtf = m63 * Z;
+
+// LFE from W
+lfe_z += (1 - a_lfe) * (W - lfe_z);
+LFE = lfe_z * lfelin;
+
+// Output order
+(order==0) ? ( // UHJ-Pi: L R C Ls Rs LFE Ltf Rtf
+  spl0=L; spl1=R; spl2=C; spl3=Ls; spl4=Rs; spl5=LFE; spl6=Ltf; spl7=Rtf;
+) : (         // Dolby:  L R C LFE Ls Rs Ltf Rtf
+  spl0=L; spl1=R; spl2=C; spl3=LFE; spl4=Ls; spl5=Rs; spl6=Ltf; spl7=Rtf;
+);
+
+// meters
+env[0] = max(abs(L),   env[0]*meter_a);
+env[1] = max(abs(R),   env[1]*meter_a);
+env[2] = max(abs(C),   env[2]*meter_a);
+env[3] = max(abs(Ls),  env[3]*meter_a);
+env[4] = max(abs(Rs),  env[4]*meter_a);
+env[5] = max(abs(LFE), env[5]*meter_a);
+env[6] = max(abs(Ltf), env[6]*meter_a);
+env[7] = max(abs(Rtf), env[7]*meter_a);
+
+/**********************************************************
+Graphics
+**********************************************************/
+@gfx 500 500
+
+determineGeometry();
+gRadius -= 30;              // Reduce circle radius
+
+// Only refresh background when needed
+geometryHasChanged(mPrevWidth, mPrevHeight) ? (
+  drawLEDBackgroundImage();
+  setSpeakerPositionFont();
+  calculateCoordinates();
+
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[4]), gCenterY - (gRadius+20)*sin(mAngles[4]), "6");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[3]), gCenterY - (gRadius+20)*sin(mAngles[3]), "5");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[1]), gCenterY - (gRadius+20)*sin(mAngles[1]), "2");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[2]), gCenterY - (gRadius+20)*sin(mAngles[2]), "3");
+  drawSpeakerPositiion(gCenterX + (gRadius+20)*cos(mAngles[0]), gCenterY - (gRadius+20)*sin(mAngles[0]), "1");
+  
+  mPrevWidth   = gfx_w;
+  mPrevHeight  = gfx_h;
+  
+  mDoRefresh = 1;
+);
+
+// Draw LEDs for all speakers
+(mDoRefresh) ? (
+  drawSpkrLEDs(amp2db(mDisplayPeaks[0]), 0, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[1]), 1, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[2]), 2, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[4]), 3, mLedCoordinates);
+  drawSpkrLEDs(amp2db(mDisplayPeaks[5]), 4, mLedCoordinates);
+
+  memset(mDisplayPeaks, 0., 6.);
+  mRefreshSampCount = 0;
+  mDoRefresh = 0;
+);
+

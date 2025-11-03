@@ -1,0 +1,252 @@
+desc:B-Format Meter (W,X,Y,Z)
+// B-Format Peak/RMS Meter for FOA Ambisonics
+// Based on WigWare multi-channel meter and Cockos loudness meter
+
+slider1:0<-60,0>-Min dB Display
+slider2:100<0,500,10>Sample Time (ms)
+slider3:10<1,20,1>Peak Hold (samples)
+
+options:no_meter
+
+@init
+ln = 5;              // channels (W,X,Y,Z,ZΔ)
+scalex = 30;         // pixels for labels
+
+// Memory allocations
+maxsamples = 1024;
+peaks = maxsamples + ln;
+pholds = peaks + ln;
+pctr = pholds + ln;
+
+memset(maxsamples, 0, ln);
+// Initialize peaks and pholds to -60dB (not -192 which might be 0)
+i = 0;
+loop(ln, 
+  peaks[i] = -60;
+  pholds[i] = -60;
+  i += 1;
+);
+memset(pctr, 0, ln);
+
+@slider
+nch = 5;                          // W,X,Y,Z,ZΔ
+sampletime = slider2 * srate / 1000;
+mindb = -60;                      // Fixed at -60dB
+minlin = pow(10, -mindb/20);
+phold = slider3;
+
+@block
+bscnt > sampletime ? (
+  ibl = 0;Measure the
+  loop(nch,
+    // Convert to dB (20*log10)
+    // B-format uses higher reference level, so we add correction
+    maxsamples[ibl] > 0 ? (
+      peaks[ibl] = max(log(maxsamples[ibl]) * 8.685889638065035 - 3, -60);  // -3dB correction, min -60dB
+    ) : (
+      peaks[ibl] = -60;
+    );
+    // Update peak hold or increment counter
+    pholds[ibl] < peaks[ibl] ? (
+      pholds[ibl] = peaks[ibl];
+      pctr[ibl] = 0;
+    ) : (
+      pctr[ibl] += 1;
+      // Peak hold expires after timeout
+      pctr[ibl] > phold ? (pholds[ibl] = peaks[ibl];);
+    );
+    maxsamples[ibl] = 0;
+    ibl += 1;
+  );
+  bscnt = 0;
+);
+bscnt += samplesblock;
+
+@sample
+// W channel
+maxsamples[0] = max(maxsamples[0], abs(spl0));
+// X channel
+maxsamples[1] = max(maxsamples[1], abs(spl1));
+// Y channel
+maxsamples[2] = max(maxsamples[2], abs(spl2));
+// Z channel
+maxsamples[3] = max(maxsamples[3], abs(spl3));
+// Z-Delta (injected) - read from Dimension VHAP plugin memory
+maxsamples[4] = mem[1000000];  // Read from memory location where Dimension VHAP stores Z_injected
+
+@gfx 400 400
+// Calculate bar width (with space between bars)
+myx = floor((gfx_w - scalex) / nch) - 2;
+x = scalex;
+mult = gfx_h / abs(mindb);
+gfx_clear = 0x000000;
+gfx_setfont(1, "Arial", 11);  // Slightly bigger font
+
+// Check for mouse clicks on peak readouts
+(gfx_mouse_cap & 1) ? (  // Left mouse button pressed
+  mx = gfx_mouse_x;
+  my = gfx_mouse_y;
+  // Check if click is on peak readout area (below padding, above meters)
+        (my >= 12 && my <= 25) ? (
+    // Determine which meter was clicked
+    met_x = scalex;
+    met = 0;
+    loop(nch,
+      (mx >= met_x && mx < met_x + myx) ? (
+        pholds[met] = -60;  // Reset peak hold
+        pctr[met] = 0;
+      );
+      met_x += myx + 2;
+      met += 1;
+    );
+  );
+);
+
+  // Reserve bottom 20 pixels for labels, top 10 pixels for gray padding, peak readout area
+  meter_top = 25;
+meter_padding_bottom = 0;
+label_h = 20;
+meter_h = gfx_h - meter_top - label_h;
+
+// Helper function to scale dB to screen position (0 to meter_h)
+function scale_db(db_val) (
+  db_val <= -60 ? 0 : db_val >= 0 ? meter_h : (db_val + 60) / 60 * meter_h;
+);
+
+// Draw gray padding bar at top (same gray as REAPER's background)
+gfx_set(0.7, 0.7, 0.7, 1.0);  // REAPER's main background gray
+gfx_rect(0, 0, gfx_w, 10);  // Thinner bar, full width
+
+// Draw peak level readouts
+peak_x = scalex;
+i = 0;
+loop(nch,
+  db_val = pholds[i];
+  // Limit display to -60dB minimum
+  db_display = max(db_val, -60);
+  // Draw red background if overloaded
+  (db_val > -3) ? (
+    gfx_set(1.0, 0.0, 0.0, 1.0);  // Red background
+    gfx_rect(peak_x, 11, myx, 14);  // Background rectangle
+  );
+  // Always white text
+  gfx_set(1.0, 1.0, 1.0, 1.0);  // White text
+  gfx_x = peak_x + myx/2 - 14;  // Center the text (approx width of 4 chars)
+  gfx_y = 13;  // Moved up 2 more pixels
+  gfx_printf("%.1f", db_display);
+  peak_x += myx + 2;
+  i += 1;
+);
+
+i = 0;
+loop(nch,
+  // Current level and peak hold
+  db = peaks[i];
+  db_hold = pholds[i];
+  
+  // Calculate screen positions
+  y = scale_db(db);
+  y_hold = scale_db(db_hold);
+  
+  // Draw the bar in 80s-style LED segments
+  (y > 0) ? (
+    y_total = floor(y);  // Floor to avoid jitter
+    seg_height = 4;  // Height of each LED segment
+    seg_gap = 1;  // Gap between segments
+    
+    // Calculate how many segments to light up
+    seg_count = floor(y_total / (seg_height + seg_gap));
+    
+    // Draw segments from bottom up
+    seg = 0;
+    seg_y = meter_top + meter_h;
+    loop(seg_count,
+      seg_y -= seg_height + seg_gap;
+      
+      // Determine color based on position
+      (seg_y < meter_top + meter_h - scale_db(-3)) ? (
+        gfx_set(1.0, 0.0, 0.0, 1.0);  // Red
+      ) : (seg_y < meter_top + meter_h - scale_db(-12)) ? (
+        gfx_set(1.0, 0.5, 0.0, 1.0);  // Orange
+      ) : (
+        gfx_set(0.0, 1.0, 1.0, 1.0);  // Cyan
+      );
+      
+      gfx_rect(x, seg_y, myx, seg_height);
+      seg += 1;
+    );
+  );
+  
+  // Peak hold indicator (white line) - only draw if there's a valid peak
+  (y_hold > 0 && y_hold <= meter_h) ? (
+    gfx_set(1.0, 1.0, 1.0, 1.0);
+    gfx_line(x, meter_top + meter_h - y_hold, x + myx, meter_top + meter_h - y_hold);
+  );
+  
+  x += myx + 2;  // Add spacing between bars
+  i += 1;
+);
+
+// Channel labels (with space above, moved up slightly)
+label_y = gfx_h - label_h / 2 - 6;
+gfx_set(1.0, 1.0, 1.0, 1.0);
+x = scalex;
+i = 0;
+loop(nch,
+  gfx_x = x + myx/2 - (i == 4 ? 12 : 5);  // Center the label (wider for delta Z)
+  gfx_y = label_y;
+  (i == 4) ? (
+    gfx_printf("%s", "ΔZ");  // Delta symbol for Z-delta
+  ) : (
+    gfx_printf("%c", i == 0 ? 87 : i == 1 ? 88 : i == 2 ? 89 : 90);  // W, X, Y, Z
+  );
+  x += myx + 2;  // Match bar spacing
+  i += 1;
+);
+
+// Draw dB scale on the left (centered)
+gfx_set(0.7, 0.7, 0.7, 1.0);
+// 0dB at top
+y_pos = meter_top + meter_h - scale_db(0);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 18) / 2; gfx_y += 1; gfx_printf("0");
+// -6dB
+y_pos = meter_top + meter_h - scale_db(-6);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 20) / 2; gfx_y += 1; gfx_printf("-6");
+// -12dB
+y_pos = meter_top + meter_h - scale_db(-12);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-12");
+// -18dB
+y_pos = meter_top + meter_h - scale_db(-18);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-18");
+// -24dB
+y_pos = meter_top + meter_h - scale_db(-24);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-24");
+// -30dB
+y_pos = meter_top + meter_h - scale_db(-30);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-30");
+// -36dB
+y_pos = meter_top + meter_h - scale_db(-36);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-36");
+// -42dB
+y_pos = meter_top + meter_h - scale_db(-42);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-42");
+// -48dB
+y_pos = meter_top + meter_h - scale_db(-48);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-48");
+// -54dB
+y_pos = meter_top + meter_h - scale_db(-54);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-54");
+// -60dB
+y_pos = meter_top + meter_h - scale_db(-60);
+gfx_x = 0; gfx_y = y_pos; gfx_lineto(scalex - 3, y_pos); 
+gfx_x = (scalex - 22) / 2; gfx_y += 1; gfx_printf("-60");

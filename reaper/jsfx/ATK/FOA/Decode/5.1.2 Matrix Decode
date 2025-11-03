@@ -29,11 +29,11 @@ out_pin:TFR
 slider1:0<0,1,1{UHJ-Pi,Dolby}>Output layout
 slider2:0<0,2,1{Equal, Focus, Four}>Mode
 slider3:0<-60,12,0.1>Centre trim (dB)
-slider4:-10<-60,12,0.1>LFE trim (dB)
+slider4:0<-60,12,0.1>LFE trim (dB)
 slider5:100<20,200,1>LFE LPF (Hz)
 slider6:45<30,90,1>Height elevation (deg)
 slider7:0<-60,12,0.1>Height trim (dB)
-slider8:80<20,500,10>Height HPF (Hz)
+slider8:80<20,3000,10>Height HPF (Hz)
 
 @init
 kMaxNumSpeakers = 8;
@@ -55,13 +55,14 @@ heightGateEnv = 0;
 heightGateGain = 1.0;
 heightGateMin = 0.0; // Zero when Z=0 (no residual)
 heightGateThreshold = 0.0001; // Lower threshold to avoid gating on small dips
-// Height speaker trim and HPF
+// Height speaker trim and HPF (2nd-order Butterworth via one biquad)
 heightTrim = 1.0;
-heightHPFCoeff = 0.0;
-heightHPFPrevL = 0.0;
-heightHPFPrevR = 0.0;
-heightLPFL = 0.0;
-heightLPFR = 0.0;
+// Biquad coeffs and states for L/R
+h_b0=0; h_b1=0; h_b2=0; h_a1=0; h_a2=0;
+// Left
+hL_x1=0; hL_x2=0; hL_y1=0; hL_y2=0;
+// Right
+hR_x1=0; hR_x2=0; hR_y1=0; hR_y2=0;
 
 // Lower ring 5x4 matrix - Equal (C,FL,RL,RR,FR)
 function set_equal_matrix() local(i) (
@@ -219,11 +220,27 @@ slider2 == 0 ? (
 );
 set_heights_matrix();
 
+// Standard dB to gain conversion - slider shows actual dB values
+// Fine step size (0.01dB) provides better resolution in the -10 to +10dB range
 centerGain = 10^(slider3/20);
 lfeGain = 10^(slider4/20) * 3.16;
 lfeCoeff = exp(-2 * $pi * slider5 / srate);
 heightTrim = 10^(slider7/20);
-heightHPFCoeff = exp(-2 * $pi * slider8 / srate);
+// Compute 2nd-order Butterworth HPF biquad coeffs from slider8
+_fc = max(20, slider8);
+_w0 = 2 * $pi * _fc / srate;
+_c = cos(_w0);
+_s = sin(_w0);
+_Q = 0.7071067811865476;
+_alpha = _s / (2 * _Q);
+_b0 = (1 + _c) * 0.5;
+_b1 = -(1 + _c);
+_b2 = (1 + _c) * 0.5;
+_a0 = 1 + _alpha;
+_a1 = -2 * _c;
+_a2 = 1 - _alpha;
+_invA0 = 1 / _a0;
+h_b0 = _b0 * _invA0; h_b1 = _b1 * _invA0; h_b2 = _b2 * _invA0; h_a1 = _a1 * _invA0; h_a2 = _a2 * _invA0;
 // Fixed peak meter decay (visual feedback only, not for mastering)
 mPeakScalar = pow( 0.5, 1.0/(0.30 * srate)); // 300ms default decay
 
@@ -238,8 +255,8 @@ loop(7,
   i += 1;
 );
 
-// LFE from horizontal speakers
-lfeInput = decOut[0] + decOut[1] + decOut[2] + decOut[3] + decOut[4];
+// LFE from front speakers only (FL+FR, channels 1+2) - same in both layouts
+lfeInput = decOut[0] + decOut[1];
 lfeOut = lfeInput + (lfePrev - lfeInput) * lfeCoeff;
 lfePrev = lfeOut;
 
@@ -252,16 +269,19 @@ heightGateEnv = heightGateEnv < zAbs ? (heightGateEnv * heightGateAttack + zAbs 
 heightGateTarget = heightGateEnv > heightGateThreshold ? 1.0 : heightGateMin;
 heightGateGain = heightGateGain < heightGateTarget ? (heightGateGain * heightGateAttack + heightGateTarget * (1 - heightGateAttack)) : (heightGateGain * heightGateRelease + heightGateTarget * (1 - heightGateRelease));
 
-// Apply trim and HPF to height speakers (before gate, so HPF affects gated signal)
+// Apply trim and HPF (2nd-order) to height speakers (before gate)
 heightL = decOut[5];
 heightR = decOut[6];
-// High-pass filter (simple 1-pole HPF: subtract low-passed signal)
-heightLPFL = heightL + (heightHPFPrevL - heightL) * heightHPFCoeff;
-heightHPFPrevL = heightLPFL;
-heightL = heightL - heightLPFL; // HPF = input - LPF
-heightLPFR = heightR + (heightHPFPrevR - heightR) * heightHPFCoeff;
-heightHPFPrevR = heightLPFR;
-heightR = heightR - heightLPFR; // HPF = input - LPF
+// Left biquad
+_x = heightL;
+_y = h_b0*_x + h_b1*hL_x1 + h_b2*hL_x2 - h_a1*hL_y1 - h_a2*hL_y2;
+hL_x2 = hL_x1; hL_x1 = _x; hL_y2 = hL_y1; hL_y1 = _y;
+heightL = _y;
+// Right biquad
+_x = heightR;
+_y = h_b0*_x + h_b1*hR_x1 + h_b2*hR_x2 - h_a1*hR_y1 - h_a2*hR_y2;
+hR_x2 = hR_x1; hR_x1 = _x; hR_y2 = hR_y1; hR_y1 = _y;
+heightR = _y;
 // Apply trim and gate
 heightL = heightL * heightTrim * heightGateGain;
 heightR = heightR * heightTrim * heightGateGain;

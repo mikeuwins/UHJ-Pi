@@ -1,0 +1,162 @@
+desc:ATK FOA Z Synthesis 2 (clean minimal)
+author: ATK Community
+version: 1.0
+
+// Minimal FOA Z synthesiser with no filters:
+// - W/X/Y pass through unchanged
+// - Z is either original or a simple decorrelated lateral cue from X+Y (with amount/trim)
+
+import ../../libraries/atk/atk.jsfx-inc
+
+chans: 4
+in_pin:W in
+in_pin:X in
+in_pin:Y in
+in_pin:Z in
+out_pin:W out
+out_pin:X out
+out_pin:Y out
+out_pin:Z out
+
+slider1:25<0,100,1>Amount %
+slider2:7<0,30,0.1>Decorrelate delay (ms)
+slider3:0<-12,12,0.1>Z trim (dB)
+slider4:1<0,1,1{Original Z,Synthesised Z}>Z mode
+slider5:1<0,1,1>HPF enable on A BU/BD (0=off,1=on)
+slider6:1000<200,3000,1>HPF cutoff (Hz)
+
+@init
+// Delay buffer
+buf_len = 8192;
+buf_mask = buf_len - 1;
+buf_base = 0;
+buf_w = 0;
+
+// B<->A matrices (4x4)
+b2a0=0; b2a1=0; b2a2=0; b2a3=0;
+b2a4=0; b2a5=0; b2a6=0; b2a7=0;
+b2a8=0; b2a9=0; b2a10=0; b2a11=0;
+b2a12=0; b2a13=0; b2a14=0; b2a15=0;
+
+a2b0=0; a2b1=0; a2b2=0; a2b3=0;
+a2b4=0; a2b5=0; a2b6=0; a2b7=0;
+a2b8=0; a2b9=0; a2b10=0; a2b11=0;
+a2b12=0; a2b13=0; a2b14=0; a2b15=0;
+
+// HPF states for A-format channels (cascaded 1-pole x2 per channel)
+aA0_lpf1 = 0; aA0_lpf2 = 0;
+aA1_lpf1 = 0; aA1_lpf2 = 0;
+aA2_lpf1 = 0; aA2_lpf2 = 0;
+aA3_lpf1 = 0; aA3_lpf2 = 0;
+hpf_a = 0;
+
+// Build B->A and A->B (using orientation 2: [FL, FR, BU, BD], canonical weight)
+function update_ba_mats()
+(
+  // Use atkMatrixLibrary.generateBtoAMatrix into a temp array at 20000
+  // Fill local b2a*
+  generateBtoAMatrix(20000, 2, 1);
+  b2a0=20000[0]; b2a1=20000[1]; b2a2=20000[2]; b2a3=20000[3];
+  b2a4=20000[4]; b2a5=20000[5]; b2a6=20000[6]; b2a7=20000[7];
+  b2a8=20000[8]; b2a9=20000[9]; b2a10=20000[10]; b2a11=20000[11];
+  b2a12=20000[12]; b2a13=20000[13]; b2a14=20000[14]; b2a15=20000[15];
+
+  // Invert to get A->B; copy b2a into 20020 then invert in-place
+  20020[0]=b2a0; 20020[1]=b2a1; 20020[2]=b2a2; 20020[3]=b2a3;
+  20020[4]=b2a4; 20020[5]=b2a5; 20020[6]=b2a6; 20020[7]=b2a7;
+  20020[8]=b2a8; 20020[9]=b2a9; 20020[10]=b2a10; 20020[11]=b2a11;
+  20020[12]=b2a12; 20020[13]=b2a13; 20020[14]=b2a14; 20020[15]=b2a15;
+  invertMatrix(20020);
+  a2b0=20020[0]; a2b1=20020[1]; a2b2=20020[2]; a2b3=20020[3];
+  a2b4=20020[4]; a2b5=20020[5]; a2b6=20020[6]; a2b7=20020[7];
+  a2b8=20020[8]; a2b9=20020[9]; a2b10=20020[10]; a2b11=20020[11];
+  a2b12=20020[12]; a2b13=20020[13]; a2b14=20020[14]; a2b15=20020[15];
+);
+
+// Params
+function update_params()
+(
+  d_samp = floor(max(0, min(30, slider2)) * 0.001 * srate);
+  d_samp = (d_samp > buf_len-1) ? (buf_len-1) : d_samp;
+  amt = slider1 * 0.01;
+  z_lin = exp(log(10) * (slider3 / 20));
+  // HPF coefficient (one-pole LPF used complementarily, cascaded twice)
+  two_pi_fc = 6.283185307179586 * max(1, slider6);
+  hpf_a = exp(-(two_pi_fc / srate));
+);
+
+update_params();
+update_ba_mats();
+
+@slider
+update_params();
+update_ba_mats();
+
+@sample
+// Inputs
+W = spl0; X = spl1; Y = spl2; Z = spl3;
+
+// Pass-through W/X/Y
+spl0 = W;
+spl1 = X;
+spl2 = Y;
+
+// Simple lateral cue; avoid rectification to reduce brittleness
+z_src = (X + Y) * 0.7071067811865476 - (W * 0.25);
+
+// Basic decorrelation delay
+mem[buf_base + (buf_w & buf_mask)] = z_src;
+z_decorr = mem[buf_base + ((buf_w - d_samp) & buf_mask)];
+buf_w = (buf_w + 1) & buf_mask;
+
+// Apply amount and trim
+z_synth = z_decorr * amt * z_lin;
+
+// Mode: 0 original Z, 1 synthesised Z
+spl3 = (slider4 >= 0.5) ? z_synth : Z;
+
+// (tremolo test removed)
+
+// End-of-chain: B->A, HPF only A vertical mics (BU, BD), then A->B
+Bw = spl0; Bx = spl1; By = spl2; Bz = spl3;
+// A = b2a * B
+A0 = b2a0*Bw + b2a1*Bx + b2a2*By + b2a3*Bz;   // FL
+A1 = b2a4*Bw + b2a5*Bx + b2a6*By + b2a7*Bz;   // FR
+A2 = b2a8*Bw + b2a9*Bx + b2a10*By + b2a11*Bz; // BU
+A3 = b2a12*Bw + b2a13*Bx + b2a14*By + b2a15*Bz; // BD
+
+// HPF all A channels if enabled (cascaded 1-pole via complementary LPF)
+(slider5 >= 0.5) ? (
+  // A0
+  aA0_in = A0 + 0.000000000000000000000000000001;
+  aA0_lpf1 = aA0_in + (aA0_lpf1 - aA0_in) * hpf_a;
+  aA0_hp1 = aA0_in - aA0_lpf1;
+  aA0_lpf2 = aA0_hp1 + (aA0_lpf2 - aA0_hp1) * hpf_a;
+  A0 = aA0_hp1 - aA0_lpf2;
+  // A1
+  aA1_in = A1 + 0.000000000000000000000000000001;
+  aA1_lpf1 = aA1_in + (aA1_lpf1 - aA1_in) * hpf_a;
+  aA1_hp1 = aA1_in - aA1_lpf1;
+  aA1_lpf2 = aA1_hp1 + (aA1_lpf2 - aA1_hp1) * hpf_a;
+  A1 = aA1_hp1 - aA1_lpf2;
+  // A2
+  aA2_in = A2 + 0.000000000000000000000000000001;
+  aA2_lpf1 = aA2_in + (aA2_lpf1 - aA2_in) * hpf_a;
+  aA2_hp1 = aA2_in - aA2_lpf1;
+  aA2_lpf2 = aA2_hp1 + (aA2_lpf2 - aA2_hp1) * hpf_a;
+  A2 = aA2_hp1 - aA2_lpf2;
+  // A3
+  aA3_in = A3 + 0.000000000000000000000000000001;
+  aA3_lpf1 = aA3_in + (aA3_lpf1 - aA3_in) * hpf_a;
+  aA3_hp1 = aA3_in - aA3_lpf1;
+  aA3_lpf2 = aA3_hp1 + (aA3_lpf2 - aA3_hp1) * hpf_a;
+  A3 = aA3_hp1 - aA3_lpf2;
+);
+
+// Back to B
+spl0 = a2b0*A0 + a2b1*A1 + a2b2*A2 + a2b3*A3;
+spl1 = a2b4*A0 + a2b5*A1 + a2b6*A2 + a2b7*A3;
+spl2 = a2b8*A0 + a2b9*A1 + a2b10*A2 + a2b11*A3;
+spl3 = a2b12*A0 + a2b13*A1 + a2b14*A2 + a2b15*A3;
+
+
