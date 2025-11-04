@@ -166,7 +166,7 @@ FoaZSynthesis : Foa {
 		// High-shelf ~4 kHz, -5 dB
 		zOut = BHiShelf.ar(zOut, 4000, 1.0, -5.0);
 		
-		// Ensure both zOrig and zOut are always audio-rate (prevent optimization to 0.0)
+        // Ensure both zOrig and zOut are always audio-rate (prevent optimization to 0.0)
 		// Use DC.ar(0) addition to ensure audio-rate even when signals are zero
 		zOrig = zOrig + DC.ar(0);
 		zOut = zOut + DC.ar(0);
@@ -178,8 +178,13 @@ FoaZSynthesis : Foa {
 		heightSourceKr = heightSource + DC.kr(0); // Ensure UGen
 		zOut_final = LinXFade2.ar(zOrig, zOut, (heightSourceKr * 2) - 1);
 		
-		// Apply Height trim
-		zOut_final = zOut_final * heightTrim.dbamp;
+        // Apply auto-comp based on heightAmount (simple headroom curve), then Height trim
+        // gainDb = -6 dB at amt=1.0, ~0 dB near 0
+        zOut_final = zOut_final * ((-6 * amt).dbamp);
+        zOut_final = zOut_final * heightTrim.dbamp;
+
+        // Safety limiter (light), after softening and trims
+        zOut_final = Limiter.ar(zOut_final, level: 0.98, dur: 0.01);
 		
 		^[w, x, y, zOut_final].madd(mul, add);
 	}

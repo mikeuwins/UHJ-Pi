@@ -664,7 +664,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70|
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
@@ -723,8 +723,17 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             ambienceMix: zsynthAmbienceMix
                         );
                         
-                        // Ambience processing (AmbiVerbSC reverb)
-                        ambient = AmbiVerbSC.ar(zsynth,
+                        // Ambience processing (AmbiVerbSC reverb) with routing target
+                        var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc;
+                        var wetOnly;
+                        // Build routed wet source per channel: 0=Lower(WXY), 1=All(WXYZ), 2=Height(Z)
+                        wetSrcW = Select.ar(reverbTarget, [zsynth[0], zsynth[0], 0]);
+                        wetSrcX = Select.ar(reverbTarget, [zsynth[1], zsynth[1], 0]);
+                        wetSrcY = Select.ar(reverbTarget, [zsynth[2], zsynth[2], 0]);
+                        wetSrcZ = Select.ar(reverbTarget, [0,          zsynth[3], zsynth[3]]);
+                        wetSrc = [wetSrcW, wetSrcX, wetSrcY, wetSrcZ];
+                        // Compute wet component by subtracting input (to avoid double-dry)
+                        wetOnly = AmbiVerbSC.ar(wetSrc,
                             mix: ambience,
                             preDelay: preDelay,
                             crossoverFreq: 3000,
@@ -741,7 +750,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             orientation: 'flu',
                             maxPreDelay: 10,
                             feedbackSpread: 1
-                        );
+                        ) - wetSrc;
+                        ambient = zsynth + wetOnly;
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
@@ -926,7 +936,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
@@ -985,8 +995,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 ambienceMix: zsynthAmbienceMix
                             );
                             
-                            // Ambience processing (AmbiVerbSC reverb)
-                            ambient = AmbiVerbSC.ar(zsynth,
+                            // Ambience processing (AmbiVerbSC reverb) with routing target
+                            var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2;
+                            wetSrcW2 = Select.ar(reverbTarget, [zsynth[0], zsynth[0], 0]);
+                            wetSrcX2 = Select.ar(reverbTarget, [zsynth[1], zsynth[1], 0]);
+                            wetSrcY2 = Select.ar(reverbTarget, [zsynth[2], zsynth[2], 0]);
+                            wetSrcZ2 = Select.ar(reverbTarget, [0,          zsynth[3], zsynth[3]]);
+                            wetSrc2 = [wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2];
+                            wetOnly2 = AmbiVerbSC.ar(wetSrc2,
                                 mix: ambience,
                                 preDelay: preDelay,
                                 crossoverFreq: 3000,
@@ -1003,7 +1019,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 orientation: 'flu',
                                 maxPreDelay: 10,
                                 feedbackSpread: 1
-                            );
+                            ) - wetSrc2;
+                            ambient = zsynth + wetOnly2;
                             // Spatial transformations (rotation, tilt, tumble)
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
@@ -2286,8 +2303,27 @@ win.front;
                     var selectedPreset = ~ambiencePresetNames[menu.value];
                     ~recallAmbiVerbSCPreset.value(selectedPreset);
                 });
+            // Add tick marks BETWEEN the sliders (visual guides, like EQ)
+            [44, 88, 132, 176, 220, 264].do({ |tx|
+                UserView(~ambienceOverlay, Rect(tx, 55, 12, sliderHeight))
+                    .background_(Color.clear)
+                    .drawFunc_({ |view|
+                        Pen.color = Color.cyan;
+                        Pen.width = 1.5;
+                        // Major ticks (top/middle/bottom)
+                        Pen.line(Point(2, 0), Point(10, 0)); Pen.stroke;
+                        Pen.line(Point(2, 70), Point(10, 70)); Pen.stroke;
+                        Pen.line(Point(2, 140), Point(10, 140)); Pen.stroke;
+                        // Minor ticks
+                        Pen.width = 1;
+                        Pen.line(Point(4, 35), Point(9, 35)); Pen.stroke;
+                        Pen.line(Point(4, 105), Point(9, 105)); Pen.stroke;
+                    });
+            });
+
             // Parameter labels and values (use saved state or defaults)
-            sliderLabels = ["Reverb", "PreDly", "LoRT", "HiRT", "Disp", "MWid", "MRate"];
+            // 7 faders (CamelCase, ≤6 chars): Height, HDelay, Reverb, RDelay, RSize, Spread, Target
+            sliderLabels = ["Height", "HDelay", "Reverb", "RDelay", "RSize", "Spread", "Target"];
             params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
             ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5; // Remember last nonzero mix value
             ~ambienceSliders = List[];
@@ -2307,26 +2343,66 @@ win.front;
                     .knobColor_(Color.cyan)
                     .value_(params[i])
                     .action_({ |sl|
-                        var val = (sl.value * 100).round(0.1);
-                        ~ambienceValues[i].string = val.asString ++ "%";
+                        var valPct = (sl.value * 100).round(0.1);
+                        var updateTargetReadout = { |snap|
+                            // Sentence case labels
+                            var label = if(snap <= 0.25, "Lower", if(snap >= 0.75, "Height", "All"));
+                            ~ambienceValues[i].string = label;
+                        };
                         if(~synth.notNil) {
                             switch(i,
-                                0, {
-                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
-                                    // --- Sync ON/OFF button with Mix slider ---
-                                    if(sl.value > 0) {
-                                        ~ambienceOnOffBtn.value_(1);
-                                        ~ambienceLastMix = sl.value;
-                                    } {
-                                        ~ambienceOnOffBtn.value_(0);
-                                    }
+                                0, { // HEIGHT amount (percent)
+                                    ~ambienceValues[i].string = valPct.asString ++ "%";
+                                    ~synth.set(\zsynthHeightAmount, (sl.value * 100));
                                 },
-                                1, { ~synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
-                                2, { ~synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
-                                3, { ~synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
-                                4, { ~synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
-                                5, { ~synth.set(\modWidth, sl.value); },
-                                6, { ~synth.set(\modRate, sl.value); }
+                                1, { // HDELAY (ms)
+                                    var ms = sl.value.linlin(0,1,0,30).round(0.1);
+                                    ~ambienceValues[i].string = (ms.asString ++ "ms");
+                                    ~synth.set(\zsynthHeightDelay, ms);
+                                },
+                                2, { // RMIX
+                                    ~ambienceValues[i].string = valPct.asString ++ "%";
+                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                                    if(sl.value > 0) { ~ambienceOnOffBtn.value_(1); ~ambienceLastMix = sl.value; } { ~ambienceOnOffBtn.value_(0); };
+                                },
+                                3, { // PREDLY (s)
+                                    var pd = sl.value.linlin(0,1,0,0.5);
+                                    ~ambienceValues[i].string = (pd.round(0.01).asString ++ "s");
+                                    ~synth.set(\preDelay, pd);
+                                },
+                                4, { // SIZE macro (R-TIME)
+                                    var base = sl.value.linlin(0,1,0.5,2.5);
+                                    var low = (base * 0.7).clip(0.1, 2.0);
+                                    var high = (base * 1.3).clip(0.2, 4.0);
+                                    ~ambienceValues[i].string = (base.round(0.01).asString ++ "s");
+                                    ~synth.set(\lowRT, low); ~synth.set(\highRT, high);
+                                },
+                                5, { // SPREAD (dispersion)
+                                    var disp = sl.value.linlin(0,1,0.1,2.0);
+                                    ~ambienceValues[i].string = (disp.round(0.01).asString);
+                                    ~synth.set(\dispersion, disp);
+                                },
+                                6, { // TARGET (Lower / All / Height) with detents (Lower at bottom)
+                                    var snap = if(sl.value < 0.25, 0.0, if(sl.value > 0.75, 1.0, 0.5));
+                                    sl.value = snap; // snap slider
+                                    updateTargetReadout.(snap);
+                                    // Inverted mapping: 0.0=Lower, 0.5=All, 1.0=Height
+                                    ~reverbTarget = if(snap == 0.0, \lower, if(snap == 1.0, \height, \all));
+                                    if(~synth.notNil) {
+                                        ~synth.set(\reverbTarget, if(snap == 0.0, 0, if(snap == 1.0, 2, 1)));
+                                    };
+                                }
+                            );
+                        } {
+                            // Update value label even if synth not ready
+                            switch(i,
+                                0, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
+                                1, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,30).round(0.1).asString ++ " ms"); },
+                                2, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
+                                3, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,0.5).round(0.01).asString ++ "s"); },
+                                4, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.5,2.5).round(0.01).asString ++ "s"); },
+                                5, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.1,2.0).round(0.01).asString); },
+                                6, { updateTargetReadout.(if(sl.value < 0.25, 0.0, if(sl.value > 0.75, 1.0, 0.5))); }
                             );
                         }
                     });
@@ -2335,7 +2411,7 @@ win.front;
                     .string_((params[i] * 100).asString ++ "%")
                     .align_(\center)
                     .stringColor_(Color.cyan)
-                    .font_(Font("Helvetica", 9))
+                    .font_(Font("Helvetica", 10))
                     .background_(Color.clear);
                 ~ambienceValues.add(valDisp);
             });
@@ -2354,9 +2430,9 @@ win.front;
             if(~ambienceOnOffBtn.notNil) { ~ambienceOnOffBtn.value_(0); };
             if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
             
-            // ON/OFF button (replaces RESET position) - same size/style as RESET, no focus border
+            // REVERB button (gates mix; label fixed "REVERB")
             ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
-                .states_([["ON", Color.cyan, Color.black], ["ON", Color.black, Color.cyan]])
+                .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
                 .value_(0) // default OFF
@@ -2386,10 +2462,10 @@ win.front;
                     };
                 });
 
-            // ENHANCE button (centered) - toggles Z source (Original vs Synthesized)
-            // Always shows label "ENHANCE"; color indicates state
+            // HEIGHT button (center) - toggles Z source (Original vs Synthesized)
+            // Always shows label "HEIGHT"; color indicates state
             ~ambienceEnhanceBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
-                .states_([["ENHANCE", Color.cyan, Color.black], ["ENHANCE", Color.black, Color.cyan]])
+                .states_([["HEIGHT", Color.cyan, Color.black], ["HEIGHT", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
                 .value_(~zsynthState[\heightSource] ? 0) // default OFF if not saved
