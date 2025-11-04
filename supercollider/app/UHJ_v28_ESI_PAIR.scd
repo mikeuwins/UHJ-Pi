@@ -48,12 +48,15 @@ var win, mainView,
     \surround, 0.8,   // Surround level
     \effect, 0.8,     // Effect level
     \delay, 0.4,      // Delay amount
-    \active, 0        // Active/bypass (default OFF)
+    \active, 1        // Active/bypass (default ON - 1 = active, 0 = bypass)
 ]);
+
+// --- Dimension active state (shared with Maplin ON/OFF button) ---
+~dimensionActive = 1;  // Default ON (1 = active, 0 = bypass)
 
 // --- Dimension state preservation variables ---
 ~dimensionState = Dictionary.newFrom([
-    \sliderValues, [0.0, 0.5, 0.5, 0.5],  // width, lfGain, hfGain, outputTrim (normalized 0-1)
+    \sliderValues, [0.0, 0.5, 0.5],  // width, widthHPF (normalized), outputTrim (normalized 0-1) - LF/HF removed (shelves disabled)
     \presetIndex, 0   // Default preset index
 ]);
 
@@ -64,8 +67,8 @@ var win, mainView,
 ]);
 
 // --- Dimension overlay variables ---
-~dimensionWidthKnob = nil; ~dimensionLFKnob = nil; ~dimensionHFKnob = nil; ~dimensionTrimKnob = nil;
-~dimensionWidthValue = nil; ~dimensionLFValue = nil; ~dimensionHFValue = nil; ~dimensionTrimValue = nil;
+~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
+~dimensionWidthValue = nil; ~dimensionWidthHPFValue = nil; ~dimensionTrimValue = nil;
 ~dimensionPresetMenu = nil; ~dimensionPresetNames = nil; ~dimensionPresetDict = nil;
 
 // --- ZSynth overlay variables ---
@@ -373,6 +376,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         if(~synth.notNil) {
             ~synth.set(\maplinMode, if(configKeyE == \maplin, 1, 0));
             ("Updated maplinMode to: " ++ if(configKeyE == \maplin, 1, 0)).postln;
+        
+            // If switching to Maplin encoder, send current Maplin parameter values to synth
+            if(configKeyE == \maplin) {
+                ~synth.set(
+                    \maplinSurround, ~maplinState[\surround] ? 0.8,
+                    \maplinEffect, ~maplinState[\effect] ? 0.8,
+                    \maplinDelay, ~maplinState[\delay] ? 0.4,
+                    \maplinActive, ~maplinState[\active] ? 1  // 1 = active, 0 = bypass
+                );
+                ("Maplin parameters sent to synth: surround=" ++ (~maplinState[\surround] ? 0.8) ++ ", effect=" ++ (~maplinState[\effect] ? 0.8) ++ ", delay=" ++ (~maplinState[\delay] ? 0.4) ++ ", active=" ++ (~maplinState[\active] ? 1)).postln;
+            };
+            // Always send Dimension active state (works for all encoders)
+            ~synth.set(\dimensionActive, ~dimensionActive ? 1);
         };
         
         // Dimension button is now always visible (not encoder-dependent)
@@ -381,6 +397,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         
         // Update Dimension overlay visibility based on encoder selection
         ~updateDimensionOverlayVisibility.value();
+        
+        // If Maplin encoder is selected and Dimension overlay is open, ensure Maplin knobs send values
+        if(configKeyE == \maplin and: { ~dimensionOverlay.notNil and: { ~maplinSurroundKnob.notNil } }) {
+            // Trigger knob actions to send current values to synth
+            ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+            ~maplinEffectKnob.action.value(~maplinEffectKnob);
+            ~maplinDelayKnob.action.value(~maplinDelayKnob);
+            ("Maplin knobs updated for Maplin encoder").postln;
+        };
         
         // Save current synth parameters before reinitializing
         ~saveSynthParams.value();
@@ -588,6 +613,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
+                    var dimVals, zsynthVals, dimWidth, dimWidthHPF, dimTrim, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix;
                     // Set audio card volume after server boot
                     ("amixer -c HD set PCM 80%").unixCmd;
                     
@@ -632,8 +658,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
-                        var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70|
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
                         // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -664,8 +690,35 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Encode to ambisonic using selected encoder
                         encode = FoaEncode.ar(encodeInput, encoder);
                         
-                        // Ambience processing
-                        ambient = AmbiVerbSC.ar(encode,
+                        // Dimension processing (Forward Preference + Psychoacoustic Shelves)
+                        // shelvesMode=0 (off), gerzonPresets=0 (off) - handled in decoders if needed
+                        // Bypass Dimension if dimensionActive is 0
+                        dimensioned = if(dimensionActive > 0,
+                            FoaDimension.ar(encode,
+                                width: dimensionWidth,
+                                widthHPF: dimensionWidthHPF,  // Control rate parameter
+                                lfGain: dimensionLFGain,
+                                hfGain: dimensionHFGain,
+                                outputTrim: dimensionOutputTrim,
+                                shelvesMode: dimensionShelvesMode,  // Control rate parameter (default 0)
+                                gerzonPresets: dimensionGerzonPresets  // Control rate parameter (default 0)
+                            ),
+                            encode  // Bypass: pass through unchanged
+                        );
+                        
+                        // Z Synthesis processing (synthesize Z from X/Y with decorrelation and ambience)
+                        zsynth = FoaZSynthesis.ar(dimensioned,
+                            heightAmount: zsynthHeightAmount,
+                            heightDelay: zsynthHeightDelay,
+                            heightTrim: zsynthHeightTrim,
+                            heightSource: zsynthHeightSource,
+                            ambienceSize: zsynthAmbienceSize,
+                            ambienceDampening: zsynthAmbienceDampening,
+                            ambienceMix: zsynthAmbienceMix
+                        );
+                        
+                        // Ambience processing (AmbiVerbSC reverb)
+                        ambient = AmbiVerbSC.ar(zsynth,
                             mix: ambience,
                             preDelay: preDelay,
                             crossoverFreq: 3000,
@@ -756,12 +809,49 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Start the synth
+                    // Convert normalized state values to actual parameter ranges
+                    dimVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5];
+                    // Legacy support: if old format with 2 values, add default widthHPF
+                    if(dimVals.size == 2) {
+                        dimVals = dimVals ++ [0.5]; // Add default widthHPF (180Hz = 0.5 normalized)
+                    };
+                    zsynthVals = ~zsynthState[\sliderValues] ? [0.3, 0.07, 0.5, 0.0, 0.625, 0.2, 0.7];
+                    dimWidth = dimVals[0] * 0.70;
+                    dimWidthHPF = dimVals[1].linlin(0, 1, 80, 400); // Convert normalized 0-1 to 80-400 Hz
+                    dimTrim = dimVals[2].linlin(0, 1, -6, 6);  // Reduced from -18/+18 to -6/+6 dB
+                    // LF/HF removed (shelves disabled)
+                    zsAmount = zsynthVals[0] * 100;
+                    zsDelay = zsynthVals[1].linlin(0, 1, 0, 30);
+                    zsTrim = zsynthVals[2].linlin(0, 1, -12, 12);
+                    zsSource = if(zsynthVals[3] < 0.5, 0, 1);
+                    zsSize = zsynthVals[4].linlin(0, 1, 0.1, 3.0);
+                    zsDamp = zsynthVals[5];
+                    zsMix = zsynthVals[6] * 100;
+                    
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
-                        \maplinSurround, ~maplinState[\surround], 
-                        \maplinEffect, ~maplinState[\effect],
-                        \maplinDelay, ~maplinState[\delay], 
-                        \maplinActive, ~maplinState[\active],
-                        \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                        \maplinSurround, ~maplinState[\surround] ? 0.8, 
+                        \maplinEffect, ~maplinState[\effect] ? 0.8,
+                        \maplinDelay, ~maplinState[\delay] ? 0.4, 
+                        \maplinActive, ~maplinState[\active] ? 1,  // 1 = active, 0 = bypass
+                        \maplinMode, if(configKeyE == \maplin, 1, 0),
+                        // Dimension parameters
+                        \dimensionWidth, dimWidth,
+                        \dimensionWidthHPF, dimWidthHPF,  // Width HPF (80-400 Hz)
+                        \dimensionLFGain, 0,  // Not used (shelves disabled)
+                        \dimensionHFGain, 0,  // Not used (shelves disabled)
+                        \dimensionOutputTrim, dimTrim,
+                        \dimensionShelvesMode, 0,  // Off - handled in decoders
+                        \dimensionGerzonPresets, 0,  // Off - handled in decoders
+                        \dimensionActive, ~dimensionActive ? 1,  // Active/bypass (default ON)
+                        // ZSynth parameters
+                        \zsynthHeightAmount, zsAmount,
+                        \zsynthHeightDelay, zsDelay,
+                        \zsynthHeightTrim, zsTrim,
+                        \zsynthHeightSource, zsSource,
+                        \zsynthAmbienceSize, zsSize,
+                        \zsynthAmbienceDampening, zsDamp,
+                        \zsynthAmbienceMix, zsMix
+                    ]);
                     
                     // Restore saved parameters to new synth
                     ~restoreSynthParams.value();
@@ -793,6 +883,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
+                var dimVals2, zsynthVals2, dimWidth2, dimWidthHPF2, dimTrim2, zsAmount2, zsDelay2, zsTrim2, zsSource2, zsSize2, zsDamp2, zsMix2;
                         // Set audio card volume after server reboot
                         ("amixer -c HD set PCM 80%").unixCmd;
                         
@@ -829,8 +920,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
-                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70|
+                            var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
                             // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -860,8 +951,36 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             
                             // Encode to ambisonic using selected encoder
                             encode = FoaEncode.ar(encodeInput, encoder);
-                            // Ambience processing
-                            ambient = AmbiVerbSC.ar(encode,
+                            
+                            // Dimension processing (Forward Preference + Psychoacoustic Shelves)
+                            // shelvesMode=0 (off), gerzonPresets=0 (off) - handled in decoders if needed
+                            // Bypass Dimension if dimensionActive is 0
+                            dimensioned = if(dimensionActive > 0,
+                                FoaDimension.ar(encode,
+                                    width: dimensionWidth,
+                                    widthHPF: dimensionWidthHPF,  // Control rate parameter
+                                    lfGain: dimensionLFGain,
+                                    hfGain: dimensionHFGain,
+                                    outputTrim: dimensionOutputTrim,
+                                    shelvesMode: dimensionShelvesMode,  // Control rate parameter (default 0)
+                                    gerzonPresets: dimensionGerzonPresets  // Control rate parameter (default 0)
+                                ),
+                                encode  // Bypass: pass through unchanged
+                            );
+                            
+                            // Z Synthesis processing (synthesize Z from X/Y with decorrelation and ambience)
+                            zsynth = FoaZSynthesis.ar(dimensioned,
+                                heightAmount: zsynthHeightAmount,
+                                heightDelay: zsynthHeightDelay,
+                                heightTrim: zsynthHeightTrim,
+                                heightSource: zsynthHeightSource,
+                                ambienceSize: zsynthAmbienceSize,
+                                ambienceDampening: zsynthAmbienceDampening,
+                                ambienceMix: zsynthAmbienceMix
+                            );
+                            
+                            // Ambience processing (AmbiVerbSC reverb)
+                            ambient = AmbiVerbSC.ar(zsynth,
                                 mix: ambience,
                                 preDelay: preDelay,
                                 crossoverFreq: 3000,
@@ -952,12 +1071,55 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Start the synth
+                        // Convert normalized state values to actual parameter ranges
+                        dimVals2 = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5];
+                        // Legacy support: handle old formats
+                        if(dimVals2.size == 2) {
+                            // Old format: [width, outputTrim] - add default widthHPF
+                            dimVals2 = [dimVals2[0], 0.5, dimVals2[1]]; // width, default widthHPF, outputTrim
+                        } {
+                            if(dimVals2.size >= 4) {
+                                // Very old format: [width, lfGain, hfGain, outputTrim] - use first and last, add widthHPF
+                                dimVals2 = [dimVals2[0], 0.5, dimVals2[3]]; // width, default widthHPF, outputTrim
+                            };
+                        };
+                        zsynthVals2 = ~zsynthState[\sliderValues] ? [0.3, 0.07, 0.5, 0.0, 0.625, 0.2, 0.7];
+                        dimWidth2 = dimVals2[0] * 0.70;
+                        dimWidthHPF2 = dimVals2[1].linlin(0, 1, 80, 400); // Convert normalized 0-1 to 80-400 Hz
+                        dimTrim2 = dimVals2[2].linlin(0, 1, -6, 6);  // Reduced from -18/+18 to -6/+6 dB
+                        // LF/HF removed (shelves disabled)
+                        zsAmount2 = zsynthVals2[0] * 100;
+                        zsDelay2 = zsynthVals2[1].linlin(0, 1, 0, 30);
+                        zsTrim2 = zsynthVals2[2].linlin(0, 1, -12, 12);
+                        zsSource2 = if(zsynthVals2[3] < 0.5, 0, 1);
+                        zsSize2 = zsynthVals2[4].linlin(0, 1, 0.1, 3.0);
+                        zsDamp2 = zsynthVals2[5];
+                        zsMix2 = zsynthVals2[6] * 100;
+                        
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
-                            \maplinSurround, ~maplinState[\surround], 
-                            \maplinEffect, ~maplinState[\effect],
-                            \maplinDelay, ~maplinState[\delay], 
-                            \maplinActive, ~maplinState[\active],
-                            \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                            \maplinSurround, ~maplinState[\surround] ? 0.8, 
+                            \maplinEffect, ~maplinState[\effect] ? 0.8,
+                            \maplinDelay, ~maplinState[\delay] ? 0.4, 
+                            \maplinActive, ~maplinState[\active] ? 1,  // 1 = active, 0 = bypass
+                            \maplinMode, if(configKeyE == \maplin, 1, 0),
+                            // Dimension parameters
+                            \dimensionWidth, dimWidth2,
+                            \dimensionWidthHPF, dimWidthHPF2,  // Width HPF (80-400 Hz)
+                            \dimensionLFGain, 0,  // Not used (shelves disabled)
+                            \dimensionHFGain, 0,  // Not used (shelves disabled)
+                            \dimensionOutputTrim, dimTrim2,
+                            \dimensionShelvesMode, 0,  // Off - handled in decoders
+                            \dimensionGerzonPresets, 0,  // Off - handled in decoders
+                            \dimensionActive, ~dimensionActive ? 1,  // Active/bypass (default ON)
+                            // ZSynth parameters
+                            \zsynthHeightAmount, zsAmount2,
+                            \zsynthHeightDelay, zsDelay2,
+                            \zsynthHeightTrim, zsTrim2,
+                            \zsynthHeightSource, zsSource2,
+                            \zsynthAmbienceSize, zsSize2,
+                            \zsynthAmbienceDampening, zsDamp2,
+                            \zsynthAmbienceMix, zsMix2
+                        ]);
                         
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
@@ -1705,8 +1867,7 @@ win.front;
     if(~dimensionWidthKnob.notNil) {
         ~dimensionState[\sliderValues] = [
             ~dimensionWidthKnob.value,
-            ~dimensionLFKnob.value,
-            ~dimensionHFKnob.value,
+            ~dimensionWidthHPFKnob.value,
             ~dimensionTrimKnob.value
         ];
         ("Saved dimension state: " ++ ~dimensionState[\sliderValues]).postln;
@@ -1721,15 +1882,34 @@ win.front;
     if(~dimensionWidthKnob.notNil and: { ~dimensionState[\sliderValues].notNil }) {
         var savedVals = ~dimensionState[\sliderValues];
         ("Restoring dimension state: " ++ savedVals).postln;
-        if(savedVals.size >= 4) {
+        if(savedVals.size >= 3) {
+            // New format: [width, widthHPF, outputTrim]
             ~dimensionWidthKnob.value_(savedVals[0] ? 0.0);
-            ~dimensionLFKnob.value_(savedVals[1] ? 0.5);
-            ~dimensionHFKnob.value_(savedVals[2] ? 0.5);
-            ~dimensionTrimKnob.value_(savedVals[3] ? 0.5);
+            ~dimensionWidthHPFKnob.value_(savedVals[1] ? 0.5); // Default 180Hz = 0.5 normalized
+            ~dimensionTrimKnob.value_(savedVals[2] ? 0.5);
             ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
-            ~dimensionLFKnob.action.value(~dimensionLFKnob);
-            ~dimensionHFKnob.action.value(~dimensionHFKnob);
+            ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
             ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+        } {
+            if(savedVals.size >= 2) {
+                // Legacy format: [width, outputTrim] - add default widthHPF
+                ~dimensionWidthKnob.value_(savedVals[0] ? 0.0);
+                ~dimensionWidthHPFKnob.value_(0.5); // Default 180Hz
+                ~dimensionTrimKnob.value_(savedVals[1] ? 0.5);
+                ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+                ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+                ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+            } {
+                // Legacy support: if old format with 4 values, use first and last
+                if(savedVals.size >= 4) {
+                    ~dimensionWidthKnob.value_(savedVals[0] ? 0.0);
+                    ~dimensionWidthHPFKnob.value_(0.5); // Default 180Hz
+                    ~dimensionTrimKnob.value_(savedVals[3] ? 0.5);
+                    ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+                    ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+                    ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+                };
+            };
         };
     };
     if(~dimensionPresetMenu.notNil and: { ~dimensionState[\presetIndex].notNil }) {
@@ -1769,28 +1949,62 @@ win.front;
 
 // --- MAPLIN SM-333 CONTROL FUNCTIONS ---
 ~setMaplinSurround = { |level=0.8|
-    if(~synth.notNil) { ~synth.set(\maplinSurround, level); };
     ~maplinState[\surround] = level;
+    if(~synth.notNil and: { configKeyE == \maplin }) { 
+        ~synth.set(\maplinSurround, level);
     ("Maplin surround level: " ++ (level * 100).round(1) ++ "%").postln;
+    } {
+        if(configKeyE != \maplin) {
+            ("Maplin surround level: " ++ (level * 100).round(1) ++ "% (Maplin encoder not selected)").postln;
+        } {
+            ("Maplin surround level: " ++ (level * 100).round(1) ++ "% (synth not ready)").postln;
+        };
+    };
 };
 
 ~setMaplinEffect = { |level=0.8|
-    if(~synth.notNil) { ~synth.set(\maplinEffect, level); };
     ~maplinState[\effect] = level;
+    if(~synth.notNil and: { configKeyE == \maplin }) { 
+        ~synth.set(\maplinEffect, level);
     ("Maplin effect level: " ++ (level * 100).round(1) ++ "%").postln;
+    } {
+        if(configKeyE != \maplin) {
+            ("Maplin effect level: " ++ (level * 100).round(1) ++ "% (Maplin encoder not selected)").postln;
+        } {
+            ("Maplin effect level: " ++ (level * 100).round(1) ++ "% (synth not ready)").postln;
+        };
+    };
 };
 
 ~setMaplinDelay = { |time=0.4|
     var delayMs = time.linlin(0, 1, 5, 50);
-    if(~synth.notNil) { ~synth.set(\maplinDelay, time); };
     ~maplinState[\delay] = time;
+    if(~synth.notNil and: { configKeyE == \maplin }) { 
+        ~synth.set(\maplinDelay, time);
     ("Maplin delay time: " ++ delayMs.round(1) ++ "ms").postln;
+    } {
+        if(configKeyE != \maplin) {
+            ("Maplin delay time: " ++ delayMs.round(1) ++ "ms (Maplin encoder not selected)").postln;
+        } {
+            ("Maplin delay time: " ++ delayMs.round(1) ++ "ms (synth not ready)").postln;
+        };
+    };
 };
 
 ~setMaplinActive = { |active=true|
-    if(~synth.notNil) { ~synth.set(\maplinActive, if(active, 1, 0)); };
-    ~maplinState[\active] = if(active, 1, 0);
-    ("Maplin processing: " ++ if(active, "ACTIVE", "BYPASSED")).postln;
+    var activeVal = if(active, 1, 0);
+    ~maplinState[\active] = activeVal;
+    ~dimensionActive = activeVal;  // Also control Dimension active state
+    
+    if(~synth.notNil) {
+        if(configKeyE == \maplin) {
+            ~synth.set(\maplinActive, activeVal);
+        };
+        ~synth.set(\dimensionActive, activeVal);
+        ("Maplin & Dimension: " ++ if(active, "ACTIVE", "BYPASSED")).postln;
+    } {
+        ("Maplin & Dimension: " ++ if(active, "ACTIVE", "BYPASSED") ++ " (synth not ready)").postln;
+    };
 };
 
 // --- MAPLIN PRESET FUNCTIONS ---
@@ -1814,7 +2028,12 @@ win.front;
         ~maplinState[\surround] = ~maplinSurroundKnob.value;
         ~maplinState[\effect] = ~maplinEffectKnob.value;
         ~maplinState[\delay] = ~maplinDelayKnob.value;
-        ("Saved Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay]).postln;
+        if(~maplinActiveBtn.notNil) {
+            var activeVal = if(~maplinActiveBtn.value == 0, 1, 0); // Button 0 = ON (active=1), Button 1 = OFF (active=0)
+            ~maplinState[\active] = activeVal;
+            ~dimensionActive = activeVal;  // Also save Dimension active state
+        };
+        ("Saved Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay] ++ ", active=" ++ ~maplinState[\active]).postln;
     };
 };
 
@@ -1823,6 +2042,11 @@ win.front;
         ~maplinSurroundKnob.value_(~maplinState[\surround] ? 0.8);
         ~maplinEffectKnob.value_(~maplinState[\effect] ? 0.8);
         ~maplinDelayKnob.value_(~maplinState[\delay] ? 0.4);
+        
+        // Update ON/OFF button (0 = ON, 1 = OFF) - uses Dimension active state
+        if(~maplinActiveBtn.notNil) {
+            ~maplinActiveBtn.value_(if((~dimensionActive ? 1) == 1, 0, 1));
+        };
         
         // Update value displays
         ~maplinSurroundValue.string_((~maplinState[\surround] * 100).round(1).asString ++ "%");
@@ -1833,8 +2057,9 @@ win.front;
         if(~maplinSurroundKnob.action.notNil) { ~maplinSurroundKnob.action.value(~maplinSurroundKnob); };
         if(~maplinEffectKnob.action.notNil) { ~maplinEffectKnob.action.value(~maplinEffectKnob); };
         if(~maplinDelayKnob.action.notNil) { ~maplinDelayKnob.action.value(~maplinDelayKnob); };
+        if(~maplinActiveBtn.notNil) { ~maplinActiveBtn.action.value(~maplinActiveBtn); };
         
-        ("Restored Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay]).postln;
+        ("Restored Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay] ++ ", active=" ++ ~maplinState[\active]).postln;
     };
 };
 
@@ -1846,21 +2071,24 @@ win.front;
         if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
         if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
         
-        // Dimension row: covers labels (y=30), knobs (y=52), values (y=117)
-        // Height from 30 to 133 (117+16), so ~103px, make it 110 to be safe
-        // Maplin row: covers labels (y=140), knobs (y=161), values (y=225)
-        // Values end at 241 (225+16), buttons start at 245, so stop at 243 (102px height) to leave 2px clearance
+        // Dimension row: covers labels (y=26), knobs (y=48), values (y=113) - moved up 4px
+        // Height from 26 to 129 (113+16), so ~103px, make it 110 to be safe
+        // Maplin row: covers labels (y=136), knobs (y=157), values (y=221) - moved up 4px
+        // Values end at 237 (221+16), buttons start at 241, so stop at 239 (102px height) to leave 2px clearance
+        // ON/OFF and RESET buttons are at y=241, height=25 - these are ALWAYS VISIBLE (work for both Dimension and Maplin)
         // Leave 2px margin on left and right to avoid overlapping border (x=2, width=316)
         
         if(configKeyE == \maplin) {
-            // MAPLIN encoder: hide Dimension row (show Maplin row)
-            ~dimensionRowOverlay = View(~dimensionOverlay, Rect(2, 30, 316, 110))
+            // MAPLIN encoder: hide Dimension row (show Maplin row, ON/OFF and RESET buttons always visible)
+            ~dimensionRowOverlay = View(~dimensionOverlay, Rect(2, 26, 316, 110))
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
         } {
-            // UHJ, SUPERSTEREO, or PHJ: hide Maplin row (show Dimension row)
-            ~maplinRowOverlay = View(~dimensionOverlay, Rect(2, 140, 316, 102))
+            // UHJ, SUPERSTEREO, or PHJ: hide Maplin row only (show Dimension row, ON/OFF and RESET buttons always visible)
+            // Cover Maplin row (y=136 to y=238) - stop before buttons at y=241
+            // Height = 238 - 136 = 102px, add 1px margin = 103px
+            ~maplinRowOverlay = View(~dimensionOverlay, Rect(2, 136, 316, 103))
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
@@ -2174,14 +2402,18 @@ win.front;
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
-            if(~maplinOverlay.notNil) { 
-                ~saveMaplinState.value(); // Save state before removing maplin overlay
-                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+            if(~dimensionOverlay.notNil) { 
+                ~saveDimensionState.value(); // Save state before removing dimension overlay
+                ~saveMaplinState.value(); // Save Maplin state too
+                // Remove overlays
+                if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
+                if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
+                ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); 
             };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
-            ~maplinBtn.value_(0);
+            ~dimensionBtn.value_(0);
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -2513,48 +2745,42 @@ win.front;
                 .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
 
-            // Dimension controls: 4 knobs (Width, LF Gain, HF Gain, Output Trim) - Row 1
-            // Under-the-hood: shelvesMode, gerzonPresets, widthHPF, transitionFreq handled automatically
-            // Layout: 320px overlay, 4 knobs @ 60px each, 10px gaps
-            // 4 × 60px = 240px, 3 × 10px = 30px, total = 270px, margin = (320-270)/2 = 25px
-            // Labels moved down 3px from previous position
-            dimKnobSize = 60; dimGap = 10; dimStartX = 25;
-            dimKnobY = 52; dimLabelY = 30; dimValueY = 117;
+            // Dimension controls: 3 knobs (Width, Width HPF, Output Trim) - Row 1
+            // LF/HF Gain removed (only work with shelves, which are disabled)
+            // Under-the-hood: shelvesMode, gerzonPresets, transitionFreq handled automatically
+            // Layout: 320px overlay, 3 knobs @ 60px each, 10px gaps
+            // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
+            dimKnobSize = 60; dimGap = 10;
+            dimStartX = 60; // Centered: (320 - (3*60 + 2*10))/2 = 60
+            dimKnobY = 48; dimLabelY = 26; dimValueY = 113; // Moved up by 4px
             
-            savedVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5, 0.5]; // All values normalized 0-1
+            savedVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5]; // width, widthHPF (normalized), outputTrim (normalized 0-1)
             
-            // Dimension labels above knobs (Row 1) - Explicit positions: 25, 95, 165, 235
-            StaticText(~dimensionOverlay, Rect(25, dimLabelY, dimKnobSize, 16))
+            // Dimension labels above knobs (Row 1) - Positions: 60 (Width), 130 (Width HPF), 200 (Trim)
+            StaticText(~dimensionOverlay, Rect(60, dimLabelY, dimKnobSize, 16))
                 .string_("WIDTH")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~dimensionOverlay, Rect(95, dimLabelY, dimKnobSize, 16))
-                .string_("LF GAIN")
+            StaticText(~dimensionOverlay, Rect(130, dimLabelY, dimKnobSize, 16))
+                .string_("W HPF")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~dimensionOverlay, Rect(165, dimLabelY, dimKnobSize, 16))
-                .string_("HF GAIN")
+            StaticText(~dimensionOverlay, Rect(200, dimLabelY, dimKnobSize, 16))
+                .string_("TRIM")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~dimensionOverlay, Rect(235, dimLabelY, dimKnobSize, 16))
-                .string_("OUTPUT")
-                .align_(\center)
-                .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 11).boldVariant)
-                .background_(Color.clear);
-            
-            // Width knob (0.0 to 0.70) - Position: 25
+            // Width knob (0.0 to 0.70) - Position: 60
             // Note: saved value is already normalized (0-1), where 1.0 = 0.70 width
-            ~dimensionWidthKnob = Knob(~dimensionOverlay, Rect(25, dimKnobY, dimKnobSize, dimKnobSize))
+            ~dimensionWidthKnob = Knob(~dimensionOverlay, Rect(60, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[0]) // Already normalized 0-1 (where 1.0 = 0.70 width)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
@@ -2564,65 +2790,45 @@ win.front;
                     if(~synth.notNil) { ~synth.set(\dimensionWidth, val); };
                 });
             
-            // LF Gain knob (-6 to +6 dB) - Position: 95
-            ~dimensionLFKnob = Knob(~dimensionOverlay, Rect(95, dimKnobY, dimKnobSize, dimKnobSize))
+            // Width HPF knob (80 to 400 Hz) - Position: 130
+            ~dimensionWidthHPFKnob = Knob(~dimensionOverlay, Rect(130, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[1]) // Already normalized 0-1
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
-                    var val = knob.value.linlin(0, 1, -6, 6);
-                    var displayVal = if(val >= 0, "+" ++ val.round(0.1).asString, val.round(0.1).asString);
-                    ~dimensionLFValue.string_(displayVal ++ "dB");
+                    var val = knob.value.linlin(0, 1, 80, 400); // Convert normalized 0-1 to 80-400 Hz
+                    ~dimensionWidthHPFValue.string_(val.round(1).asString ++ "Hz");
                     ~dimensionState[\sliderValues][1] = knob.value;
-                    if(~synth.notNil) { ~synth.set(\dimensionLFGain, val); };
+                    if(~synth.notNil) { ~synth.set(\dimensionWidthHPF, val); };
                 });
             
-            // HF Gain knob (-6 to +6 dB) - Position: 165
-            ~dimensionHFKnob = Knob(~dimensionOverlay, Rect(165, dimKnobY, dimKnobSize, dimKnobSize))
+            // Output Trim knob (-6 to +6 dB) - Position: 200
+            ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(200, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[2]) // Already normalized 0-1
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
-                    var val = knob.value.linlin(0, 1, -6, 6);
-                    var displayVal = if(val >= 0, "+" ++ val.round(0.1).asString, val.round(0.1).asString);
-                    ~dimensionHFValue.string_(displayVal ++ "dB");
-                    ~dimensionState[\sliderValues][2] = knob.value;
-                    if(~synth.notNil) { ~synth.set(\dimensionHFGain, val); };
-                });
-            
-            // Output Trim knob (-18 to +18 dB) - Position: 235
-            ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(235, dimKnobY, dimKnobSize, dimKnobSize))
-                .value_(savedVals[3]) // Already normalized 0-1
-                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
-                .action_({ |knob| 
-                    var val = knob.value.linlin(0, 1, -18, 18);
+                    var val = knob.value.linlin(0, 1, -6, 6);  // Reduced from -18/+18 to -6/+6 dB
                     var displayVal = if(val >= 0, "+" ++ val.round(0.1).asString, val.round(0.1).asString);
                     ~dimensionTrimValue.string_(displayVal ++ "dB");
-                    ~dimensionState[\sliderValues][3] = knob.value;
+                    ~dimensionState[\sliderValues][2] = knob.value;
                     if(~synth.notNil) { ~synth.set(\dimensionOutputTrim, val); };
                 });
             
-            // Dimension value displays below knobs - Explicit positions: 25, 95, 165, 235
-            ~dimensionWidthValue = StaticText(~dimensionOverlay, Rect(25, dimValueY, dimKnobSize, 16))
+            // Dimension value displays below knobs - Positions: 60 (Width), 130 (Width HPF), 200 (Trim)
+            ~dimensionWidthValue = StaticText(~dimensionOverlay, Rect(60, dimValueY, dimKnobSize, 16))
                 .string_("0.00")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~dimensionLFValue = StaticText(~dimensionOverlay, Rect(95, dimValueY, dimKnobSize, 16))
-                .string_("0.0dB")
+            ~dimensionWidthHPFValue = StaticText(~dimensionOverlay, Rect(130, dimValueY, dimKnobSize, 16))
+                .string_("180Hz")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~dimensionHFValue = StaticText(~dimensionOverlay, Rect(165, dimValueY, dimKnobSize, 16))
-                .string_("0.0dB")
-                .align_(\center)
-                .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 11))
-                .background_(Color.clear);
-            
-            ~dimensionTrimValue = StaticText(~dimensionOverlay, Rect(235, dimValueY, dimKnobSize, 16))
+            ~dimensionTrimValue = StaticText(~dimensionOverlay, Rect(200, dimValueY, dimKnobSize, 16))
                 .string_("0.0dB")
                 .align_(\center)
                 .stringColor_(Color.cyan)
@@ -2632,10 +2838,12 @@ win.front;
             // Maplin SM-333 controls: 3 knobs (Surround, Effect, Delay) - Row 2
             // Layout: 320px overlay, 3 knobs @ 60px each, 10px gaps
             // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
-            // Knobs down 2px more
-            maplinKnobSize = 60; maplinKnobY = 161; maplinLabelY = 140; maplinValueY = 225;
+            // All moved up by 4px
+            maplinKnobSize = 60; maplinKnobY = 157; maplinLabelY = 136; maplinValueY = 221;
             maplinStartX = 60; maplinGap = 10;
             maplinSavedVals = ~maplinState;
+            
+            // Maplin ON/OFF button will be placed at bottom (where RESET was)
             
             // Maplin labels above knobs (Row 2) - SURROUND expanded 2px each side (64px width, x=58)
             StaticText(~dimensionOverlay, Rect(58, maplinLabelY, 64, 16))
@@ -2710,50 +2918,54 @@ win.front;
 
             // Initialize value displays
             ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
-            ~dimensionLFKnob.action.value(~dimensionLFKnob);
-            ~dimensionHFKnob.action.value(~dimensionHFKnob);
+            ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
             ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
             ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
             ~maplinEffectKnob.action.value(~maplinEffectKnob);
             ~maplinDelayKnob.action.value(~maplinDelayKnob);
 
-            // RESET button
-            Button(~dimensionOverlay, Rect(18, 245, 80, 25))
+            // Maplin & Dimension ON/OFF button (where RESET was) - controls both Maplin and Dimension
+            ~maplinActiveBtn = Button(~dimensionOverlay, Rect(18, 241, 80, 25))
+                .states_([
+                    ["ON", Color.black, Color.cyan],
+                    ["OFF", Color.cyan, Color.black]
+                ])
+                .action_({ |button|
+                    ~setMaplinActive.(button.value == 0);  // Controls both Maplin and Dimension
+                })
+                .font_(Font("Helvetica", 10))
+                .focusColor_(Color.clear)
+                .value_(if((maplinSavedVals[\active] ? 1) == 1, 0, 1)); // 0 = ON (button state 0), 1 = OFF (button state 1)
+
+            // RESET button (where CLOSE was)
+            Button(~dimensionOverlay, Rect(222, 241, 80, 25))
                 .states_([["RESET", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 10))
                 .action_({
                     // Reset Dimension to default values
                     ~dimensionWidthKnob.value_(0.0);
-                    ~dimensionLFKnob.value_(0.5);
-                    ~dimensionHFKnob.value_(0.5);
+                    ~dimensionWidthHPFKnob.value_(0.5); // Default 180Hz
                     ~dimensionTrimKnob.value_(0.5);
                     ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
-                    ~dimensionLFKnob.action.value(~dimensionLFKnob);
-                    ~dimensionHFKnob.action.value(~dimensionHFKnob);
+                    ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
                     ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
                     // Reset Maplin to default values
                     ~maplinSurroundKnob.value_(0.8);
                     ~maplinEffectKnob.value_(0.8);
                     ~maplinDelayKnob.value_(0.4);
+                    if(~maplinActiveBtn.notNil) {
+                        ~maplinActiveBtn.value_(0); // Default to ON (button state 0 = ON)
+                        ~dimensionActive = 1;  // Reset Dimension active state to ON
+                    };
                     ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
                     ~maplinEffectKnob.action.value(~maplinEffectKnob);
                     ~maplinDelayKnob.action.value(~maplinDelayKnob);
+                    if(~maplinActiveBtn.notNil) {
+                        ~maplinActiveBtn.action.value(~maplinActiveBtn);
+                    };
                 });
 
-            // Close button
-            Button(~dimensionOverlay, Rect(222, 245, 80, 25))
-                .states_([["CLOSE", Color.cyan, Color.black]])
-                .font_(Font("Helvetica", 10))
-                .action_({
-                    ~saveDimensionState.value(); // Save state before closing
-                    ~saveMaplinState.value(); // Save Maplin state too
-                    // Remove overlays
-                    if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
-                    if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
-                    ~dimensionOverlay.remove;
-                    ~dimensionOverlay = nil;
-                    ~dimensionBtn.value_(0);
-                });
+            // CLOSE button removed - pressing Dimension button again closes the overlay
 
             ~dimensionOverlay.front;
             ~dimensionBtn.value_(1);
@@ -2764,6 +2976,14 @@ win.front;
             
             // Update visibility based on current encoder selection
             ~updateDimensionOverlayVisibility.value();
+            
+            // If Maplin encoder is selected, ensure Maplin knobs send values to synth immediately
+            if(configKeyE == \maplin and: { ~maplinSurroundKnob.notNil }) {
+                // Trigger knob actions to send values to synth
+                ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+                ~maplinEffectKnob.action.value(~maplinEffectKnob);
+                ~maplinDelayKnob.action.value(~maplinDelayKnob);
+            };
 
         } {
             if(~dimensionOverlay.notNil) {

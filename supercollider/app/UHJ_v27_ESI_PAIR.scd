@@ -18,7 +18,7 @@ var win, mainView,
 // --- Maplin overlay variables ---
 ~maplinSurroundKnob = nil; ~maplinEffectKnob = nil; ~maplinDelayKnob = nil; ~maplinActiveBtn = nil;
 ~maplinSurroundValue = nil; ~maplinEffectValue = nil; ~maplinDelayValue = nil;
-// --- Headtracker overlanil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
+// --- Headtra cker overlanil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
 // --- Maplin button overlay ---
