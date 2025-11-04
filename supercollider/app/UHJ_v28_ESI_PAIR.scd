@@ -12,6 +12,7 @@ var win, mainView,
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~dimensionOverlay = nil;
+~layoutTitleText = nil;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~dimensionBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
@@ -48,11 +49,11 @@ var win, mainView,
     \surround, 0.8,   // Surround level
     \effect, 0.8,     // Effect level
     \delay, 0.4,      // Delay amount
-    \active, 1        // Active/bypass (default ON - 1 = active, 0 = bypass)
+    \active, 0        // Active/bypass (default OFF - 1 = active, 0 = bypass)
 ]);
 
 // --- Dimension active state (shared with Maplin ON/OFF button) ---
-~dimensionActive = 1;  // Default ON (1 = active, 0 = bypass)
+~dimensionActive = 0;  // Default OFF (1 = active, 0 = bypass)
 
 // --- Dimension state preservation variables ---
 ~dimensionState = Dictionary.newFrom([
@@ -453,6 +454,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         htIsOff = (~headtrackBtn.notNil and: { ~headtrackBtn.value == 0 });
         isBinaural = (idx == 1) or: { idx == 2 };
         shouldDim = (idx == 3 or: { idx == 4 } or: { idx == 5 } or: { idx == 6 } or: { idx == 7 } or: { idx == 8 });
+
+        // Update Layout overlay title if visible
+        if(~layoutOverlay.notNil and: { ~layoutTitleText.notNil }) {
+            ~layoutTitleText.string = decoderName;
+        };
 
         // --- Overlay/enable logic for headtracker controls ---
         if(~knobOverlay.notNil) { ~knobOverlay.remove; ~knobOverlay = nil; };
@@ -1471,6 +1477,7 @@ win.front;
 ~eqBtn = Button(mainView, Rect(180, 410, 100, 35))
     .states_([ ["EQ", Color.cyan, Color.black], ["EQ", Color.black, Color.cyan] ])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
         if(btn.value == 1) {
@@ -1501,8 +1508,8 @@ win.front;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
-            StaticText(~eqOverlay, Rect(10, 5, 120, 20))
-                .string_("GRAPHIC EQ")
+            StaticText(~eqOverlay, Rect(10, 7, 120, 20))
+                .string_("EQ PRESETS")
                 .align_(\left)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
@@ -1538,7 +1545,8 @@ win.front;
                     }
                 }
             };
-            ~eqPresetMenu = PopUpMenu(~eqOverlay, Rect(140, 7, 110, 20))
+            // Preset menu enlarged slightly and kept clear of title
+            ~eqPresetMenu = PopUpMenu(~eqOverlay, Rect(110, 7, 130, 20))
                 .items_(~eqPresetNames.collect(_.asString))
                 .font_(Font("Helvetica", 11))
                 .background_(Color.black)
@@ -1547,6 +1555,7 @@ win.front;
                 .action_({
                     ~recallEqPreset.value;
                 });
+            // SAVE button kept at its original position/size
             Button(~eqOverlay, Rect(255, 7, 58, 20))
                 .states_([["SAVE", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 10))
@@ -2073,22 +2082,22 @@ win.front;
         
         // Dimension row: covers labels (y=26), knobs (y=48), values (y=113) - moved up 4px
         // Height from 26 to 129 (113+16), so ~103px, make it 110 to be safe
-        // Maplin row: covers labels (y=136), knobs (y=157), values (y=221) - moved up 4px
-        // Values end at 237 (221+16), buttons start at 241, so stop at 239 (102px height) to leave 2px clearance
+        // Maplin row: covers labels (y=116), knobs (y=137), values (y=201) after upward shift
+        // Values end at 217 (201+16), buttons start at 241, so stop well before buttons
         // ON/OFF and RESET buttons are at y=241, height=25 - these are ALWAYS VISIBLE (work for both Dimension and Maplin)
         // Leave 2px margin on left and right to avoid overlapping border (x=2, width=316)
         
         if(configKeyE == \maplin) {
             // MAPLIN encoder: hide Dimension row (show Maplin row, ON/OFF and RESET buttons always visible)
-            ~dimensionRowOverlay = View(~dimensionOverlay, Rect(2, 26, 316, 110))
+            ~dimensionRowOverlay = View(~dimensionOverlay, Rect(2, 28, 316, 110))
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
         } {
             // UHJ, SUPERSTEREO, or PHJ: hide Maplin row only (show Dimension row, ON/OFF and RESET buttons always visible)
-            // Cover Maplin row (y=136 to y=238) - stop before buttons at y=241
-            // Height = 238 - 136 = 102px, add 1px margin = 103px
-            ~maplinRowOverlay = View(~dimensionOverlay, Rect(2, 136, 316, 103))
+            // Cover Maplin row (y=116 to ~238) - stop before buttons at y=241
+            // Keep previous height for safety
+            ~maplinRowOverlay = View(~dimensionOverlay, Rect(2, 118, 316, 103))
                 .background_(Color.black.alpha_(0.7))
                 .alpha_(1.0)
                 .front;
@@ -2219,6 +2228,7 @@ win.front;
 ~ambienceBtn = Button(mainView, Rect(399, 410, 100, 35))
     .states_([["AMBIENCE", Color.cyan, Color.black], ["AMBIENCE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
@@ -2250,8 +2260,9 @@ win.front;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
-            StaticText(~ambienceOverlay, Rect(10, 5, 120, 22))
-                .string_("AMBIENCE")
+            // AMBIENCE PRESETS label (matches EQ title placement)
+            StaticText(~ambienceOverlay, Rect(10, 7, 160, 20))
+                .string_("AMBIENCE PRESETS")
                 .align_(\left)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
@@ -2265,7 +2276,7 @@ win.front;
             };
 
             // Preset selector (dropdown)
-            ~ambiencePresetMenu = PopUpMenu(~ambienceOverlay, Rect(140, 7, 170, 20))
+            ~ambiencePresetMenu = PopUpMenu(~ambienceOverlay, Rect(160, 7, 150, 20))
                 .items_(["Default", "High Verb", "Huge Hall", "Large Hall", "Low Verb", "Mod Echo", "Spatial Delay", "Time Modulation"])
                 .font_(Font("Helvetica", 11))
                 .background_(Color.black)
@@ -2334,42 +2345,58 @@ win.front;
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
-                if(~synth.notNil) {
+                if(~synth.notNil and: { ~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 } }) {
+                    // Only send to synth when ambience is ON
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
-                }
+                };
             });
             // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
             if(~ambienceOnOffBtn.notNil) { ~ambienceOnOffBtn.value_(0); };
             if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
-            // Close button
-            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
-                .states_([["CLOSE", Color.cyan, Color.black]])
+            
+            // ON/OFF button (replaces RESET position) - same size/style as RESET, no focus border
+            ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([["ON", Color.cyan, Color.black], ["ON", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
-                .action_({
-                    ~saveAmbienceState.value(); // Save state before closing
-                    ~ambienceOverlay.remove;
-                    ~ambienceOverlay = nil;
-                    ~ambienceBtn.value_(0);
+                .focusColor_(Color.clear)
+                .value_(0) // default OFF
+                .action_({ |btn|
+                    if(~synth.notNil and: { ~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil } }) {
+                        if(btn.value == 1) {
+                            // Turn ambience ON: apply current slider value to synth (no slider movement)
+                            ~synth.set(\ambience, ~ambienceSliders[0].value.linlin(0, 1, 0, 0.2));
+                        } {
+                            // Turn ambience OFF: remember last mix (slider position) and bypass at synth
+                            ~ambienceLastMix = ~ambienceSliders[0].value;
+                            ~synth.set(\ambience, 0);
+                        };
+                    };
                 });
-            // Place RESET button before CLOSE button in the Ambience overlay:
-            Button(~ambienceOverlay, Rect(18, 230, 80, 28))
-                .states_([ ["RESET", Color.cyan, Color.black] ])
+            
+            // RESET button moved to where CLOSE was
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([["RESET", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
+                .focusColor_(Color.clear)
                 .action_({
                     // Reset to default preset
                     if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
                         ~ambiencePresetMenu.value_(0); // Select first preset
                         ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
-                    }
+                    };
                 });
-            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
-                .states_([ ["CLOSE", Color.cyan, Color.black] ])
+
+            // ENHANCE button (centered) - toggles Z source (Original vs Synthesized)
+            // Always shows label "ENHANCE"; color indicates state
+            ~ambienceEnhanceBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
+                .states_([["ENHANCE", Color.cyan, Color.black], ["ENHANCE", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
-                .action_({
-                    ~saveAmbienceState.value(); // Save state before closing
-                    ~ambienceOverlay.remove;
-                    ~ambienceOverlay = nil;
-                    ~ambienceBtn.value_(0);
+                .focusColor_(Color.clear)
+                .value_(~zsynthState[\heightSource] ? 0) // default OFF if not saved
+                .action_({ |btn|
+                    var src = if(btn.value == 1, 1, 0); // 0=Original, 1=Synth
+                    ~zsynthState[\heightSource] = src;
+                    if(~synth.notNil) { ~synth.set(\zsynthHeightSource, src); };
                 });
             ~ambienceOverlay.front;
             // Restore saved state or apply default preset on overlay open
@@ -2390,6 +2417,7 @@ win.front;
 ~layoutBtn = Button(mainView, Rect(508, 410, 100, 35))
     .states_([["LAYOUT", Color.cyan, Color.black], ["LAYOUT", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
@@ -2417,8 +2445,19 @@ win.front;
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
-            StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
-                .string_("LAYOUT - " ++ (["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "DOLBY 5.1.2", "OCTAGON"][~dmenu.value ? 0]))
+            // Layout title showing encoder class only
+            ~layoutTitleText = StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
+                .string_(([
+                    "STEREO",
+                    "BINAURAL IRCAM",
+                    "BINAURAL CIPIC",
+                    "QUADRAPHONIC SQUARE",
+                    "QUADRAPHONIC NARROW",
+                    "QUADRAPHONIC WIDE",
+                    "DOLBY 5.1",
+                    "DOLBY 5.1.2",
+                    "OCTAGON"
+                ][~dmenu.value ? 0]))
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
@@ -2704,6 +2743,7 @@ win.front;
 ~dimensionBtn = Button(mainView, Rect(290, 410, 100, 35))
     .states_([["DIMENSION", Color.cyan, Color.black], ["DIMENSION", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var knobWidth, knobHeight, knobSpacing, knobY, savedVals;
         var dimKnobSize, dimKnobY, dimLabelY, dimValueY, dimStartX, dimGap;
@@ -2736,14 +2776,9 @@ win.front;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
+            // (Removed center guide line)
 
-            // Title
-            StaticText(~dimensionOverlay, Rect(10, 5, 200, 22))
-                .string_("DIMENSION")
-                .align_(\left)
-                .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13).boldVariant)
-                .background_(Color.clear);
+            // (Removed title to reclaim vertical space)
 
             // Dimension controls: 3 knobs (Width, Width HPF, Output Trim) - Row 1
             // LF/HF Gain removed (only work with shelves, which are disabled)
@@ -2752,18 +2787,18 @@ win.front;
             // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
             dimKnobSize = 60; dimGap = 10;
             dimStartX = 60; // Centered: (320 - (3*60 + 2*10))/2 = 60
-            dimKnobY = 48; dimLabelY = 26; dimValueY = 113; // Moved up by 4px
+            dimKnobY = 32; dimLabelY = 10; dimValueY = 97; // moved down by 2px
             
             savedVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5]; // width, widthHPF (normalized), outputTrim (normalized 0-1)
             
-            // Dimension labels above knobs (Row 1) - Positions: 60 (Width), 130 (Width HPF), 200 (Trim)
-            StaticText(~dimensionOverlay, Rect(60, dimLabelY, dimKnobSize, 16))
+            // Dimension labels above knobs (Row 1) - Positions adjusted: 35 (Width), 130 (Width HPF center), 225 (Trim)
+            StaticText(~dimensionOverlay, Rect(35, dimLabelY, dimKnobSize, 16))
                 .string_("WIDTH")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
-            
+
             StaticText(~dimensionOverlay, Rect(130, dimLabelY, dimKnobSize, 16))
                 .string_("W HPF")
                 .align_(\center)
@@ -2771,16 +2806,16 @@ win.front;
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~dimensionOverlay, Rect(200, dimLabelY, dimKnobSize, 16))
+            StaticText(~dimensionOverlay, Rect(225, dimLabelY, dimKnobSize, 16))
                 .string_("TRIM")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            // Width knob (0.0 to 0.70) - Position: 60
+            // Width knob (0.0 to 0.70) - Position: 35
             // Note: saved value is already normalized (0-1), where 1.0 = 0.70 width
-            ~dimensionWidthKnob = Knob(~dimensionOverlay, Rect(60, dimKnobY, dimKnobSize, dimKnobSize))
+            ~dimensionWidthKnob = Knob(~dimensionOverlay, Rect(35, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[0]) // Already normalized 0-1 (where 1.0 = 0.70 width)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
@@ -2790,7 +2825,7 @@ win.front;
                     if(~synth.notNil) { ~synth.set(\dimensionWidth, val); };
                 });
             
-            // Width HPF knob (80 to 400 Hz) - Position: 130
+            // Width HPF knob (80 to 400 Hz) - Position: 130 (center)
             ~dimensionWidthHPFKnob = Knob(~dimensionOverlay, Rect(130, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[1]) // Already normalized 0-1
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
@@ -2801,8 +2836,8 @@ win.front;
                     if(~synth.notNil) { ~synth.set(\dimensionWidthHPF, val); };
                 });
             
-            // Output Trim knob (-6 to +6 dB) - Position: 200
-            ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(200, dimKnobY, dimKnobSize, dimKnobSize))
+            // Output Trim knob (-6 to +6 dB) - Position: 225
+            ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(225, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[2]) // Already normalized 0-1
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
@@ -2813,22 +2848,22 @@ win.front;
                     if(~synth.notNil) { ~synth.set(\dimensionOutputTrim, val); };
                 });
             
-            // Dimension value displays below knobs - Positions: 60 (Width), 130 (Width HPF), 200 (Trim)
-            ~dimensionWidthValue = StaticText(~dimensionOverlay, Rect(60, dimValueY, dimKnobSize, 16))
+            // Dimension value displays below knobs - Positions adjusted: 35 (Width), 130 (Width HPF center), 225 (Trim)
+            ~dimensionWidthValue = StaticText(~dimensionOverlay, Rect(35, dimValueY - 3, dimKnobSize, 16))
                 .string_("0.00")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~dimensionWidthHPFValue = StaticText(~dimensionOverlay, Rect(130, dimValueY, dimKnobSize, 16))
+            ~dimensionWidthHPFValue = StaticText(~dimensionOverlay, Rect(130, dimValueY - 3, dimKnobSize, 16))
                 .string_("180Hz")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~dimensionTrimValue = StaticText(~dimensionOverlay, Rect(200, dimValueY, dimKnobSize, 16))
+            ~dimensionTrimValue = StaticText(~dimensionOverlay, Rect(225, dimValueY - 3, dimKnobSize, 16))
                 .string_("0.0dB")
                 .align_(\center)
                 .stringColor_(Color.cyan)
@@ -2838,15 +2873,15 @@ win.front;
             // Maplin SM-333 controls: 3 knobs (Surround, Effect, Delay) - Row 2
             // Layout: 320px overlay, 3 knobs @ 60px each, 10px gaps
             // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
-            // All moved up by 4px
-            maplinKnobSize = 60; maplinKnobY = 157; maplinLabelY = 136; maplinValueY = 221;
+            // All moved up by 4px; row previously moved 20px; now shift down 2px for alignment
+            maplinKnobSize = 60; maplinKnobY = 139; maplinLabelY = 118; maplinValueY = 203;
             maplinStartX = 60; maplinGap = 10;
             maplinSavedVals = ~maplinState;
             
             // Maplin ON/OFF button will be placed at bottom (where RESET was)
             
             // Maplin labels above knobs (Row 2) - SURROUND expanded 2px each side (64px width, x=58)
-            StaticText(~dimensionOverlay, Rect(58, maplinLabelY, 64, 16))
+            StaticText(~dimensionOverlay, Rect(33, maplinLabelY, 64, 16))
                 .string_("SURROUND")
                 .align_(\center)
                 .stringColor_(Color.cyan)
@@ -2860,15 +2895,15 @@ win.front;
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~dimensionOverlay, Rect(200, maplinLabelY, maplinKnobSize, 16))
+            StaticText(~dimensionOverlay, Rect(225, maplinLabelY, maplinKnobSize, 16))
                 .string_("DELAY")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            // Maplin Surround knob - Position: 60
-            ~maplinSurroundKnob = Knob(~dimensionOverlay, Rect(60, maplinKnobY, maplinKnobSize, maplinKnobSize))
+            // Maplin Surround knob - Position: 35
+            ~maplinSurroundKnob = Knob(~dimensionOverlay, Rect(35, maplinKnobY, maplinKnobSize, maplinKnobSize))
                 .value_(maplinSavedVals[\surround] ? 0.8)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
@@ -2876,7 +2911,7 @@ win.front;
                     ~maplinSurroundValue.string_((knob.value * 100).round(1).asString ++ "%");
                 });
             
-            // Maplin Effect knob - Position: 130
+            // Maplin Effect knob - Position: 130 (center)
             ~maplinEffectKnob = Knob(~dimensionOverlay, Rect(130, maplinKnobY, maplinKnobSize, maplinKnobSize))
                 .value_(maplinSavedVals[\effect] ? 0.8)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
@@ -2885,8 +2920,8 @@ win.front;
                     ~maplinEffectValue.string_((knob.value * 100).round(1).asString ++ "%");
                 });
             
-            // Maplin Delay knob - Position: 200
-            ~maplinDelayKnob = Knob(~dimensionOverlay, Rect(200, maplinKnobY, maplinKnobSize, maplinKnobSize))
+            // Maplin Delay knob - Position: 225
+            ~maplinDelayKnob = Knob(~dimensionOverlay, Rect(225, maplinKnobY, maplinKnobSize, maplinKnobSize))
                 .value_(maplinSavedVals[\delay] ? 0.4)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
@@ -2894,22 +2929,22 @@ win.front;
                     ~maplinDelayValue.string_((knob.value.linlin(0, 1, 5, 50).round(1).asString ++ " ms"));
                 });
             
-            // Maplin value displays below knobs - Explicit positions: 60, 130, 200
-            ~maplinSurroundValue = StaticText(~dimensionOverlay, Rect(60, maplinValueY, maplinKnobSize, 16))
+            // Maplin value displays below knobs - Positions adjusted: 35, 110, 225
+            ~maplinSurroundValue = StaticText(~dimensionOverlay, Rect(35, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("80%")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~maplinEffectValue = StaticText(~dimensionOverlay, Rect(130, maplinValueY, maplinKnobSize, 16))
+            ~maplinEffectValue = StaticText(~dimensionOverlay, Rect(130, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("80%")
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~maplinDelayValue = StaticText(~dimensionOverlay, Rect(200, maplinValueY, maplinKnobSize, 16))
+            ~maplinDelayValue = StaticText(~dimensionOverlay, Rect(225, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("25 ms")
                 .align_(\center)
                 .stringColor_(Color.cyan)
@@ -2925,22 +2960,22 @@ win.front;
             ~maplinDelayKnob.action.value(~maplinDelayKnob);
 
             // Maplin & Dimension ON/OFF button (where RESET was) - controls both Maplin and Dimension
-            ~maplinActiveBtn = Button(~dimensionOverlay, Rect(18, 241, 80, 25))
+            ~maplinActiveBtn = Button(~dimensionOverlay, Rect(18, 230, 80, 28))
                 .states_([
                     ["ON", Color.black, Color.cyan],
-                    ["OFF", Color.cyan, Color.black]
+                    ["ON", Color.cyan, Color.black]
                 ])
                 .action_({ |button|
                     ~setMaplinActive.(button.value == 0);  // Controls both Maplin and Dimension
                 })
-                .font_(Font("Helvetica", 10))
+                .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
                 .value_(if((maplinSavedVals[\active] ? 1) == 1, 0, 1)); // 0 = ON (button state 0), 1 = OFF (button state 1)
 
             // RESET button (where CLOSE was)
-            Button(~dimensionOverlay, Rect(222, 241, 80, 25))
+            Button(~dimensionOverlay, Rect(222, 230, 80, 28))
                 .states_([["RESET", Color.cyan, Color.black]])
-                .font_(Font("Helvetica", 10))
+                .font_(Font("Helvetica", 11))
                 .action_({
                     // Reset Dimension to default values
                     ~dimensionWidthKnob.value_(0.0);
@@ -2983,6 +3018,7 @@ win.front;
                 ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
                 ~maplinEffectKnob.action.value(~maplinEffectKnob);
                 ~maplinDelayKnob.action.value(~maplinDelayKnob);
+                
             };
 
         } {
