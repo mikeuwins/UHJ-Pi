@@ -664,8 +664,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                        var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
                         // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -724,13 +725,13 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         );
                         
                         // Ambience processing (AmbiVerbSC reverb) with routing target
-                        var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc;
-                        var wetOnly;
                         // Build routed wet source per channel: 0=Lower(WXY), 1=All(WXYZ), 2=Height(Z)
-                        wetSrcW = Select.ar(reverbTarget, [zsynth[0], zsynth[0], 0]);
-                        wetSrcX = Select.ar(reverbTarget, [zsynth[1], zsynth[1], 0]);
-                        wetSrcY = Select.ar(reverbTarget, [zsynth[2], zsynth[2], 0]);
-                        wetSrcZ = Select.ar(reverbTarget, [0,          zsynth[3], zsynth[3]]);
+                        rtAr = reverbTarget + DC.ar(0); // ensure audio-rate selector
+                        zeroA = DC.ar(0);
+                        wetSrcW = Select.ar(rtAr, [zsynth[0], zsynth[0], zeroA]);
+                        wetSrcX = Select.ar(rtAr, [zsynth[1], zsynth[1], zeroA]);
+                        wetSrcY = Select.ar(rtAr, [zsynth[2], zsynth[2], zeroA]);
+                        wetSrcZ = Select.ar(rtAr, [zeroA,      zsynth[3], zsynth[3]]);
                         wetSrc = [wetSrcW, wetSrcX, wetSrcY, wetSrcZ];
                         // Compute wet component by subtracting input (to avoid double-dry)
                         wetOnly = AmbiVerbSC.ar(wetSrc,
@@ -751,9 +752,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             maxPreDelay: 10,
                             feedbackSpread: 1
                         ) - wetSrc;
+                        // If HEIGHT is OFF (zsynthHeightSource == 0), suppress any wet Z contribution
+                        wetOnly = [wetOnly[0], wetOnly[1], wetOnly[2], wetOnly[3] * (zsynthHeightSource > 0)];
                         ambient = zsynth + wetOnly;
-                        // Spatial transformations (rotation, tilt, tumble) - apply to all modes
-                        trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
+                        // Spatial transformations (rotation, tilt, tumble) temporarily disabled
+                        trans = ambient; // bypass FoaRTT
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
                         if(outputs == 4, {
@@ -938,6 +941,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                            var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
                             // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -996,11 +1000,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             );
                             
                             // Ambience processing (AmbiVerbSC reverb) with routing target
-                            var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2;
-                            wetSrcW2 = Select.ar(reverbTarget, [zsynth[0], zsynth[0], 0]);
-                            wetSrcX2 = Select.ar(reverbTarget, [zsynth[1], zsynth[1], 0]);
-                            wetSrcY2 = Select.ar(reverbTarget, [zsynth[2], zsynth[2], 0]);
-                            wetSrcZ2 = Select.ar(reverbTarget, [0,          zsynth[3], zsynth[3]]);
+                            rtAr2 = reverbTarget + DC.ar(0);
+                            zeroA2 = DC.ar(0);
+                            wetSrcW2 = Select.ar(rtAr2, [zsynth[0], zsynth[0], zeroA2]);
+                            wetSrcX2 = Select.ar(rtAr2, [zsynth[1], zsynth[1], zeroA2]);
+                            wetSrcY2 = Select.ar(rtAr2, [zsynth[2], zsynth[2], zeroA2]);
+                            wetSrcZ2 = Select.ar(rtAr2, [zeroA2,      zsynth[3], zsynth[3]]);
                             wetSrc2 = [wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2];
                             wetOnly2 = AmbiVerbSC.ar(wetSrc2,
                                 mix: ambience,
@@ -1020,9 +1025,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 maxPreDelay: 10,
                                 feedbackSpread: 1
                             ) - wetSrc2;
+                            // Suppress wet Z when HEIGHT is OFF
+                            wetOnly2 = [wetOnly2[0], wetOnly2[1], wetOnly2[2], wetOnly2[3] * (zsynthHeightSource > 0)];
                             ambient = zsynth + wetOnly2;
-                            // Spatial transformations (rotation, tilt, tumble)
-                            trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
+                            // Spatial transformations (rotation, tilt, tumble) temporarily disabled
+                            trans = ambient; // bypass FoaRTT
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
                             if(outputs == 4, {
@@ -1056,9 +1063,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             
                             if(outputs == 8, {
                                 if(configKeyD == \fiveonetwo, {
-                                    // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
-                                    // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFL, out[6]=TFR (matches ATK 5.0 order)
-                                    // UHJ-Pi layout: [0] FL, [1] FR, [2] C, [3] RL, [4] RR, [5] LFE, [6] TFL, [7] TFR
+                                // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
+                                // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
+                                // UHJ-Pi layout: [0] FL, [1] FR, [2] C, [3] RL, [4] RR, [5] LFE, [6] TFL, [7] TFR
                                     var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE
                                     out = [
                                         out[1], // FL (Speaker 1) - Front Left
@@ -1067,8 +1074,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                         out[2], // RL (Speaker 4) - Rear Left
                                         out[3], // RR (Speaker 5) - Rear Right
                                         lowpass, // LFE (Speaker 6) - Low Frequency Effects
-                                        out[5], // TFL (Speaker 7) - Top Front Left
-                                        out[6]  // TFR (Speaker 8) - Top Front Right
+                                    out[6], // TFL (Speaker 7) - Top Front Left
+                                    out[5]  // TFR (Speaker 8) - Top Front Right
                                     ];
                                 }, {
                                     // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -2192,7 +2199,7 @@ win.front;
 
 // --- AmbiVerbSC Preset Recall Function ---
 ~recallAmbiVerbSCPreset = { |presetName|
-    var presetData, roomName;
+    var presetData, roomName, baseRT;
 
     if(~ambiencePresetDict.notNil and: { ~ambiencePresetDict[presetName].notNil }) {
         presetData = ~ambiencePresetDict[presetName];
@@ -2204,16 +2211,14 @@ win.front;
             roomName = "Brahmssaal";
         };
 
-        // Update sliders with preset values
+        // Update sliders with preset values (only Reverb, RDelay, RSize, Spread)
         if(~ambienceSliders.notNil) {
-            // Map preset values to slider ranges
-            ~ambienceSliders[0].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Mix
-            ~ambienceSliders[1].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // PreDelay
-            ~ambienceSliders[2].value_(presetData[\lowRT].linlin(0.01, 2, 0, 1)); // LowRT
-            ~ambienceSliders[3].value_(presetData[\highRT].linlin(0.01, 4, 0, 1)); // HighRT
-            ~ambienceSliders[4].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Dispersion
-            ~ambienceSliders[5].value_(presetData[\modWidth].linlin(0, 1, 0, 1)); // ModWidth
-            ~ambienceSliders[6].value_(presetData[\modRate].linlin(0, 1, 0, 1)); // ModRate
+            // Index mapping: 2=Reverb, 3=RDelay, 4=RSize, 5=Spread, 6=Target
+            ~ambienceSliders[2].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Reverb mix
+            ~ambienceSliders[3].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // RDelay
+            baseRT = (((presetData[\lowRT] / 0.7) + (presetData[\highRT] / 1.3)) * 0.5).clip(0.5, 2.5);
+            ~ambienceSliders[4].value_(baseRT.linlin(0.5, 2.5, 0, 1)); // RSize macro
+            ~ambienceSliders[5].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Spread
 
             // Trigger slider actions to update synth
             ~ambienceSliders.do({ |slider, i|
@@ -2228,12 +2233,10 @@ win.front;
             // Use synth.set() instead of recreating to avoid signal break
             ~synth.set(
                 \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
-                \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
-                \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
-                \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
-                \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
-                \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
-                \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
+                \preDelay, presetData[\preDelay],
+                \lowRT, presetData[\lowRT].clip(0.1, 2),
+                \highRT, presetData[\highRT].clip(0.2, 4),
+                \dispersion, presetData[\dispersion].clip(0.1, 2),
                 \size, roomName.asSymbol
             );
         };
@@ -2277,9 +2280,9 @@ win.front;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
-            // AMBIENCE PRESETS label (matches EQ title placement)
+            // REVERB PRESETS label (matches EQ title placement)
             StaticText(~ambienceOverlay, Rect(10, 7, 160, 20))
-                .string_("AMBIENCE PRESETS")
+                .string_("REVERB PRESETS")
                 .align_(\left)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
@@ -2431,7 +2434,7 @@ win.front;
             if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
             
             // REVERB button (gates mix; label fixed "REVERB")
-            ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+            ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
                 .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
@@ -2462,9 +2465,9 @@ win.front;
                     };
                 });
 
-            // HEIGHT button (center) - toggles Z source (Original vs Synthesized)
+            // HEIGHT button (left) - toggles Z source (Original vs Synthesized)
             // Always shows label "HEIGHT"; color indicates state
-            ~ambienceEnhanceBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
+            ~ambienceEnhanceBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
                 .states_([["HEIGHT", Color.cyan, Color.black], ["HEIGHT", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
