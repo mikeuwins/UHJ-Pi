@@ -1,0 +1,144 @@
+/*
+Copyright the ATK Community and Joseph Anderson, Josh Parmenter, Trond Lossius, 2014
+
+               J Anderson     j.anderson[at]ambisonictoolkit.net
+               J Parmenter    j.parmenter[at]ambisonictoolkit.net
+               T Lossius      trond.lossius[at]bek.no
+
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+and GNU General Public License along with this program.  If not, see
+<http://www.gnu.org/licenses/>.
+
+
+---------------------------------------------------------------------
+  Class: MuteSoloChannels8 (expanded from MuteSoloChannels)
+  
+  Mute or solo individual channels within an eight-channel track,
+  with optional group soloing for 5.1.2 layouts:
+  - Lower Ring (channels 1-6: FL, FR, C, Ls, Rs, LFE)
+  - Fronts Only (channels 1-2: FL, FR)
+  - Heights (channels 7-8: TFL, TFR)
+  Useful for monitoring effect processing in multi-channel chains,
+  especially for exploring height speaker content in 5.1.2 decoders.
+
+---------------------------------------------------------------------
+*/
+
+desc: ATK FOA Utility MuteSoloChannels8
+
+// Individual channel controls
+slider1:0<0,3,0{None, Mute, Solo}>Channel 1
+slider2:0<0,3,0{None, Mute, Solo}>Channel 2
+slider3:0<0,3,0{None, Mute, Solo}>Channel 3
+slider4:0<0,3,0{None, Mute, Solo}>Channel 4
+slider5:0<0,3,0{None, Mute, Solo}>Channel 5
+slider6:0<0,3,0{None, Mute, Solo}>Channel 6
+slider7:0<0,3,0{None, Mute, Solo}>Channel 7
+slider8:0<0,3,0{None, Mute, Solo}>Channel 8
+
+// Group solo control (overrides individual solos if active)
+slider9:0<0,3,0{None, Lower Ring 1-6, Fronts Only 1-2, Heights 7-8}>Group Solo
+
+in_pin:Channel 1
+in_pin:Channel 2
+in_pin:Channel 3
+in_pin:Channel 4
+in_pin:Channel 5
+in_pin:Channel 6
+in_pin:Channel 7
+in_pin:Channel 8
+
+out_pin:Channel 1
+out_pin:Channel 2
+out_pin:Channel 3
+out_pin:Channel 4
+out_pin:Channel 5
+out_pin:Channel 6
+out_pin:Channel 7
+out_pin:Channel 8
+
+
+/**********************************************************
+Updated slider value:
+**********************************************************/
+@slider
+
+// Check for group solo first (takes precedence)
+group_solo = slider9|0;
+
+(group_solo > 0) ? (
+  // Group solo active: override individual channel settings
+  (group_solo == 1) ? (
+    // Lower Ring: channels 1-6 (FL, FR, C, Ls, Rs, LFE)
+    gain0 = 1; gain1 = 1; gain2 = 1; gain3 = 1; gain4 = 1; gain5 = 1;
+    gain6 = 0; gain7 = 0;
+  ) : (group_solo == 2) ? (
+    // Fronts Only: channels 1-2 (FL, FR)
+    gain0 = 1; gain1 = 1;
+    gain2 = 0; gain3 = 0; gain4 = 0; gain5 = 0; gain6 = 0; gain7 = 0;
+  ) : (
+    // Heights: channels 7-8 (TFL, TFR)
+    gain0 = 0; gain1 = 0; gain2 = 0; gain3 = 0; gain4 = 0; gain5 = 0;
+    gain6 = 1; gain7 = 1;
+  );
+) : (
+  // No group solo: check individual channel solos
+  any_solo = (slider1 == 2) || (slider2 == 2) || (slider3 == 2) || (slider4 == 2) || 
+             (slider5 == 2) || (slider6 == 2) || (slider7 == 2) || (slider8 == 2);
+  
+  (any_solo) ? (
+    // At least one channel is soloed - only those channels play
+    (slider1 == 2) ? (gain0 = 1) : (gain0 = 0);
+    (slider2 == 2) ? (gain1 = 1) : (gain1 = 0);
+    (slider3 == 2) ? (gain2 = 1) : (gain2 = 0);
+    (slider4 == 2) ? (gain3 = 1) : (gain3 = 0);
+    (slider5 == 2) ? (gain4 = 1) : (gain4 = 0);
+    (slider6 == 2) ? (gain5 = 1) : (gain5 = 0);
+    (slider7 == 2) ? (gain6 = 1) : (gain6 = 0);
+    (slider8 == 2) ? (gain7 = 1) : (gain7 = 0);
+  ) : (
+    // No solo: apply mute settings
+    gain0 = 1 - slider1;
+    gain1 = 1 - slider2;
+    gain2 = 1 - slider3;
+    gain3 = 1 - slider4;
+    gain4 = 1 - slider5;
+    gain5 = 1 - slider6;
+    gain6 = 1 - slider7;
+    gain7 = 1 - slider8;
+  );
+);
+
+@sample
+
+// If fewer than 8 channels, zero out uninitialised channels
+(num_ch < 8) ? (
+  i = num_ch;
+  loop (8 - num_ch,
+    spl(i) = 0.;
+    i += 1;
+  );
+);
+
+spl0 = spl0 * gain0;
+spl1 = spl1 * gain1;
+spl2 = spl2 * gain2;
+spl3 = spl3 * gain3;
+spl4 = spl4 * gain4;
+spl5 = spl5 * gain5;
+spl6 = spl6 * gain6;
+spl7 = spl7 * gain7;
+
+
+
