@@ -317,6 +317,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
         \QUAD ++ " NARROW" -> { |a| inputs = 2; outputs = 4; configKeyD = \quadnarrow; },
         \QUAD ++" WIDE" -> { |a| inputs = 2; outputs = 4; configKeyD = \quadwide; },
         \DOLBY ++" 5.1" -> { |a| inputs = 2; outputs = 6; configKeyD = \fivezero; },
+        \DOLBY ++" 5.1.2" -> { |a| inputs = 2; outputs = 6; configKeyD = \fivezero2; },
         \OCTAGON -> { |a| inputs = 2; outputs = 8; configKeyD = \octagon; }
     ],
     globalAction: { |menu|
@@ -331,7 +332,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
             ~xyPannerPos = Point(0.5, 0.5);
         };
         idx = menu.value;
-        decoderNames = ["BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"];
+        decoderNames = ["BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "DOLBY 5.1.2", "OCTAGON"];
         decoderName = decoderNames[idx];
         htIsOff = (~headtrackBtn.notNil and: { ~headtrackBtn.value == 0 });
         isBinaural = (idx == 0) or: { idx == 1 };
@@ -459,7 +460,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \quadsquare, FoaDecoderMatrix.newQuad(pi/4, k: 'dual'),
                         \quadnarrow, FoaDecoderMatrix.newQuad(pi/6, k: 'dual'),
                         \quadwide, FoaDecoderMatrix.newQuad(pi/3, k: 'dual'),
-                        \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
+                        \fivezero, FoaDecoderMatrix.new5_2(irregKind: 'focused'),
                         \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single')
                     ]);
 
@@ -573,6 +574,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \quadnarrow, FoaDecoderMatrix.newQuad(pi/6, k: 'dual'),
                             \quadwide, FoaDecoderMatrix.newQuad(pi/3, k: 'dual'),
                             \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
+                            \fivezero2, FoaDecoderMatrix.new5_2(irregKind: 'focused'),                                                      
                             \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single')
                         ]);
 

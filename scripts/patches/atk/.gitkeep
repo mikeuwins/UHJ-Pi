@@ -1,0 +1,3 @@
+# This file ensures the patches directory is tracked by git
+# Place ATK.sc.patch and FoaMatrix.sc.patch files here
+

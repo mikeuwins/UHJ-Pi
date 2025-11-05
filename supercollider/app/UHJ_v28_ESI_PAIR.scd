@@ -641,7 +641,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                         \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single'),
                         \stereo, FoaDecoderMatrix.newStereo,
-                        \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
+                        \fiveonetwo, FoaDecoderMatrix.new5_2(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
                     ]);
 
                     // Get selected encoder and decoder
@@ -924,7 +924,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                             \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single'),
                             \stereo, FoaDecoderMatrix.newStereo,
-                            \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
+                            \fiveonetwo, FoaDecoderMatrix.new5_2(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
                         ]);
 
                         // Get selected encoder and decoder
