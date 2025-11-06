@@ -1,1 +1,8 @@
 sc3-plugins/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Cursor IDE
+.cursor/

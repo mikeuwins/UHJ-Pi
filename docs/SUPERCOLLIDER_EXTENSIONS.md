@@ -33,14 +33,14 @@ This document describes all modifications and extensions made to the Ambisonic T
 
 ---
 
-### 2. `FoaDecoderMatrix.new5_2` - 5.1.2 Decoder Method
+### 2. `FoaDecoderMatrix.new5_0_2` - 5.1.2 Decoder Method
 
 **File:** `~/.local/share/SuperCollider/downloaded-quarks/atk-sc3/Classes/FoaMatrix.sc`
 
-**Modification:** Added `*new5_2` class method to `FoaDecoderMatrix` class.
+**Modification:** Added `*new5_0_2` class method to `FoaDecoderMatrix` class.
 
 **What Changed:**
-- Added `FoaDecoderMatrix.new5_2` method (similar to existing `new5_0`)
+- Added `FoaDecoderMatrix.new5_0_2` method (similar to existing `new5_0`)
 - Supports 8-channel 5.1.2 speaker layout (FL, FR, C, RL, RR, LFE, TFL, TFR)
 - Loads decoder matrices from files or uses hardcoded fallback
 - Handles height channels with full periphonic decoding (W, X, Y, Z)
@@ -48,7 +48,7 @@ This document describes all modifications and extensions made to the Ambisonic T
 
 **Usage:**
 ```supercollider
-decoder = FoaDecoderMatrix.new5_2(
+decoder = FoaDecoderMatrix.new5_0_2(
     mode: \equal,              // \equal, \focus, or \four
     heightElevation: 45,       // Height speaker elevation in degrees
     outputLayout: \uhjpi       // Layout identifier
@@ -58,6 +58,29 @@ decoder = FoaDecoderMatrix.new5_2(
 **Why:** Provides proper 5.1.2 decoder support following ATK patterns, matching the JSFX implementation.
 
 **Compatibility:** ✅ Safe - New method, doesn't affect existing functionality.
+
+---
+
+### 3. PHJ Kernel Loading Order Fix
+
+**File:** `~/.local/share/SuperCollider/downloaded-quarks/atk-sc3/Classes/FoaMatrix.sc`
+
+**Modification:** Fixed kernel file loading order for PHJ encoder and decoder to ensure correct channel mapping.
+
+**What Changed:**
+- **PHJ Encoder:** Explicitly sorts kernel files to L, R, T, Q order (not alphabetical L, Q, R, T)
+- **PHJ Decoder:** Explicitly sorts kernel files to W, X, Y, Z order (for safety, though already alphabetical)
+- Automatically detects which files exist to choose encoder vs decoder order
+
+**Why:** The filesystem returns files in alphabetical order, but PHJ encoder requires L, R, T, Q order. Without this fix:
+- R input was using Q's kernels → only producing Z (vertical component)
+- T input was using R's kernels
+- Q input was using T's kernels
+- This caused Z-leak from UHJ inputs and incorrect decoder routing
+
+**Code Location:** `FoaEncoderKernel.initKernel` and `FoaDecoderKernel.initKernel` methods
+
+**Compatibility:** ✅ Safe - Only affects PHJ encoder/decoder, explicitly detects file types.
 
 ---
 
@@ -368,9 +391,15 @@ MaplinMatrix; // Should not error
 
 ## Version History
 
+- **2025-11-05**: Kernel loading order fix
+  - Fixed PHJ encoder kernel loading order (L, R, T, Q instead of alphabetical)
+  - Fixed PHJ decoder kernel loading order (W, X, Y, Z explicit)
+  - Resolved Z-leak issue from UHJ inputs
+  - Resolved decoder routing issues
+
 - **2024-11-04**: Initial documentation
   - Added PHJ encoder support to `AtkKernelConv`
-  - Added `FoaDecoderMatrix.new5_2` method
+  - Added `FoaDecoderMatrix.new5_0_2` method
   - Documented all custom extensions
 
 ---

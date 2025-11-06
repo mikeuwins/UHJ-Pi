@@ -148,4 +148,36 @@ This confirms:
 - The logic appears correct but produces wrong results
 - Need to investigate the mathematical relationship in the kernel design
 
+## Resolution (2025-11-05)
+
+### Root Cause Identified
+The issue was **kernel file loading order**, not the convolution logic itself. The PHJ encoder kernels were being loaded in alphabetical order (L, Q, R, T) instead of the required order (L, R, T, Q), causing:
+- R input to use Q's kernels → only producing Z (vertical component)
+- T input to use R's kernels
+- Q input to use T's kernels
+
+### Fixes Applied
+
+1. **Kernel Loading Order Fix** (`FoaMatrix.sc`)
+   - Added explicit file sorting for PHJ encoder: L, R, T, Q order
+   - Added explicit file sorting for PHJ decoder: W, X, Y, Z order (for safety)
+   - Detects which files exist to automatically choose encoder vs decoder order
+
+2. **Height Gate** (Test script)
+   - Added Z-based gating to mute height channels when Z≈0
+   - Prevents W/X/Y leakage into height speakers for horizontal sources
+
+### Verification
+- ✅ UHJ input (L, R, T=0, Q=0) → Z=0 (correct)
+- ✅ PHJ input (L, R, T, Q all active) → All 8 channels active
+- ✅ Mute Q → Height channels (7 & 8) silent (correct: Q produces Z)
+- ✅ Mute T → Width pulled in (correct: T produces Y)
+
+### Files Modified
+- `~/Library/Application Support/SuperCollider/downloaded-quarks/atk-sc3/Classes/FoaMatrix.sc`
+- `supercollider/app/Test_FOA_512_Check.scd` (height gate added)
+
+### Status: ✅ RESOLVED
+All PHJ encoder and 5.1.2 decoder issues are now fixed and working correctly.
+
 
