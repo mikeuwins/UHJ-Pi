@@ -114,6 +114,31 @@ var win, mainView,
     \s8On, 1               // Speaker 8 on/off (1 = on, 0 = off)
 ]);
 
+// --- Stereo/Binaural layout state preservation variables ---
+~stereoState = Dictionary.newFrom([
+    \lOn, 1,               // Left channel on/off (1 = on, 0 = off)
+    \rOn, 1                // Right channel on/off (1 = on, 0 = off)
+]);
+
+~binauralState = Dictionary.newFrom([
+    \lOn, 1,                // Left ear on/off (1 = on, 0 = off)
+    \rOn, 1                 // Right ear on/off (1 = on, 0 = off)
+]);
+
+// --- Binaural HRTF selection (defaults) ---
+~binauralIRCAMId = 1053; // IRCAM LISTEN subject id (no leading zeros)
+~binauralCIPICId = 12;   // CIPIC subject id (no leading zeros)
+~binauralIRCAMPendingId = ~binauralIRCAMId;
+~binauralCIPICPendingId = ~binauralCIPICId;
+~binauralIrcamSelectBtn = nil;
+~binauralCipicSelectBtn = nil;
+~binauralIrcamChooserWin = nil;
+~binauralCipicChooserWin = nil;
+~binauralIRCAMIds = nil;
+~binauralCIPICIds = [3, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 27, 28, 33, 40, 44, 48, 50, 51, 58, 59, 60, 61, 65, 119, 124, 126, 127, 131, 133, 134, 135, 137, 147, 148, 152, 153, 154, 155, 156, 158, 162, 163, 165];
+~binauralIrcamProfileLabel = nil;
+~binauralCipicProfileLabel = nil;
+
 // --- Dimension overlay variables ---
 ~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
 ~dimensionWidthValue = nil; ~dimensionWidthHPFValue = nil; ~dimensionTrimValue = nil;
@@ -174,7 +199,6 @@ win.onClose_({
     if(s.serverRunning) { s.quit; };
     0.exit;
 });
-
 // Position at visible top-left corner
 if(Platform.name == \osx, {
     win.bounds_(Rect(0, 25, 800, 480)); // Account for macOS menu bar
@@ -367,7 +391,6 @@ mainView.mouseUpAction_({
             // Note: LINK button retains its current state
         });
     });
-
 ~monBtn = Button(mainView, Rect(18, 310, 40, 20))
     .states_([["MON", Color.cyan, Color.black], ["MON", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
@@ -418,7 +441,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
-
 // Encoder menu (Input format selection)
 ~emenu = EZPopUpMenu.new(
     mainView,
@@ -673,10 +695,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 // Style the menus to match the GUI prototype
 ~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
-
 ~dmenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~dmenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
-
 // --- Track previous channel counts for safe decoder switching ---
 ~prevInputs = inputs;
 ~prevOutputs = outputs;
@@ -717,6 +737,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 cond = Condition.new;
                 s.waitForBoot({
                     var dimVals, zsynthVals, dimWidth, dimWidthHPF, dimTrim, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix;
+                    
                     // Set audio card volume after server boot
                     ("amixer -c HD set PCM 80%").unixCmd;
                     
@@ -730,8 +751,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
                     decoderDict = Dictionary.newFrom([
-                        \binaural, FoaDecoderKernel.newListen(1053),
-                        \binaurac, FoaDecoderKernel.newCIPIC(12),
+                        \binaural, FoaDecoderKernel.newListen(~binauralIRCAMId),
+                        \binaurac, FoaDecoderKernel.newCIPIC(~binauralCIPICId),
                         \quadsquare, FoaDecoderMatrix.newQuad(pi/4, k: 'dual'),
                         \quadnarrow, FoaDecoderMatrix.newQuad(pi/6, k: 'dual'),
                         \quadwide, FoaDecoderMatrix.newQuad(pi/3, k: 'dual'),
@@ -757,9 +778,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // In a full implementation, these would be loaded from files
                         Buffer.alloc(s, 2048, 1); // Temporary buffer
                     });
-
                     s.sync(cond);
-
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
@@ -1062,8 +1081,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
                         decoderDict = Dictionary.newFrom([
-                            \binaural, FoaDecoderKernel.newListen(1053),
-                            \binaurac, FoaDecoderKernel.newCIPIC(12),
+                            \binaural, FoaDecoderKernel.newListen(~binauralIRCAMId),
+                            \binaurac, FoaDecoderKernel.newCIPIC(~binauralCIPICId),
                             \quadsquare, FoaDecoderMatrix.newQuad(pi/4, k: 'dual'),
                             \quadnarrow, FoaDecoderMatrix.newQuad(pi/6, k: 'dual'),
                             \quadwide, FoaDecoderMatrix.newQuad(pi/3, k: 'dual'),
@@ -1209,7 +1228,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                     subChan * subOn // SUB (Speaker 6) - Subwoofer
                                 ];
                             });
-                            
                             if(outputs == 8, {
                                 if(configKeyD == \fiveonetwo, {
                                 // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
@@ -1251,9 +1269,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             // Output routing for all modes
                             Out.ar(0, out);
                         }).add;
-
                         s.sync(cond);
-
                         // Start the synth
                         // Convert normalized state values to actual parameter ranges
                         dimVals2 = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5];
@@ -1605,7 +1621,6 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
-
 // --- BLUETOOTH PAIR BUTTON ---
 ~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
     .states_([["PAIR", Color.cyan, Color.black]])
@@ -1995,7 +2010,6 @@ win.front;
 
         params;
     };
-
     // Find the first valid path
     possiblePaths.do({ |path|
         if(presetDir.isNil and: { File.exists(path) }) {
@@ -2187,7 +2201,6 @@ win.front;
         };
     };
 };
-
 ~setMaplinEffect = { |level=0.8|
     ~maplinState[\effect] = level;
     if(~synth.notNil and: { configKeyE == \maplin }) { 
@@ -2388,7 +2401,6 @@ win.front;
         };
     };
 };
-
 // --- AmbiVerbSC Preset Recall Function ---
 ~recallAmbiVerbSCPreset = { |presetName|
     var presetData, roomName, baseRT;
@@ -2409,7 +2421,7 @@ win.front;
             ~ambienceSliders[2].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Reverb mix
             ~ambienceSliders[3].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // RDelay
             baseRT = (((presetData[\lowRT] / 0.7) + (presetData[\highRT] / 1.3)) * 0.5).clip(0.5, 2.5);
-            ~ambienceSliders[4].value_(baseRT.linlin(0.5, 2.5, 0, 1)); // RSize macro
+            ~ambienceSliders[4].value_(baseRT.linlin(0, 1, 0, 1)); // RSize macro
             ~ambienceSliders[5].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Spread
 
             // Trigger slider actions to update synth
@@ -2738,9 +2750,7 @@ win.front;
             
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black);
-            
             ("Creating layout overlay, decoder value: " ++ ~dmenu.value).postln;
-            
             // ONE UserView that draws both border AND diagrams (exactly like v27)
             // Create UserView FIRST (before controls) so it's beneath them
             ~layoutDiagramView = UserView(~layoutOverlay, Rect(0, 0, 320, 275))
@@ -2804,41 +2814,47 @@ win.front;
                             Pen.stringAtPoint("Optimum listening angles", Point(centerX - 70, 50), Font("Helvetica", 12, italic: true), Color.cyan);
                         },
                         1, { // IRCAM Binaural
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                            // Center graphic between top title (ends at y=32) and HRTF ID controls (at y=233): midpoint = 132.5
+                            // Current graphic center is ~163.5, so move up by 16px
+                            var moveUp = 16;
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
-                            leftEarY = centerY + 25 + 25;
+                            leftEarY = centerY + 25 + 25 - moveUp;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
-                            rightEarY = centerY + 25 + 25;
+                            rightEarY = centerY + 25 + 25 - moveUp;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
-                            Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
-                            Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan); // Moved down 2px (5 -> 7)
                             Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan); // Moved down 2px (5 -> 7)
                             // Do NOT move the description text
-                            Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("Headphone Listening using IRCAM HRTF Library", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         2, { // CIPIC Binaural
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                            // Center graphic between top title (ends at y=32) and HRTF ID controls (at y=233): midpoint = 132.5
+                            // Current graphic center is ~163.5, so move up by 16px
+                            var moveUp = 16;
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
-                            leftEarY = centerY + 25 + 25;
+                            leftEarY = centerY + 25 + 25 - moveUp;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
-                            rightEarY = centerY + 25 + 25;
+                            rightEarY = centerY + 25 + 25 - moveUp;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
-                            Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
-                            Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("Headphone Listening using CIPIC HRTF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         3, { // Quad Square - larger square (similar to v27)
                             var layoutSize = 140, diagramCenterX = 160, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
@@ -3035,7 +3051,6 @@ win.front;
                     );
                 })
                 .refresh;  // Force initial draw
-            
             // Add the title as StaticText at the top, centered
             // Layout title showing encoder class only
             // For Dolby layouts, center over diagram (left side); for others, use full width
@@ -3122,7 +3137,6 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\rlOn, newState) };
                         btn.focus(nil);
                     });
-                
                 // Speaker 4: Rear Right (RR)
                 ~dolbyRRSquareBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
                     .states_([
@@ -3233,7 +3247,6 @@ win.front;
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
-
                 ~dolbyHeightGainSlider = Slider(~layoutOverlay, Rect(controlStartX, controlY + 18, sliderWidth, sliderHeight))
                     .orientation_(\vertical)
                     .knobColor_(Color.cyan)
@@ -3321,7 +3334,6 @@ win.front;
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
-                
                 // Extra slender faders BELOW the diagram and vertical faders
                 // Geometry: left aligns to right edge of speaker 3 box; right leaves space for value labels
                 // TOP LPF - now top horizontal slender fader (swapped with SUB)
@@ -3399,6 +3411,190 @@ win.front;
                 ~dolbyCenterSquareBtn.front;
                 ~dolbySubSquareBtn.front;
             });
+            // Binaural IRCAM (case 1) – HRTF selection menu and grid chooser
+            if(~dmenu.value == 1, {
+                var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds, gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos;
+                // Hardcoded list of available IRCAM LISTEN subject IDs
+                ~binauralIRCAMIds = [1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1020, 1021, 1022, 1023, 1025, 1026, 1028, 1029, 1030, 1031, 1032, 1033, 1034, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059];
+                ("Found " ++ ~binauralIRCAMIds.size ++ " IRCAM IDs").postln;
+                ~binauralIRCAMPendingId = ~binauralIRCAMId; // pending selection (apply with LOAD)
+                // Calculate button height to match grid buttons
+                layoutBounds = ~layoutOverlay.bounds;
+                gridRows = 8;
+                gridSpacing = 3;
+                gridHeight = layoutBounds.height - 3; // Same as winHeight calculation
+                buttonH = ((gridHeight - (9 * gridSpacing)) / gridRows).floor;
+                // Calculate positions: center label + dropdown together, then move up 7px
+                labelWidth = 90; // Bigger box so "PROFILE" fits on one line
+                dropdownWidth = 80;
+                totalWidth = labelWidth + dropdownWidth;
+                groupStartX = (320 - totalWidth) / 2; // Center the group
+                labelX = groupStartX;
+                dropdownX = groupStartX + labelWidth;
+                yPos = 240 - 7; // Move up 7px
+                // Profile label - bigger box, LCD font size 13 (one step down from ENCODER/DECODER titles)
+                ~binauralIrcamProfileLabel = StaticText(~layoutOverlay, Rect(labelX, yPos, labelWidth, buttonH))
+                    .string_("PROFILE")
+                    .stringColor_(Color.cyan)
+                    .font_(Font("LCD 5x7 Segment Monospace", 13))
+                    .align_(\left)
+                    .background_(Color.clear);
+                ~binauralIrcamProfileLabel.front;
+                 // Fake dropdown button (cyan text on black) that opens chooser - LCD font size 11 (same as encoder labels)
+                 ~binauralIrcamSelectBtn = Button(~layoutOverlay, Rect(dropdownX, yPos, dropdownWidth, buttonH))
+                     .states_([[ (~binauralIRCAMPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                               [ (~binauralIRCAMPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ]])
+                     .font_(Font("LCD 5x7 Segment Monospace", 11))
+                     .focusColor_(Color.clear)
+                     .action_({
+                         var spacing, buttonW, totalUsedW, totalUsedH, extraW, extraH, startX, startY;
+                         // Match red box exactly - get exact size and position of layoutOverlay
+                         layoutBounds = ~layoutOverlay.bounds;
+                         winWidth = layoutBounds.width - 3; // 2px less wide (was -1, now -3)
+                         winHeight = layoutBounds.height - 3; // 2px less tall (was -1, now -3)
+                         mainViewBounds = mainView.bounds;
+                         winBounds = win.bounds;
+                         winX = winBounds.left + mainViewBounds.left + layoutBounds.left + 2; // Move right 2px total
+                         winY = winBounds.top + mainViewBounds.top + layoutBounds.top - 8; // Move down 8px total (in SuperCollider: -Y = down, +Y = up)
+                         // 6x8 grid with even spacing
+                         cols = 6; rows = 8;
+                         spacing = 3; // Even spacing between buttons and to edges
+                         // Calculate button size: 6 buttons with 7 spaces horizontally, 8 buttons with 9 spaces vertically
+                         buttonW = ((winWidth - (7 * spacing)) / cols).floor;
+                         buttonH = ((winHeight - (9 * spacing)) / rows).floor;
+                         // Calculate total space used and distribute remainder evenly
+                         totalUsedW = (cols * buttonW) + ((cols - 1) * spacing);
+                         totalUsedH = (rows * buttonH) + ((rows - 1) * spacing);
+                         extraW = (winWidth - totalUsedW) / 2; // Distribute remainder evenly left/right
+                         extraH = (winHeight - totalUsedH) / 2; // Distribute remainder evenly top/bottom
+                         startX = extraW.floor;
+                         startY = extraH.floor;
+                         chooserWin = Window.new("IRCAM IDs", Rect(winX, winY, winWidth, winHeight), border: false)
+                             .alwaysOnTop_(true);
+                         chooserView = CompositeView(chooserWin, chooserWin.view.bounds)
+                             .background_(Color.black);
+                         ~binauralIRCAMIds.do({ |id, i|
+                             var r = (i / cols).floor; var c = i % cols;
+                             if(r < rows) {
+                                 var x = startX + (c * (buttonW + spacing));
+                                 var y = startY + (r * (buttonH + spacing));
+                                 var isLoaded = (id == ~binauralIRCAMId);
+                                 Button(chooserView, Rect(x, y, buttonW, buttonH))
+                                     .states_([
+                                         [id.asString.padLeft(4, "0"), Color.cyan, Color.black], // Not loaded: cyan text on black
+                                         [id.asString.padLeft(4, "0"), Color.black, Color.cyan]  // Loaded: black text on cyan
+                                     ])
+                                     .value_(if(isLoaded, 1, 0))
+                                     .font_(Font("LCD 5x7 Segment Monospace", 11)) // Same size as encoder labels
+                                     .focusColor_(Color.clear)
+                                     .canFocus_(false) // Prevent focus to avoid border changes
+                                     .action_({ |b|
+                                         // Load HRTF directly when clicking grid button
+                                         ~binauralIRCAMId = id;
+                                         ~binauralIRCAMPendingId = id; // Keep in sync
+                                         if(~binauralIrcamSelectBtn.notNil) {
+                                             ~binauralIrcamSelectBtn.states_([[ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                                                                              [ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ]]);
+                                         };
+                                         chooserWin.close;
+                                         ~saveSynthParams.value();
+                                         ~initAudioEngine.value();
+                                     });
+                             };
+                         });
+                         ~binauralIrcamChooserWin = chooserWin; // keep ref for cleanup
+                         chooserWin.front;
+                     });
+                 ~binauralIrcamSelectBtn.front;
+            });
+            // Binaural CIPIC (case 2) – HRTF selection menu and grid chooser
+            if(~dmenu.value == 2, {
+                var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds;
+                var gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos;
+                ~binauralCIPICIds = [3, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 27, 28, 33, 40, 44, 48, 50, 51, 58, 59, 60, 61, 65, 119, 124, 126, 127, 131, 133, 134, 135, 137, 147, 148, 152, 153, 154, 155, 156, 158, 162, 163, 165];
+                ~binauralCIPICPendingId = ~binauralCIPICId;
+
+                layoutBounds = ~layoutOverlay.bounds;
+                gridRows = 8; gridSpacing = 3;
+                gridHeight = layoutBounds.height - 3;
+                buttonH = ((gridHeight - (9 * gridSpacing)) / gridRows).floor;
+                labelWidth = 90; dropdownWidth = 80; totalWidth = labelWidth + dropdownWidth;
+                groupStartX = (320 - totalWidth) / 2;
+                labelX = groupStartX;
+                dropdownX = groupStartX + labelWidth;
+                yPos = 240 - 7;
+
+                ~binauralCipicProfileLabel = StaticText(~layoutOverlay, Rect(labelX, yPos, labelWidth, buttonH))
+                    .string_("PROFILE")
+                    .stringColor_(Color.cyan)
+                    .font_(Font("LCD 5x7 Segment Monospace", 13))
+                    .align_(\left)
+                    .background_(Color.clear);
+                ~binauralCipicProfileLabel.front;
+
+                ~binauralCipicSelectBtn = Button(~layoutOverlay, Rect(dropdownX, yPos, dropdownWidth, buttonH))
+                    .states_([[ (~binauralCIPICPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                              [ (~binauralCIPICPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ]])
+                    .font_(Font("LCD 5x7 Segment Monospace", 11))
+                    .focusColor_(Color.clear)
+                    .canFocus_(false)
+                    .action_({
+                        var spacing, buttonW, totalUsedW, totalUsedH, extraW, extraH, startX, startY;
+                        spacing = 3; cols = 6; rows = 8;
+                        layoutBounds = ~layoutOverlay.bounds;
+                        winWidth = layoutBounds.width - 3;
+                        winHeight = layoutBounds.height - 3;
+                        mainViewBounds = mainView.bounds;
+                        winBounds = win.bounds;
+                        winX = winBounds.left + mainViewBounds.left + layoutBounds.left + 2; // Align with cyan box adjustments
+                        winY = winBounds.top + mainViewBounds.top + layoutBounds.top - 8;
+                        buttonW = ((winWidth - (7 * spacing)) / cols).floor;
+                        buttonH = ((winHeight - (9 * spacing)) / rows).floor;
+                        totalUsedW = (cols * buttonW) + ((cols - 1) * spacing);
+                        totalUsedH = (rows * buttonH) + ((rows - 1) * spacing);
+                        extraW = (winWidth - totalUsedW) / 2;
+                        extraH = (winHeight - totalUsedH) / 2;
+                        startX = extraW.floor;
+                        startY = extraH.floor;
+                        chooserWin = Window.new("CIPIC Profiles", Rect(winX, winY, winWidth, winHeight), border: false)
+                            .alwaysOnTop_(true);
+                        chooserView = CompositeView(chooserWin, chooserWin.view.bounds)
+                            .background_(Color.black);
+                        ~binauralCIPICIds.do({ |id, i|
+                            var r = (i / cols).floor;
+                            var c = i % cols;
+                            if(r < rows) {
+                                var cellX = startX + (c * (buttonW + spacing));
+                                var cellY = startY + (r * (buttonH + spacing));
+                                var isLoaded = (id == ~binauralCIPICId);
+                                Button(chooserView, Rect(cellX, cellY, buttonW, buttonH))
+                                    .states_([
+                                        [id.asString.padLeft(4, "0"), Color.cyan, Color.black],
+                                        [id.asString.padLeft(4, "0"), Color.black, Color.cyan]
+                                    ])
+                                    .value_(if(isLoaded, 1, 0))
+                                    .font_(Font("LCD 5x7 Segment Monospace", 11))
+                                    .focusColor_(Color.clear)
+                                    .canFocus_(false)
+                                    .action_({ |b|
+                                        ~binauralCIPICId = id;
+                                        ~binauralCIPICPendingId = id;
+                                        if(~binauralCipicSelectBtn.notNil) {
+                                            ~binauralCipicSelectBtn.states_([[ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                                                                             [ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ]]);
+                                        };
+                                        chooserWin.close;
+                                        ~saveSynthParams.value();
+                                        ~initAudioEngine.value();
+                                    });
+                            };
+                        });
+                        ~binauralCipicChooserWin = chooserWin; // keep ref for cleanup
+                        chooserWin.front;
+                    });
+
+                ~binauralCipicSelectBtn.front;
+             });
             
             // Create on/off buttons for QUAD SQUARE (case 3) - positions match larger square
             if(~dmenu.value == 3, {
@@ -3532,7 +3728,6 @@ win.front;
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~octagonS3Hit.front;
-
                 // Invisible hit target for square 4
                 speaker4Index = 1; angle4 = startAngle + (speaker4Index * angleStep);
                 x4 = centerX + (radius * cos(angle4));
@@ -3588,7 +3783,6 @@ win.front;
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~octagonS7Hit.front;
-
                 // Invisible hit target for square 8
                 speaker8Index = 5; angle8 = startAngle + (speaker8Index * angleStep);
                 x8 = centerX + (radius * cos(angle8));
@@ -3618,7 +3812,6 @@ win.front;
                 var topFrontRightX = 121, topFrontRightY = 35;
                 var controlStartX = 170, controlY = 14, sliderWidth = 35, sliderHeight = 164, controlSpacing = 43;
                 var rightmostFaderX;
-                // (no extra layout vars for slim faders; compute inline below)
                 
                 ("Creating controls for Dolby 5.1.2 (case 7), decoder value: " ++ ~dmenu.value).postln;
                 // Speaker positions (matching drawFunc exactly for case 7)
@@ -3718,7 +3911,6 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\subOn, newState) };
                         btn.focus(nil);
                     });
-                
                 // Speaker 7: Top Front Left (TL)
                 ~dolbyTopLeftSquareBtn = Button(~layoutOverlay, Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize))
                     .states_([
@@ -3806,7 +3998,6 @@ win.front;
                         };
                         if(~synth.notNil) { ~synth.set(\subGain, gain) };
                     });
-                
                 ~dolbySubGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), 199, sliderWidth, 15))
                     .string_((~dolbyState[\subGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
@@ -3915,7 +4106,6 @@ win.front;
                         if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.asInteger.asString ++ " Hz"; };
                         if(~synth.notNil) { ~synth.set(\topHPF, hz) };
                     });
-
                 ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 2, 44, 15))
                     .string_((((~dolbyState[\topHPF] ? 180) / 10).round * 10).asInteger.asString ++ " Hz")
                     .align_(\right)
@@ -3964,52 +4154,13 @@ win.front;
             // Clean up all layout-specific controls when closing layout overlay
             // Remove Dolby controls overlay first (this removes all controls inside it)
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
-            // Layout 6 (Dolby 5.1) and Layout 7 (Dolby 5.1.2) controls cleanup
-            if(~dolbyFLSquareBtn.notNil) { try { ~dolbyFLSquareBtn.remove; }; ~dolbyFLSquareBtn = nil; };
-            if(~dolbyFRSquareBtn.notNil) { try { ~dolbyFRSquareBtn.remove; }; ~dolbyFRSquareBtn = nil; };
-            if(~dolbyRLSquareBtn.notNil) { try { ~dolbyRLSquareBtn.remove; }; ~dolbyRLSquareBtn = nil; };
-            if(~dolbyRRSquareBtn.notNil) { try { ~dolbyRRSquareBtn.remove; }; ~dolbyRRSquareBtn = nil; };
-            if(~dolbyCenterSquareBtn.notNil) { try { ~dolbyCenterSquareBtn.remove; }; ~dolbyCenterSquareBtn = nil; };
-            if(~dolbySubSquareBtn.notNil) { try { ~dolbySubSquareBtn.remove; }; ~dolbySubSquareBtn = nil; };
-            if(~dolbyTopLeftSquareBtn.notNil) { try { ~dolbyTopLeftSquareBtn.remove; }; ~dolbyTopLeftSquareBtn = nil; };
-            if(~dolbyTopRightSquareBtn.notNil) { try { ~dolbyTopRightSquareBtn.remove; }; ~dolbyTopRightSquareBtn = nil; };
-            if(~dolbyCenterGainSlider.notNil) { try { ~dolbyCenterGainSlider.remove; }; ~dolbyCenterGainSlider = nil; };
-            if(~dolbyCenterGainLabel.notNil) { try { ~dolbyCenterGainLabel.remove; }; ~dolbyCenterGainLabel = nil; };
-            if(~dolbySubGainSlider.notNil) { try { ~dolbySubGainSlider.remove; }; ~dolbySubGainSlider = nil; };
-            if(~dolbySubGainLabel.notNil) { try { ~dolbySubGainLabel.remove; }; ~dolbySubGainLabel = nil; };
-            if(~dolbyHeightGainSlider.notNil) { try { ~dolbyHeightGainSlider.remove; }; ~dolbyHeightGainSlider = nil; };
-            if(~dolbyHeightGainLabel.notNil) { try { ~dolbyHeightGainLabel.remove; }; ~dolbyHeightGainLabel = nil; };
-            if(~dolbyHeightOverlay.notNil) { try { ~dolbyHeightOverlay.remove; }; ~dolbyHeightOverlay = nil; };
-            if(~dolbySubLpfSlider.notNil) { try { ~dolbySubLpfSlider.remove; }; ~dolbySubLpfSlider = nil; };
-            if(~dolbySubLpfValue.notNil) { try { ~dolbySubLpfValue.remove; }; ~dolbySubLpfValue = nil; };
-            if(~dolbyTopHpfSlider.notNil) { try { ~dolbyTopHpfSlider.remove; }; ~dolbyTopHpfSlider = nil; };
-            if(~dolbyTopHpfValue.notNil) { try { ~dolbyTopHpfValue.remove; }; ~dolbyTopHpfValue = nil; };
-            // Quad layout specific buttons cleanup
-            if(~quadSquareFLBtn.notNil) { try { ~quadSquareFLBtn.remove; }; ~quadSquareFLBtn = nil; };
-            if(~quadSquareFRBtn.notNil) { try { ~quadSquareFRBtn.remove; }; ~quadSquareFRBtn = nil; };
-            if(~quadSquareRLBtn.notNil) { try { ~quadSquareRLBtn.remove; }; ~quadSquareRLBtn = nil; };
-            if(~quadSquareRRBtn.notNil) { try { ~quadSquareRRBtn.remove; }; ~quadSquareRRBtn = nil; };
-            if(~quadNarrowFLBtn.notNil) { try { ~quadNarrowFLBtn.remove; }; ~quadNarrowFLBtn = nil; };
-            if(~quadNarrowFRBtn.notNil) { try { ~quadNarrowFRBtn.remove; }; ~quadNarrowFRBtn = nil; };
-            if(~quadNarrowRLBtn.notNil) { try { ~quadNarrowRLBtn.remove; }; ~quadNarrowRLBtn = nil; };
-            if(~quadNarrowRRBtn.notNil) { try { ~quadNarrowRRBtn.remove; }; ~quadNarrowRRBtn = nil; };
-            if(~quadWideFLBtn.notNil) { try { ~quadWideFLBtn.remove; }; ~quadWideFLBtn = nil; };
-            if(~quadWideFRBtn.notNil) { try { ~quadWideFRBtn.remove; }; ~quadWideFRBtn = nil; };
-            if(~quadWideRLBtn.notNil) { try { ~quadWideRLBtn.remove; }; ~quadWideRLBtn = nil; };
-            if(~quadWideRRBtn.notNil) { try { ~quadWideRRBtn.remove; }; ~quadWideRRBtn = nil; };
-            // Octagon hit targets cleanup
-            if(~octagonS1Hit.notNil) { try { ~octagonS1Hit.remove; }; ~octagonS1Hit = nil; };
-            if(~octagonS2Hit.notNil) { try { ~octagonS2Hit.remove; }; ~octagonS2Hit = nil; };
-            if(~octagonS3Hit.notNil) { try { ~octagonS3Hit.remove; }; ~octagonS3Hit = nil; };
-            if(~octagonS4Hit.notNil) { try { ~octagonS4Hit.remove; }; ~octagonS4Hit = nil; };
-            if(~octagonS5Hit.notNil) { try { ~octagonS5Hit.remove; }; ~octagonS5Hit = nil; };
-            if(~octagonS6Hit.notNil) { try { ~octagonS6Hit.remove; }; ~octagonS6Hit = nil; };
-            if(~octagonS7Hit.notNil) { try { ~octagonS7Hit.remove; }; ~octagonS7Hit = nil; };
-            if(~octagonS8Hit.notNil) { try { ~octagonS8Hit.remove; }; ~octagonS8Hit = nil; };
-            // (Removed) Quad panner cleanup not needed (panner lives in main window)
-            if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
-            // Add cleanup for other layout controls here as needed
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
+            if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+            if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            if(~binauralIrcamSelectBtn.notNil) { try { ~binauralIrcamSelectBtn.remove; }; ~binauralIrcamSelectBtn = nil; };
+            if(~binauralCipicSelectBtn.notNil) { try { ~binauralCipicSelectBtn.remove; }; ~binauralCipicSelectBtn = nil; };
+            if(~binauralIrcamProfileLabel.notNil) { try { ~binauralIrcamProfileLabel.remove; }; ~binauralIrcamProfileLabel = nil; };
+            if(~binauralCipicProfileLabel.notNil) { try { ~binauralCipicProfileLabel.remove; }; ~binauralCipicProfileLabel = nil; };
+            if(~binauralCipicArrow.notNil) { try { ~binauralCipicArrow.remove; }; ~binauralCipicArrow = nil; };
         }
     });
 // --- DIMENSION OVERLAY BUTTON ---
@@ -4108,7 +4259,6 @@ win.front;
                     ~dimensionState[\sliderValues][1] = knob.value;
                     if(~synth.notNil) { ~synth.set(\dimensionWidthHPF, val); };
                 });
-            
             // Output Trim knob (-6 to +6 dB) - Position: 225
             ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(225, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[2]) // Already normalized 0-1
@@ -4142,7 +4292,6 @@ win.front;
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
-            
             // Maplin SM-333 controls: 3 knobs (Surround, Effect, Delay) - Row 2
             // Layout: 320px overlay, 3 knobs @ 60px each, 10px gaps
             // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
@@ -4306,7 +4455,6 @@ win.front;
             };
         }
     });
-
 // --- OUTPUT FADER (GRAPHICAL ONLY, GUIPrototype style) ---
 StaticText(mainView, Rect(544, 40, 24, 24))
     .string_("dB")
@@ -4341,10 +4489,8 @@ StaticText(mainView, Rect(520, 10, 72, 28))
     .align_(\center)
     .stringColor_(Color.cyan)
     .font_(Font("Helvetica", 13));
-
 // Ensure output fader starts at top (0dB) to match SynthDef default
 ~outputSlider.valueAction_(1.0); // Set to 0dB position (top)
-
 // Tick marks for output fader (3px further from fader)
 UserView(mainView, Rect(537, 70, 4, 300))
     .background_(Color.clear)
