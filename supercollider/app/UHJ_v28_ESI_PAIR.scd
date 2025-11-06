@@ -67,6 +67,21 @@ var win, mainView,
     \presetIndex, 0   // Default preset index
 ]);
 
+// --- Dolby control state preservation variables ---
+~dolbyState = Dictionary.newFrom([
+    \centerGain, 0.0,      // Center gain in dB (0dB default)
+    \subGain, 0.0,         // Sub/LFE gain in dB (0dB default)
+    \heightGain, 0.0,      // Height gain in dB (0dB default)
+    \flOn, 1,              // Front Left on/off (1 = on, 0 = off)
+    \frOn, 1,              // Front Right on/off (1 = on, 0 = off)
+    \rlOn, 1,              // Rear Left on/off (1 = on, 0 = off)
+    \rrOn, 1,              // Rear Right on/off (1 = on, 0 = off)
+    \centerOn, 1,          // Center on/off (1 = on, 0 = off)
+    \subOn, 1,             // Sub on/off (1 = on, 0 = off)
+    \tflOn, 1,             // Top Front Left on/off (1 = on, 0 = off)
+    \tfrOn, 1              // Top Front Right on/off (1 = on, 0 = off)
+]);
+
 // --- Dimension overlay variables ---
 ~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
 ~dimensionWidthValue = nil; ~dimensionWidthHPFValue = nil; ~dimensionTrimValue = nil;
@@ -241,6 +256,11 @@ UserView(mainView, Rect(98, 70, 18, 300))
     });
 
 // Mouse up action for CLI commands (MainApp2 functionality)
+mainView.mouseDownAction_({
+    // Clear focus from all buttons when clicking on main view
+    mainView.focus(nil);
+});
+
 mainView.mouseUpAction_({
     AppClock.sched(0.05, {
         if(lastFaderGroup == \input) {
@@ -254,6 +274,7 @@ mainView.mouseUpAction_({
 ~lineBtn = Button(mainView, Rect(18, 70, 40, 20))
     .states_([["LINE", Color.cyan, Color.black], ["LINE", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         if(btn.value == 1) {
             ~mmBtn.value_(0);
@@ -265,6 +286,7 @@ mainView.mouseUpAction_({
 ~mmBtn = Button(mainView, Rect(18, 110, 40, 20))
     .states_([["MM", Color.cyan, Color.black], ["MM", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         if(btn.value == 1) {
             ~lineBtn.value_(0);
@@ -276,6 +298,7 @@ mainView.mouseUpAction_({
 ~mcBtn = Button(mainView, Rect(18, 150, 40, 20))
     .states_([["MC", Color.cyan, Color.black], ["MC", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         if(btn.value == 1) {
             ~lineBtn.value_(0);
@@ -288,6 +311,7 @@ mainView.mouseUpAction_({
 ~resetBtn = Button(mainView, Rect(18, 270, 40, 20))
     .states_([["RESET", Color.cyan, Color.black]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         ("phono-control -d").unixCmd;
         // Reset GUI to match defaults
@@ -315,6 +339,7 @@ mainView.mouseUpAction_({
 ~monBtn = Button(mainView, Rect(18, 310, 40, 20))
     .states_([["MON", Color.cyan, Color.black], ["MON", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .action_({ |btn|
         var cmd = if(btn.value == 1) { "phono-control -M" } { "phono-control -m" };
         cmd.unixCmd;
@@ -345,6 +370,7 @@ mainView.mouseUpAction_({
 ~linkBtn = Button(mainView, Rect(18, 350, 40, 20))
     .states_([["LINK", Color.cyan, Color.black], ["LINK", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
+    .focusColor_(Color.clear)
     .value_(linkFaders.asInteger)
     .action_({ |btn| linkFaders = btn.value == 1; });
 
@@ -548,16 +574,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 .front;
         };
 
-        // --- Refresh layout overlay title and graphics if open ---
-        if(~layoutOverlay.notNil) {
-            ~layoutOverlay.children.do({ |child|
-                if(child.class == StaticText and: { child.string.beginsWith("LAYOUT -") }) {
-                    child.string_("LAYOUT - " ++ decoderName);
-                };
-            });
-            ~layoutOverlay.children.do({ |child|
-                if(child.class == UserView) { child.refresh; };
-            });
+        // --- Recreate layout overlay controls if open (treat decoder change like reopening layout) ---
+        if(~layoutOverlay.notNil and: { ~layoutBtn.notNil and: { ~layoutBtn.value == 1 } }) {
+            // Close the layout overlay first (this cleans up controls)
+            ~layoutBtn.value_(0);
+            ~layoutBtn.doAction;
+            // Then reopen it with the new decoder value (this recreates controls for new decoder)
+            ~layoutBtn.value_(1);
+            ~layoutBtn.doAction;
         };
         // --- Audio engine reinitialization logic (must be last) ---
         if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
@@ -616,6 +640,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.options.memSize = 65536;
                 s.options.numOutputBusChannels = outputs;
                 s.options.numInputBusChannels = inputs;
+                // Set audio device to UHJ aggregate device (macOS)
+                s.options.device = "UHJ";
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
@@ -641,7 +667,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                         \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single'),
                         \stereo, FoaDecoderMatrix.newStereo,
-                        \fiveonetwo, FoaDecoderMatrix.new5_2(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
+                        \fiveonetwo, FoaDecoderMatrix.new5_0_2(\equal)  // 5.1.2 decoder (outputs in ATK order, routed to UHJ-Pi layout in app)
                     ]);
 
                     // Get selected encoder and decoder
@@ -664,7 +690,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
@@ -774,35 +800,43 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             ];
                         });
                         if(outputs == 6, {
-                            // --- DOLBY 5.1 OUTPUT MAPPING (Consumer Standard) ---
+                            // --- UHJ-PI 5.1 OUTPUT MAPPING ---
                             // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
-                            // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub
+                            // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB
+                            // This aligns with Quad (1-4) and adds C and SUB
                             var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                            var centerChan = out[0] * centerGain.dbamp * centerOn;
+                            var subChan = lowpass * subGain.dbamp * subOn;
                             out = [
-                                out[1], // FL (Speaker 1) - Front Left
-                                out[4], // FR (Speaker 2) - Front Right  
-                                out[0], // C  (Speaker 3) - Center
-                                out[2], // RL (Speaker 4) - Rear Left
-                                out[3], // RR (Speaker 5) - Rear Right
-                                lowpass // Sub (Speaker 6) - Subwoofer
+                                out[1] * flOn, // FL (Speaker 1) - Front Left
+                                out[4] * frOn, // FR (Speaker 2) - Front Right
+                                out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                centerChan * centerOn, // C  (Speaker 5) - Center
+                                subChan * subOn // SUB (Speaker 6) - Subwoofer
                             ];
                         });
                         
                         if(outputs == 8, {
                             if(configKeyD == \fiveonetwo, {
                                 // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
-                                // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL (correct for UHJ-Pi)
-                                // UHJ-Pi layout: [0] FL, [1] FR, [2] C, [3] RL, [4] RR, [5] LFE, [6] TFL, [7] TFR
-                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE
+                                // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
+                                // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB, [6] TFL, [7] TFR
+                                // This aligns with Quad (1-4) and 5.1 (1-5), then adds height channels
+                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE/SUB
+                                var centerChan = out[0] * centerGain.dbamp * centerOn;
+                                var subChan = lowpass * subGain.dbamp * subOn;
+                                var heightTFL = out[6] * heightGain.dbamp * tflOn;
+                                var heightTFR = out[5] * heightGain.dbamp * tfrOn;
                                 out = [
-                                    out[1], // FL (Speaker 1) - Front Left
-                                    out[4], // FR (Speaker 2) - Front Right  
-                                    out[0], // C  (Speaker 3) - Center
-                                    out[2], // RL (Speaker 4) - Rear Left
-                                    out[3], // RR (Speaker 5) - Rear Right
-                                    lowpass, // LFE (Speaker 6) - Low Frequency Effects
-                                    out[6], // TFL (Speaker 7) - Top Front Left
-                                    out[5]  // TFR (Speaker 8) - Top Front Right
+                                    out[1] * flOn, // FL (Speaker 1) - Front Left
+                                    out[4] * frOn, // FR (Speaker 2) - Front Right
+                                    out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                    out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                    centerChan * centerOn, // C  (Speaker 5) - Center
+                                    subChan * subOn, // SUB (Speaker 6) - Subwoofer/LFE
+                                    heightTFL * tflOn, // TFL (Speaker 7) - Top Front Left
+                                    heightTFR * tfrOn  // TFR (Speaker 8) - Top Front Right
                                 ];
                             }, {
                                 // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -869,7 +903,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \zsynthHeightSource, zsSource,
                         \zsynthAmbienceSize, zsSize,
                         \zsynthAmbienceDampening, zsDamp,
-                        \zsynthAmbienceMix, zsMix
+                        \zsynthAmbienceMix, zsMix,
+                        // Dolby control parameters
+                        \centerGain, ~dolbyState[\centerGain] ? 0.0,
+                        \subGain, ~dolbyState[\subGain] ? 0.0,
+                        \heightGain, ~dolbyState[\heightGain] ? 0.0,
+                        \flOn, ~dolbyState[\flOn] ? 1,
+                        \frOn, ~dolbyState[\frOn] ? 1,
+                        \rlOn, ~dolbyState[\rlOn] ? 1,
+                        \rrOn, ~dolbyState[\rrOn] ? 1,
+                        \centerOn, ~dolbyState[\centerOn] ? 1,
+                        \subOn, ~dolbyState[\subOn] ? 1,
+                        \tflOn, ~dolbyState[\tflOn] ? 1,
+                        \tfrOn, ~dolbyState[\tfrOn] ? 1
                     ]);
                     
                     // Restore saved parameters to new synth
@@ -899,6 +945,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.options.memSize = 65536;
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
+                    // Set audio device to UHJ aggregate device (macOS)
+                    s.options.device = "UHJ";
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
@@ -924,7 +972,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                             \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'single'),
                             \stereo, FoaDecoderMatrix.newStereo,
-                            \fiveonetwo, FoaDecoderMatrix.new5_2(\equal, 45, \uhjpi)  // 5.1.2 decoder (custom matrix with heights, UHJ Pi layout, equal mode)
+                            \fiveonetwo, FoaDecoderMatrix.new5_0_2(\equal)  // 5.1.2 decoder (outputs in ATK order, routed to UHJ-Pi layout in app)
                         ]);
 
                         // Get selected encoder and decoder
@@ -939,7 +987,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
@@ -1047,17 +1095,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 ];
                             });
                             if(outputs == 6, {
-                                // --- DOLBY 5.1 OUTPUT MAPPING (Consumer Standard) ---
+                                // --- UHJ-PI 5.1 OUTPUT MAPPING ---
                                 // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
-                                // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub
+                                // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB
+                                // This aligns with Quad (1-4) and adds C and SUB
                                 var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                                var centerChan = out[0] * centerGain.dbamp * centerOn;
+                                var subChan = lowpass * subGain.dbamp * subOn;
                                 out = [
-                                    out[1], // FL (Speaker 1) - Front Left
-                                    out[4], // FR (Speaker 2) - Front Right  
-                                    out[0], // C  (Speaker 3) - Center
-                                    out[2], // RL (Speaker 4) - Rear Left
-                                    out[3], // RR (Speaker 5) - Rear Right
-                                    lowpass // Sub (Speaker 6) - Subwoofer
+                                    out[1] * flOn, // FL (Speaker 1) - Front Left
+                                    out[4] * frOn, // FR (Speaker 2) - Front Right
+                                    out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                    out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                    centerChan * centerOn, // C  (Speaker 5) - Center
+                                    subChan * subOn // SUB (Speaker 6) - Subwoofer
                                 ];
                             });
                             
@@ -1065,17 +1116,22 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 if(configKeyD == \fiveonetwo, {
                                 // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
                                 // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
-                                // UHJ-Pi layout: [0] FL, [1] FR, [2] C, [3] RL, [4] RR, [5] LFE, [6] TFL, [7] TFR
-                                    var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE
+                                // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB, [6] TFL, [7] TFR
+                                // This aligns with Quad (1-4) and 5.1 (1-5), then adds height channels
+                                    var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE/SUB
+                                    var centerChan = out[0] * centerGain.dbamp * centerOn;
+                                    var subChan = lowpass * subGain.dbamp * subOn;
+                                    var heightTFL = out[6] * heightGain.dbamp * tflOn;
+                                    var heightTFR = out[5] * heightGain.dbamp * tfrOn;
                                     out = [
-                                        out[1], // FL (Speaker 1) - Front Left
-                                        out[4], // FR (Speaker 2) - Front Right  
-                                        out[0], // C  (Speaker 3) - Center
-                                        out[2], // RL (Speaker 4) - Rear Left
-                                        out[3], // RR (Speaker 5) - Rear Right
-                                        lowpass, // LFE (Speaker 6) - Low Frequency Effects
-                                    out[6], // TFL (Speaker 7) - Top Front Left
-                                    out[5]  // TFR (Speaker 8) - Top Front Right
+                                        out[1] * flOn, // FL (Speaker 1) - Front Left
+                                        out[4] * frOn, // FR (Speaker 2) - Front Right
+                                        out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                        out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                        centerChan * centerOn, // C  (Speaker 5) - Center
+                                        subChan * subOn, // SUB (Speaker 6) - Subwoofer/LFE
+                                        heightTFL * tflOn, // TFL (Speaker 7) - Top Front Left
+                                        heightTFR * tfrOn  // TFR (Speaker 8) - Top Front Right
                                     ];
                                 }, {
                                     // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -1148,7 +1204,19 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \zsynthHeightSource, zsSource2,
                             \zsynthAmbienceSize, zsSize2,
                             \zsynthAmbienceDampening, zsDamp2,
-                            \zsynthAmbienceMix, zsMix2
+                            \zsynthAmbienceMix, zsMix2,
+                            // Dolby control parameters
+                            \centerGain, ~dolbyState[\centerGain] ? 0.0,
+                            \subGain, ~dolbyState[\subGain] ? 0.0,
+                            \heightGain, ~dolbyState[\heightGain] ? 0.0,
+                            \flOn, ~dolbyState[\flOn] ? 1,
+                            \frOn, ~dolbyState[\frOn] ? 1,
+                            \rlOn, ~dolbyState[\rlOn] ? 1,
+                            \rrOn, ~dolbyState[\rrOn] ? 1,
+                            \centerOn, ~dolbyState[\centerOn] ? 1,
+                            \subOn, ~dolbyState[\subOn] ? 1,
+                            \tflOn, ~dolbyState[\tflOn] ? 1,
+                            \tfrOn, ~dolbyState[\tfrOn] ? 1
                         ]);
                         
                         // Restore saved parameters to new synth
@@ -1583,6 +1651,7 @@ win.front;
             Button(~eqOverlay, Rect(255, 7, 58, 20))
                 .states_([["SAVE", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 10))
+                .focusColor_(Color.clear)
                 .action_({
                     var newName, values, customNum;
                     values = ~eqSliders.collect({ |slider| slider.value });
@@ -1689,6 +1758,7 @@ win.front;
             Button(~eqOverlay, Rect(18, 230, 80, 28))
                 .states_([["RESET", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
+                .focusColor_(Color.clear)
                 .action_({
                     ~eqSliders.do({ |slider, i|
                         slider.value_(0.5);
@@ -1702,6 +1772,7 @@ win.front;
             Button(~eqOverlay, Rect(222, 230, 80, 28))
                 .states_([["CLOSE", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
+                .focusColor_(Color.clear)
                 .action_({
                     ~saveEqState.value(); // Save state before closing
                     ~eqOverlay.remove;
@@ -2498,7 +2569,7 @@ win.front;
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
     .action_({ |btn|
-        var currentDecoder, decoderNames, decoderName;
+        var currentDecoder, decoderNames, decoderName, titleWidth, titleX;
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { 
@@ -2521,34 +2592,46 @@ win.front;
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~dimensionBtn.value_(0);
+            // Remove old overlay first (this will remove all its children automatically)
+            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
+            
+            // Clean up layout-specific control references (in case they weren't children of overlay)
+            // This ensures each layout is independent and controls don't persist between layouts
+            // Layout 6 (Dolby 5.1) and Layout 7 (Dolby 5.1.2) controls cleanup
+            if(~dolbyFLSquareBtn.notNil) { ~dolbyFLSquareBtn = nil; };
+            if(~dolbyFRSquareBtn.notNil) { ~dolbyFRSquareBtn = nil; };
+            if(~dolbyRLSquareBtn.notNil) { ~dolbyRLSquareBtn = nil; };
+            if(~dolbyRRSquareBtn.notNil) { ~dolbyRRSquareBtn = nil; };
+            if(~dolbyCenterSquareBtn.notNil) { ~dolbyCenterSquareBtn = nil; };
+            if(~dolbySubSquareBtn.notNil) { ~dolbySubSquareBtn = nil; };
+            if(~dolbyTopLeftSquareBtn.notNil) { ~dolbyTopLeftSquareBtn = nil; };
+            if(~dolbyTopRightSquareBtn.notNil) { ~dolbyTopRightSquareBtn = nil; };
+            if(~dolbyCenterGainSlider.notNil) { ~dolbyCenterGainSlider = nil; };
+            if(~dolbyCenterGainLabel.notNil) { ~dolbyCenterGainLabel = nil; };
+            if(~dolbySubGainSlider.notNil) { ~dolbySubGainSlider = nil; };
+            if(~dolbySubGainLabel.notNil) { ~dolbySubGainLabel = nil; };
+            if(~dolbyHeightGainSlider.notNil) { ~dolbyHeightGainSlider = nil; };
+            if(~dolbyHeightGainLabel.notNil) { ~dolbyHeightGainLabel = nil; };
+            // Add cleanup for other layout controls here as needed
+            // Example for layout 0: if(~stereoControlBtn.notNil) { ~stereoControlBtn = nil; };
+            
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
-                .background_(Color.black); // Remove .alpha_(0.5) for full opacity
-            // Add the title as StaticText at the top, centered
-            // Layout title showing encoder class only
-            ~layoutTitleText = StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
-                .string_(([
-                    "STEREO",
-                    "BINAURAL IRCAM",
-                    "BINAURAL CIPIC",
-                    "QUADRAPHONIC SQUARE",
-                    "QUADRAPHONIC NARROW",
-                    "QUADRAPHONIC WIDE",
-                    "DOLBY 5.1",
-                    "DOLBY 5.1.2",
-                    "OCTAGON"
-                ][~dmenu.value ? 0]))
-                .align_(\center)
-                .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13).boldVariant)
-                .background_(Color.clear);
-            UserView(~layoutOverlay, Rect(0, 0, 320, 275))
+                .background_(Color.black);
+            
+            ("Creating layout overlay, decoder value: " ++ ~dmenu.value).postln;
+            
+            // ONE UserView that draws both border AND diagrams (exactly like v27)
+            // Create UserView FIRST (before controls) so it's beneath them
+            ~layoutDiagramView = UserView(~layoutOverlay, Rect(0, 0, 320, 275))
                 .background_(Color.clear)
                 .drawFunc_({ |view|
+                    // All variable declarations must be at the top
                     var bounds = view.bounds;
                     var centerX = bounds.width / 2;
                     var centerY = bounds.height / 2;
                     var currentDecoderValue = ~dmenu.value;
-                    // Draw cyan border
+                    
+                    // Draw cyan border FIRST (like v27)
                     Pen.width = 0.5;
                     Pen.color = Color.cyan;
                     Pen.addRect(Rect(0.25, 0.25, bounds.width - 0.5, bounds.height - 0.5));
@@ -2700,91 +2783,99 @@ win.front;
                             Pen.stringAtPoint("[1] FL, [2] FR, [3] RL, [4] RR", Point(centerX - 82, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         6, { // Dolby 5.1
-                            var layoutSize = 140, layoutLeft = centerX - (layoutSize / 2), layoutTop = centerY - (layoutSize / 2) + 25, speakerSize = 20, frontLeftX = layoutLeft - 10, frontLeftY = layoutTop - 10, frontRightX = layoutLeft + layoutSize - 10, frontRightY = layoutTop - 10, centerX_speaker = layoutLeft + (layoutSize / 2) - 10, centerY_speaker = layoutTop - 10, surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10, surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10, subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize)); Pen.stroke;
+                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18, frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9, frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9, centerX_speaker = layoutLeft + (layoutSize / 2) - 9, centerY_speaker = layoutTop - 9, surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7, surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7, subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;  // Extended box height by 7px to include RL/RR at corners
                             // Speaker 1: Front Left
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(frontLeftX + 7, frontLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(frontRightX + 7, frontRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 3: Center
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX_speaker + 7, centerY_speaker + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 4: Surround Left
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // Speaker 3: Rear Left (RL)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(surroundLeftX + 7, surroundLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 5: Surround Right
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // Speaker 4: Rear Right (RR)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("5", Point(surroundRightX + 7, surroundRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // Speaker 5: Center (C)
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("5", Point(centerX_speaker + 5, centerY_speaker + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("C", Point(centerX_speaker + 5, centerY_speaker - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 6: Subwoofer (Sub = 6)
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("SUB", Point(subwooferX + 25, subwooferY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub", Point(centerX - 124, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         7, { // Dolby Atmos 5.1.2
-                            var layoutSize = 140, layoutLeft = centerX - (layoutSize / 2), layoutTop = centerY - (layoutSize / 2) + 25, speakerSize = 20;
-                            var frontLeftX = layoutLeft - 10, frontLeftY = layoutTop - 10;
-                            var frontRightX = layoutLeft + layoutSize - 10, frontRightY = layoutTop - 10;
-                            var centerX_speaker = layoutLeft + (layoutSize / 2) - 10, centerY_speaker = layoutTop - 10;
-                            var surroundLeftX = layoutLeft - 10, surroundLeftY = layoutTop + layoutSize - 10;
-                            var surroundRightX = layoutLeft + layoutSize - 10, surroundRightY = layoutTop + layoutSize - 10;
-                            var subwooferX = layoutLeft + (layoutSize / 2) - 10, subwooferY = layoutTop + (layoutSize / 2) - 10;
-                            var topFrontLeftX = frontLeftX, topFrontLeftY = layoutTop - 40;  // Directly above speaker 1 (FL)
-                            var topFrontRightX = frontRightX, topFrontRightY = layoutTop - 40;  // Directly above speaker 2 (FR)
+                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                            var centerX_speaker = layoutLeft + (layoutSize / 2) - 9, centerY_speaker = layoutTop - 9;
+                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                            var subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
+                            var topFrontLeftX = frontLeftX, topFrontLeftY = layoutTop - 49;  // Keep TL/TR in same position (compensate for layoutTop -2)
+                            var topFrontRightX = frontRightX, topFrontRightY = layoutTop - 49;  // Keep TL/TR in same position (compensate for layoutTop -2)
                             
-                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize)); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;  // Extended box height by 7px to include RL/RR at corners
                             
                             // --- EXACTLY THE SAME AS 5.1 LAYOUT ---
                             // Speaker 1: Front Left
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(frontLeftX + 7, frontLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(frontRightX + 7, frontRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
-                            // Speaker 3: Center
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX_speaker + 7, centerY_speaker + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            
-                            // Speaker 4: Surround Left
+                            // Speaker 3: Rear Left (RL)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(surroundLeftX + 7, surroundLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
-                            // Speaker 5: Surround Right
+                            // Speaker 4: Rear Right (RR)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("5", Point(surroundRightX + 7, surroundRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            
+                            // Speaker 5: Center (C)
+                            Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("5", Point(centerX_speaker + 5, centerY_speaker + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("C", Point(centerX_speaker + 5, centerY_speaker - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // Speaker 6: Subwoofer (Sub = 6)
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("6", Point(subwooferX + 7, subwooferY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("SUB", Point(subwooferX + 25, subwooferY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // --- ADDITIONAL CEILING SPEAKERS FOR 5.1.2 ---
                             // Speaker 7: Top Front Left (overhead) - positioned above front left
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("7", Point(topFrontLeftX + 7, topFrontLeftY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("7", Point(topFrontLeftX + 5, topFrontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("TL", Point(topFrontLeftX + speakerSize + 4, topFrontLeftY + 5), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // Speaker 8: Top Front Right (overhead) - positioned above front right
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("8", Point(topFrontRightX + 7, topFrontRightY + 1), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub", Point(centerX - 112, 28), Font("Helvetica", 12), Color.cyan);
-                            Pen.stringAtPoint("[7] TFL, [8] TFR", Point(centerX - 42, 50), Font("Helvetica", 12), Color.cyan);
+                            Pen.stringAtPoint("8", Point(topFrontRightX + 5, topFrontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("TR", Point(topFrontRightX - 18, topFrontRightY + 5), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
@@ -2811,9 +2902,242 @@ win.front;
                             Pen.stringAtPoint("[1] FL (-22.5°), Clockwise @ 45°", Point(centerX - 84, 32), Font("Helvetica", 13), Color.cyan);
                         }
                     );
-                });
+                })
+                .refresh;  // Force initial draw
+            
+            // Add the title as StaticText at the top, centered
+            // Layout title showing encoder class only
+            // For Dolby layouts, center over diagram (left side); for others, use full width
+            ~layoutTitleText = StaticText(~layoutOverlay, Rect(
+                if((~dmenu.value == 6) or: { (~dmenu.value == 7) }, 5, 15),  // titleX: Center over diagram at x=5 for Dolby
+                10,  // y position
+                if((~dmenu.value == 6) or: { (~dmenu.value == 7) }, 150, 300),  // titleWidth
+                22   // height
+            ))
+                .string_(([
+                    "STEREO",
+                    "BINAURAL IRCAM",
+                    "BINAURAL CIPIC",
+                    "QUADRAPHONIC SQUARE",
+                    "QUADRAPHONIC NARROW",
+                    "QUADRAPHONIC WIDE",
+                    "DOLBY 5.1",
+                    "DOLBY 5.1.2",
+                    "OCTAGON"
+                ][~dmenu.value ? 0]))
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 13).boldVariant)
+                .background_(Color.clear);
+            
+            // Create controls for Dolby 5.1 (case 6)
+            if(~dmenu.value == 6, {
+                "Creating controls for Dolby 5.1 (case 6)".postln;
+                // Create ONE simple CENTER fader - exactly like EQ sliders
+                StaticText(~layoutOverlay, Rect(170, 14, 35, 15))
+                    .string_("CENTER")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 10).boldVariant);
+                
+                ~dolbyCenterGainSlider = Slider(~layoutOverlay, Rect(170, 32, 35, 164))
+                    .orientation_(\vertical)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\centerGain] ? 0.0).linlin(-12, 12, 0, 1))
+                    .action_({ |sl|
+                        var gain = sl.value.linlin(0, 1, -12, 12);
+                        ~dolbyState[\centerGain] = gain;
+                        if(~dolbyCenterGainLabel.notNil) {
+                            ~dolbyCenterGainLabel.string = gain.round(0.1).asString ++ "dB";
+                        };
+                        if(~synth.notNil) { ~synth.set(\centerGain, gain) };
+                    });
+                
+                ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(170, 199, 35, 15))
+                    .string_((~dolbyState[\centerGain] ? 0.0).round(0.1).asString ++ "dB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 10).boldVariant);
+            });
+            
+            // Create on/off buttons and faders for Dolby 5.1.2 (case 7)
+            if(~dmenu.value == 7, {
+                // All variable declarations must be at the absolute top of the block
+                var layoutSize = 100, diagramCenterX = 80, layoutLeft = 30, layoutTop = 84, speakerSize = 18;
+                var frontLeftX = 21, frontLeftY = 75;
+                var frontRightX = 121, frontRightY = 75;
+                var centerX_speaker = 71, centerY_speaker = 75;
+                var surroundLeftX = 21, surroundLeftY = 182;
+                var surroundRightX = 121, surroundRightY = 182;
+                var subwooferX = 71, subwooferY = 132;
+                var topFrontLeftX = 21, topFrontLeftY = 35;
+                var topFrontRightX = 121, topFrontRightY = 35;
+                
+                ("Creating controls for Dolby 5.1.2 (case 7), decoder value: " ++ ~dmenu.value).postln;
+                // Speaker positions (matching drawFunc exactly for case 7)
+                
+                // Speaker 1: Front Left (FL)
+                ~dolbyFLSquareBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .states_([
+                        ["1", Color.black, Color.cyan],
+                        ["1", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\flOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\flOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\flOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 2: Front Right (FR)
+                ~dolbyFRSquareBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .states_([
+                        ["2", Color.black, Color.cyan],
+                        ["2", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\frOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\frOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\frOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 3: Rear Left (RL)
+                ~dolbyRLSquareBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .states_([
+                        ["3", Color.black, Color.cyan],
+                        ["3", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\rlOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\rlOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rlOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 4: Rear Right (RR)
+                ~dolbyRRSquareBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .states_([
+                        ["4", Color.black, Color.cyan],
+                        ["4", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\rrOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\rrOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rrOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 5: Center (C)
+                ~dolbyCenterSquareBtn = Button(~layoutOverlay, Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize))
+                    .states_([
+                        ["5", Color.black, Color.cyan],
+                        ["5", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\centerOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\centerOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\centerOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 6: Subwoofer (SUB)
+                ~dolbySubSquareBtn = Button(~layoutOverlay, Rect(subwooferX, subwooferY, speakerSize, speakerSize))
+                    .states_([
+                        ["6", Color.black, Color.cyan],
+                        ["6", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\subOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\subOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\subOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 7: Top Front Left (TL)
+                ~dolbyTopLeftSquareBtn = Button(~layoutOverlay, Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize))
+                    .states_([
+                        ["7", Color.black, Color.cyan],
+                        ["7", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\tflOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\tflOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\tflOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 8: Top Front Right (TR)
+                ~dolbyTopRightSquareBtn = Button(~layoutOverlay, Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize))
+                    .states_([
+                        ["8", Color.black, Color.cyan],
+                        ["8", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\tfrOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\tfrOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\tfrOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Bring all buttons to front so they're clickable
+                ~dolbyFLSquareBtn.front;
+                ~dolbyFRSquareBtn.front;
+                ~dolbyRLSquareBtn.front;
+                ~dolbyRRSquareBtn.front;
+                ~dolbyCenterSquareBtn.front;
+                ~dolbySubSquareBtn.front;
+                ~dolbyTopLeftSquareBtn.front;
+                ~dolbyTopRightSquareBtn.front;
+            });
+            
             ~layoutOverlay.front;
         } {
+            // Clean up all layout-specific controls when closing layout overlay
+            // Remove Dolby controls overlay first (this removes all controls inside it)
+            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
+            // Layout 6 (Dolby 5.1) and Layout 7 (Dolby 5.1.2) controls cleanup
+            if(~dolbyFLSquareBtn.notNil) { try { ~dolbyFLSquareBtn.remove; }; ~dolbyFLSquareBtn = nil; };
+            if(~dolbyFRSquareBtn.notNil) { try { ~dolbyFRSquareBtn.remove; }; ~dolbyFRSquareBtn = nil; };
+            if(~dolbyRLSquareBtn.notNil) { try { ~dolbyRLSquareBtn.remove; }; ~dolbyRLSquareBtn = nil; };
+            if(~dolbyRRSquareBtn.notNil) { try { ~dolbyRRSquareBtn.remove; }; ~dolbyRRSquareBtn = nil; };
+            if(~dolbyCenterSquareBtn.notNil) { try { ~dolbyCenterSquareBtn.remove; }; ~dolbyCenterSquareBtn = nil; };
+            if(~dolbySubSquareBtn.notNil) { try { ~dolbySubSquareBtn.remove; }; ~dolbySubSquareBtn = nil; };
+            if(~dolbyTopLeftSquareBtn.notNil) { try { ~dolbyTopLeftSquareBtn.remove; }; ~dolbyTopLeftSquareBtn = nil; };
+            if(~dolbyTopRightSquareBtn.notNil) { try { ~dolbyTopRightSquareBtn.remove; }; ~dolbyTopRightSquareBtn = nil; };
+            if(~dolbyCenterGainSlider.notNil) { try { ~dolbyCenterGainSlider.remove; }; ~dolbyCenterGainSlider = nil; };
+            if(~dolbyCenterGainLabel.notNil) { try { ~dolbyCenterGainLabel.remove; }; ~dolbyCenterGainLabel = nil; };
+            if(~dolbySubGainSlider.notNil) { try { ~dolbySubGainSlider.remove; }; ~dolbySubGainSlider = nil; };
+            if(~dolbySubGainLabel.notNil) { try { ~dolbySubGainLabel.remove; }; ~dolbySubGainLabel = nil; };
+            if(~dolbyHeightGainSlider.notNil) { try { ~dolbyHeightGainSlider.remove; }; ~dolbyHeightGainSlider = nil; };
+            if(~dolbyHeightGainLabel.notNil) { try { ~dolbyHeightGainLabel.remove; }; ~dolbyHeightGainLabel = nil; };
+            // Add cleanup for other layout controls here as needed
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
         }
     });
@@ -3055,6 +3379,7 @@ win.front;
             Button(~dimensionOverlay, Rect(222, 230, 80, 28))
                 .states_([["RESET", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
+                .focusColor_(Color.clear)
                 .action_({
                     // Reset Dimension to default values
                     ~dimensionWidthKnob.value_(0.0);
