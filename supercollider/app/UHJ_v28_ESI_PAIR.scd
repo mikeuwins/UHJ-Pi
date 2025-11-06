@@ -4160,7 +4160,6 @@ win.front;
             if(~binauralCipicSelectBtn.notNil) { try { ~binauralCipicSelectBtn.remove; }; ~binauralCipicSelectBtn = nil; };
             if(~binauralIrcamProfileLabel.notNil) { try { ~binauralIrcamProfileLabel.remove; }; ~binauralIrcamProfileLabel = nil; };
             if(~binauralCipicProfileLabel.notNil) { try { ~binauralCipicProfileLabel.remove; }; ~binauralCipicProfileLabel = nil; };
-            if(~binauralCipicArrow.notNil) { try { ~binauralCipicArrow.remove; }; ~binauralCipicArrow = nil; };
         }
     });
 // --- DIMENSION OVERLAY BUTTON ---
