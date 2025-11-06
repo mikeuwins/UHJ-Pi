@@ -102,6 +102,18 @@ var win, mainView,
     \rrOn, 1               // Rear Right on/off (1 = on, 0 = off)
 ]);
 
+// --- Octagon layout state preservation variables ---
+~octagonState = Dictionary.newFrom([
+    \s1On, 1,              // Speaker 1 on/off (1 = on, 0 = off)
+    \s2On, 1,              // Speaker 2 on/off (1 = on, 0 = off)
+    \s3On, 1,              // Speaker 3 on/off (1 = on, 0 = off)
+    \s4On, 1,              // Speaker 4 on/off (1 = on, 0 = off)
+    \s5On, 1,              // Speaker 5 on/off (1 = on, 0 = off)
+    \s6On, 1,              // Speaker 6 on/off (1 = on, 0 = off)
+    \s7On, 1,              // Speaker 7 on/off (1 = on, 0 = off)
+    \s8On, 1               // Speaker 8 on/off (1 = on, 0 = off)
+]);
+
 // --- Dimension overlay variables ---
 ~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
 ~dimensionWidthValue = nil; ~dimensionWidthHPFValue = nil; ~dimensionTrimValue = nil;
@@ -466,7 +478,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     layout: \horz,
     gap: 0@0
 );
-
 // Decoder menu (Output format selection)
 ~dmenu = EZPopUpMenu.new(
     mainView,
@@ -578,7 +589,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     .background_(Color.black.alpha_(0.7))
                     .alpha_(1.0)
                     .front;
-            }
+            };
         };
         // ... existing code ...
         // --- Quad panner logic ---
@@ -617,6 +628,20 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \rlOn, ~dolbyState[\rlOn] ? 1,
                         \rrOn, ~dolbyState[\rrOn] ? 1
                     );
+                }, {
+                    if(idx == 8, {
+                        // Octagon layout - use octagon state
+                        ~synth.set(
+                            \s1On, ~octagonState[\s1On] ? 1,
+                            \s2On, ~octagonState[\s2On] ? 1,
+                            \s3On, ~octagonState[\s3On] ? 1,
+                            \s4On, ~octagonState[\s4On] ? 1,
+                            \s5On, ~octagonState[\s5On] ? 1,
+                            \s6On, ~octagonState[\s6On] ? 1,
+                            \s7On, ~octagonState[\s7On] ? 1,
+                            \s8On, ~octagonState[\s8On] ? 1
+                        );
+                    });
                 });
             });
         };
@@ -736,7 +761,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
@@ -889,14 +914,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 // ATK 8.0 decoder: Anti-clockwise from front left out[0]
                                 // Map to diagram: Clockwise from front left starting at Speaker 1
                                 out = [
-                                    out[0], // Speaker 1: Front Left (FL)
-                                    out[7], // Speaker 2: Front Left Center (FLC)
-                                    out[6], // Speaker 3: Center (C)
-                                    out[5], // Speaker 4: Front Right Center (FRC)
-                                    out[4], // Speaker 5: Front Right (FR)
-                                    out[3], // Speaker 6: Rear Right Center (RRC)
-                                    out[2], // Speaker 7: Rear Right (RR)
-                                    out[1]  // Speaker 8: Rear Left Center (RLC)
+                                    out[0] * s1On, // Speaker 1: Front Left (FL)
+                                    out[7] * s2On, // Speaker 2: Front Left Center (FLC)
+                                    out[6] * s3On, // Speaker 3: Center (C)
+                                    out[5] * s4On, // Speaker 4: Front Right Center (FRC)
+                                    out[4] * s5On, // Speaker 5: Front Right (FR)
+                                    out[3] * s6On, // Speaker 6: Rear Right Center (RRC)
+                                    out[2] * s7On, // Speaker 7: Rear Right (RR)
+                                    out[1] * s8On  // Speaker 8: Rear Left Center (RLC)
                                 ];
                             });
                         });
@@ -979,7 +1004,16 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \tflOn, ~dolbyState[\tflOn] ? 1,
                         \tfrOn, ~dolbyState[\tfrOn] ? 1,
                         \subLPF, 120,
-                        \topHPF, 180
+                        \topHPF, 180,
+                        // Octagon speaker mutes
+                        \s1On, ~octagonState[\s1On] ? 1,
+                        \s2On, ~octagonState[\s2On] ? 1,
+                        \s3On, ~octagonState[\s3On] ? 1,
+                        \s4On, ~octagonState[\s4On] ? 1,
+                        \s5On, ~octagonState[\s5On] ? 1,
+                        \s6On, ~octagonState[\s6On] ? 1,
+                        \s7On, ~octagonState[\s7On] ? 1,
+                        \s8On, ~octagonState[\s8On] ? 1
                     ]);
                     
                     // Restore saved parameters to new synth
@@ -1051,7 +1085,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
@@ -1151,12 +1185,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 rearStereo  = Balance2.ar(out[1], out[2], quadLR); // RL, RR
                                 quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
                                 quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
-                            out = [
+                                out = [
                                 quadOutFront[0] * flOn, // LF (Speaker 1)
                                 quadOutFront[1] * frOn, // FR (Speaker 2)
                                 quadOutRear[0]  * rlOn, // RL (Speaker 3)
                                 quadOutRear[1]  * rrOn  // RR (Speaker 4)
-                            ];
+                                ];
                             });
                             if(outputs == 6, {
                                 // --- UHJ-PI 5.1 OUTPUT MAPPING ---
@@ -1202,14 +1236,14 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                     // ATK 8.0 decoder: Anti-clockwise from front left out[0]
                                     // Map to diagram: Clockwise from front left starting at Speaker 1
                                     out = [
-                                        out[0], // Speaker 1: Front Left (FL)
-                                        out[7], // Speaker 2: Front Left Center (FLC)
-                                        out[6], // Speaker 3: Center (C)
-                                        out[5], // Speaker 4: Front Right Center (FRC)
-                                        out[4], // Speaker 5: Front Right (FR)
-                                        out[3], // Speaker 6: Rear Right Center (RRC)
-                                        out[2], // Speaker 7: Rear Right (RR)
-                                        out[1]  // Speaker 8: Rear Left Center (RLC)
+                                        out[0] * s1On, // Speaker 1: Front Left (FL)
+                                        out[7] * s2On, // Speaker 2: Front Left Center (FLC)
+                                        out[6] * s3On, // Speaker 3: Center (C)
+                                        out[5] * s4On, // Speaker 4: Front Right Center (FRC)
+                                        out[4] * s5On, // Speaker 5: Front Right (FR)
+                                        out[3] * s6On, // Speaker 6: Rear Right Center (RRC)
+                                        out[2] * s7On, // Speaker 7: Rear Right (RR)
+                                        out[1] * s8On  // Speaker 8: Rear Left Center (RLC)
                                     ];
                                 });
                             });
@@ -1298,7 +1332,15 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \tflOn, ~dolbyState[\tflOn] ? 1,
                             \tfrOn, ~dolbyState[\tfrOn] ? 1,
                             \subLPF, 120,
-                            \topHPF, 180
+                            \topHPF, 180,
+                            \s1On, ~octagonState[\s1On] ? 1,
+                            \s2On, ~octagonState[\s2On] ? 1,
+                            \s3On, ~octagonState[\s3On] ? 1,
+                            \s4On, ~octagonState[\s4On] ? 1,
+                            \s5On, ~octagonState[\s5On] ? 1,
+                            \s6On, ~octagonState[\s6On] ? 1,
+                            \s7On, ~octagonState[\s7On] ? 1,
+                            \s8On, ~octagonState[\s8On] ? 1
                         ]);
                         
                         // Restore saved parameters to new synth
@@ -2439,7 +2481,7 @@ win.front;
                 .background_(Color.clear);
 
             // Load AmbiVerbSC presets if not already loaded
-            if(~ambiencePresetNames.isNil) {
+            if(~ambiencePresetDict.isNil) {
                 var presetData = ~loadAmbiVerbSCPresets.value();
                 ~ambiencePresetNames = presetData[0];
                 ~ambiencePresetDict = presetData[1];
@@ -2962,13 +3004,30 @@ win.front;
                                 var speakerNum = ((i + 2) % 8) + 1; // Shift so speaker 1 is at front-left position (consumer standard)
                                 var angle = startAngle + (i * angleStep);
                                 var rotationAngle = angle + (pi / 2);
+                                var isOn, key;
+                                key = ("s" ++ speakerNum.asString ++ "On").asSymbol;
+                                isOn = ~octagonState[key] ? 1;
                                 Pen.push;
                                 Pen.translate(pos.x + 10, pos.y + 10);
                                 Pen.rotate(rotationAngle);
                                 Pen.translate(-10, -10);
+                                if(isOn == 1, {
+                                    // ON: cyan box with black text
+                                    Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.fill;
+                                    Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.stroke;
+                                    // subtle outer border like real buttons
+                                    Pen.width = 1; Pen.color = Color.grey(0.6);
+                                    Pen.addRoundedRect(Rect(0.5, 0.5, 19, 19), 2, 2); Pen.stroke;
+                                    Pen.stringAtPoint(speakerNum.asString, Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
+                                }, {
+                                    // OFF: black box with cyan text (dim outline optional)
                                 Pen.color = Color.black; Pen.addRect(Rect(0, 0, 20, 20)); Pen.fill;
                                 Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.stroke;
-                                Pen.stringAtPoint(speakerNum.asString, Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                                    // subtle outer border like real buttons
+                                    Pen.width = 1; Pen.color = Color.grey(0.6);
+                                    Pen.addRoundedRect(Rect(0.5, 0.5, 19, 19), 2, 2); Pen.stroke;
+                                    Pen.stringAtPoint(speakerNum.asString, Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
+                                });
                                 Pen.pop;
                             });
                             Pen.stringAtPoint("[1] FL (-22.5°), Clockwise @ 45°", Point(centerX - 84, 32), Font("Helvetica", 13), Color.cyan);
@@ -3418,6 +3477,132 @@ win.front;
                     .value_(if((~quadWideState[\rrOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\rrOn]=ns; if(~synth.notNil){~synth.set(\rrOn,ns)}; b.focus(nil); });
                 ~quadWideFLBtn.front; ~quadWideFRBtn.front; ~quadWideRLBtn.front; ~quadWideRRBtn.front;
             });
+            // Octagon layout (case 8) - invisible hit targets for rotated squares
+            if(~dmenu.value == 8, {
+                var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180;
+                var centerX = 160, centerY = 137.5; // Match diagram center
+                var speaker1Index, angle1, x1, y1, speaker2Index, angle2, x2, y2,
+                    speaker3Index, angle3, x3, y3, speaker4Index, angle4, x4, y4,
+                    speaker5Index, angle5, x5, y5, speaker6Index, angle6, x6, y6,
+                    speaker7Index, angle7, x7, y7, speaker8Index, angle8, x8, y8; // declarations at top
+                // Calculate position for speaker 1 (index 0 after shift: ((0 + 2) % 8) + 1 = 3, but we want 1, so need to find correct index)
+                // Speaker 1 is at front-left: need to find which index gives speakerNum == 1
+                speaker1Index = 6; // After shift: ((6 + 2) % 8) + 1 = 1
+                angle1 = startAngle + (speaker1Index * angleStep);
+                x1 = centerX + (radius * cos(angle1));
+                y1 = centerY + (radius * sin(angle1)) + 25;
+                // Invisible hit target for square 1 (20x20 square, centered on position)
+                ~octagonS1Hit = UserView(~layoutOverlay, Rect(x1 - 10, y1 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s1On] ? 1);
+                        ~octagonState[\s1On] = newState;
+                        // Apply mute to Speaker 1 in octagon mapping
+                        if(~synth.notNil) { ~synth.set(\s1On, newState); };
+                        // Refresh diagram to show new state
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS1Hit.front;
+                
+                // Invisible hit target for square 2 (20x20), mapped correctly
+                speaker2Index = 7; // ((7 + 2) % 8) + 1 = 2
+                angle2 = startAngle + (speaker2Index * angleStep);
+                x2 = centerX + (radius * cos(angle2));
+                y2 = centerY + (radius * sin(angle2)) + 25;
+                ~octagonS2Hit = UserView(~layoutOverlay, Rect(x2 - 10, y2 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s2On] ? 1);
+                        ~octagonState[\s2On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s2On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS2Hit.front;
+
+                // Invisible hit target for square 3
+                speaker3Index = 0; angle3 = startAngle + (speaker3Index * angleStep);
+                x3 = centerX + (radius * cos(angle3));
+                y3 = centerY + (radius * sin(angle3)) + 25;
+                ~octagonS3Hit = UserView(~layoutOverlay, Rect(x3 - 10, y3 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s3On] ? 1);
+                        ~octagonState[\s3On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s3On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS3Hit.front;
+
+                // Invisible hit target for square 4
+                speaker4Index = 1; angle4 = startAngle + (speaker4Index * angleStep);
+                x4 = centerX + (radius * cos(angle4));
+                y4 = centerY + (radius * sin(angle4)) + 25;
+                ~octagonS4Hit = UserView(~layoutOverlay, Rect(x4 - 10, y4 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s4On] ? 1);
+                        ~octagonState[\s4On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s4On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS4Hit.front;
+
+                // Invisible hit target for square 5
+                speaker5Index = 2; angle5 = startAngle + (speaker5Index * angleStep);
+                x5 = centerX + (radius * cos(angle5));
+                y5 = centerY + (radius * sin(angle5)) + 25;
+                ~octagonS5Hit = UserView(~layoutOverlay, Rect(x5 - 10, y5 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s5On] ? 1);
+                        ~octagonState[\s5On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s5On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS5Hit.front;
+
+                // Invisible hit target for square 6
+                speaker6Index = 3; angle6 = startAngle + (speaker6Index * angleStep);
+                x6 = centerX + (radius * cos(angle6));
+                y6 = centerY + (radius * sin(angle6)) + 25;
+                ~octagonS6Hit = UserView(~layoutOverlay, Rect(x6 - 10, y6 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s6On] ? 1);
+                        ~octagonState[\s6On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s6On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS6Hit.front;
+
+                // Invisible hit target for square 7
+                speaker7Index = 4; angle7 = startAngle + (speaker7Index * angleStep);
+                x7 = centerX + (radius * cos(angle7));
+                y7 = centerY + (radius * sin(angle7)) + 25;
+                ~octagonS7Hit = UserView(~layoutOverlay, Rect(x7 - 10, y7 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s7On] ? 1);
+                        ~octagonState[\s7On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s7On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS7Hit.front;
+
+                // Invisible hit target for square 8
+                speaker8Index = 5; angle8 = startAngle + (speaker8Index * angleStep);
+                x8 = centerX + (radius * cos(angle8));
+                y8 = centerY + (radius * sin(angle8)) + 25;
+                ~octagonS8Hit = UserView(~layoutOverlay, Rect(x8 - 10, y8 - 10, 20, 20))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~octagonState[\s8On] ? 1);
+                        ~octagonState[\s8On] = newState;
+                        if(~synth.notNil) { ~synth.set(\s8On, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~octagonS8Hit.front;
+            });
             // (Removed) In-layout quad panner – using main window panner for live metering view
             // Create on/off buttons and faders for Dolby 5.1.2 (case 7)
             if(~dmenu.value == 7, {
@@ -3812,6 +3997,15 @@ win.front;
             if(~quadWideFRBtn.notNil) { try { ~quadWideFRBtn.remove; }; ~quadWideFRBtn = nil; };
             if(~quadWideRLBtn.notNil) { try { ~quadWideRLBtn.remove; }; ~quadWideRLBtn = nil; };
             if(~quadWideRRBtn.notNil) { try { ~quadWideRRBtn.remove; }; ~quadWideRRBtn = nil; };
+            // Octagon hit targets cleanup
+            if(~octagonS1Hit.notNil) { try { ~octagonS1Hit.remove; }; ~octagonS1Hit = nil; };
+            if(~octagonS2Hit.notNil) { try { ~octagonS2Hit.remove; }; ~octagonS2Hit = nil; };
+            if(~octagonS3Hit.notNil) { try { ~octagonS3Hit.remove; }; ~octagonS3Hit = nil; };
+            if(~octagonS4Hit.notNil) { try { ~octagonS4Hit.remove; }; ~octagonS4Hit = nil; };
+            if(~octagonS5Hit.notNil) { try { ~octagonS5Hit.remove; }; ~octagonS5Hit = nil; };
+            if(~octagonS6Hit.notNil) { try { ~octagonS6Hit.remove; }; ~octagonS6Hit = nil; };
+            if(~octagonS7Hit.notNil) { try { ~octagonS7Hit.remove; }; ~octagonS7Hit = nil; };
+            if(~octagonS8Hit.notNil) { try { ~octagonS8Hit.remove; }; ~octagonS8Hit = nil; };
             // (Removed) Quad panner cleanup not needed (panner lives in main window)
             if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
             // Add cleanup for other layout controls here as needed
