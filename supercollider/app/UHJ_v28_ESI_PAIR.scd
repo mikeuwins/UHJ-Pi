@@ -645,7 +645,6 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     layout: \horz,
     gap: 0@0
 );
-
 // Style the menus to match the GUI prototype
 ~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
@@ -737,7 +736,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
@@ -851,7 +850,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
                             // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB
                             // This aligns with Quad (1-4) and adds C and SUB
-                            var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                            var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for sub
                             var centerChan = out[0] * centerGain.dbamp * centerOn;
                             var subChan = lowpass * subGain.dbamp * subOn;
                             out = [
@@ -870,11 +869,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
                                 // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB, [6] TFL, [7] TFR
                                 // This aligns with Quad (1-4) and 5.1 (1-5), then adds height channels
-                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE/SUB
+                                var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for LFE/SUB
                                 var centerChan = out[0] * centerGain.dbamp * centerOn;
                                 var subChan = lowpass * subGain.dbamp * subOn;
-                                var heightTFL = out[6] * heightGain.dbamp * tflOn;
-                                var heightTFR = out[5] * heightGain.dbamp * tfrOn;
+                                var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
+                                var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
                                 out = [
                                     out[1] * flOn, // FL (Speaker 1) - Front Left
                                     out[4] * frOn, // FR (Speaker 2) - Front Right
@@ -978,7 +977,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \centerOn, ~dolbyState[\centerOn] ? 1,
                         \subOn, ~dolbyState[\subOn] ? 1,
                         \tflOn, ~dolbyState[\tflOn] ? 1,
-                        \tfrOn, ~dolbyState[\tfrOn] ? 1
+                        \tfrOn, ~dolbyState[\tfrOn] ? 1,
+                        \subLPF, 120,
+                        \topHPF, 180
                     ]);
                     
                     // Restore saved parameters to new synth
@@ -1050,7 +1051,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
@@ -1162,7 +1163,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
                                 // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB
                                 // This aligns with Quad (1-4) and adds C and SUB
-                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                                var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for sub
                                 var centerChan = out[0] * centerGain.dbamp * centerOn;
                                 var subChan = lowpass * subGain.dbamp * subOn;
                                 out = [
@@ -1181,11 +1182,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
                                 // UHJ-Pi layout: [0] FL, [1] FR, [2] RL, [3] RR, [4] C, [5] SUB, [6] TFL, [7] TFR
                                 // This aligns with Quad (1-4) and 5.1 (1-5), then adds height channels
-                                    var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for LFE/SUB
+                                    var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for LFE/SUB
                                     var centerChan = out[0] * centerGain.dbamp * centerOn;
                                     var subChan = lowpass * subGain.dbamp * subOn;
-                                    var heightTFL = out[6] * heightGain.dbamp * tflOn;
-                                    var heightTFR = out[5] * heightGain.dbamp * tfrOn;
+                                    var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
+                                    var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
                                     out = [
                                         out[1] * flOn, // FL (Speaker 1) - Front Left
                                         out[4] * frOn, // FR (Speaker 2) - Front Right
@@ -1295,7 +1296,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \centerOn, ~dolbyState[\centerOn] ? 1,
                             \subOn, ~dolbyState[\subOn] ? 1,
                             \tflOn, ~dolbyState[\tflOn] ? 1,
-                            \tfrOn, ~dolbyState[\tfrOn] ? 1
+                            \tfrOn, ~dolbyState[\tfrOn] ? 1,
+                            \subLPF, 120,
+                            \topHPF, 180
                         ]);
                         
                         // Restore saved parameters to new synth
@@ -1642,8 +1645,6 @@ StaticText(mainView, Rect(629, 299, 110, 22))
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .background_(Color.clear);
 win.front;
-
-
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---
 ~eqBtn = Button(mainView, Rect(180, 410, 100, 35))
     .states_([ ["EQ", Color.cyan, Color.black], ["EQ", Color.black, Color.cyan] ])
@@ -2278,7 +2279,6 @@ win.front;
         };
     };
 };
-
 // --- Synth Parameter State Management (for encoder/decoder changes) ---
 ~saveSynthParams = {
     var currentEqValues, currentAmbienceValues;
@@ -2798,13 +2798,13 @@ win.front;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
-                        3, { // Quad Square - use Dolby square size/position
-                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                        3, { // Quad Square - larger square (similar to v27)
+                            var layoutSize = 140, diagramCenterX = 160, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
                             var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
                             var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
-                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
+                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
+                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 10)); Pen.stroke;
                             // FL
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
@@ -2826,26 +2826,28 @@ win.front;
                             Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
-                        4, { // Quad Narrow - match Quad/Dolby square size
-                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
-                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
-                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
-                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
+                        4, { // Quad Narrow - taller rectangle (similar proportions to v27)
+                            var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
+                            var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
+                            var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+                            var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+                            var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+                            var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight + 8)); Pen.stroke;
                             // Draw labels same as case 3
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
-                        5, { // Quad Wide - match Quad/Dolby square size
-                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
-                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
-                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
-                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
+                        5, { // Quad Wide - wider rectangle (similar proportions to v27)
+                            var rectWidth = 170, rectHeight = 120, diagramCenterX = 160;
+                            var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 78, speakerSize = 18;
+                            var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+                            var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+                            var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+                            var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight + 8)); Pen.stroke;
                             // Draw labels same as case 3
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
@@ -2979,9 +2981,9 @@ win.front;
             // Layout title showing encoder class only
             // For Dolby layouts, center over diagram (left side); for others, use full width
             ~layoutTitleText = StaticText(~layoutOverlay, Rect(
-                if((~dmenu.value >= 3 and: { ~dmenu.value <= 7 }), 5, 15),  // For QUAD (3-5) and DOLBY (6-7), center over left diagram
-                10,  // y position
-                if((~dmenu.value >= 3 and: { ~dmenu.value <= 7 }), 150, 300),  // Narrow width for left-side diagrams
+                if((~dmenu.value == 6) or: { ~dmenu.value == 7 }, 5, 0),  // For Dolby, align over left diagram
+                10, // y position
+                if((~dmenu.value == 6) or: { ~dmenu.value == 7 }, 150, 320), // Dolby: narrow width; others: full width
                 22   // height
             ))
                 .string_(([
@@ -2999,7 +3001,6 @@ win.front;
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
-            
             // Create controls for Dolby 5.1 (case 6)
             if(~dmenu.value == 6, {
                 // All variable declarations must be at the absolute top of the block
@@ -3276,16 +3277,16 @@ win.front;
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
                     .focusColor_(Color.clear)
-                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 400, 0, 1))
+                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 4000, 0, 1))
                     .action_({ |sl|
-                        var hz = sl.value.linlin(0, 1, 80, 400); // 80-400 Hz
+                        var hz = (sl.value.linlin(0, 1, 80, 4000) / 10).round * 10; // 80-4000 Hz, stepped in 10s
                         ~dolbyState[\topHPF] = hz;
-                        if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.round.asInteger.asString ++ " Hz"; };
+                        if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.asInteger.asString ++ " Hz"; };
                         if(~synth.notNil) { ~synth.set(\topHPF, hz) };
                     });
 
                 ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 1, 44, 15))
-                    .string_(((~dolbyState[\topHPF] ? 180)).round.asInteger.asString ++ " Hz")
+                    .string_((((~dolbyState[\topHPF] ? 180) / 10).round * 10).asInteger.asString ++ " Hz")
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
@@ -3340,13 +3341,13 @@ win.front;
                 ~dolbySubSquareBtn.front;
             });
             
-            // Create on/off buttons for QUAD SQUARE (case 3)
+            // Create on/off buttons for QUAD SQUARE (case 3) - positions match larger square
             if(~dmenu.value == 3, {
-                var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                var layoutSize = 140, diagramCenterX = 160, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
                 var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
                 var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
-                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
+                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
                 ~quadSquareFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
                     .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]])
                     .font_(Font("Helvetica", 13).boldVariant)
@@ -3373,13 +3374,14 @@ win.front;
                     .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\rrOn] = ns; if(~synth.notNil) { ~synth.set(\rrOn, ns) }; btn.focus(nil); });
                 ~quadSquareFLBtn.front; ~quadSquareFRBtn.front; ~quadSquareRLBtn.front; ~quadSquareRRBtn.front;
             });
-            // QUAD NARROW (case 4)
+            // QUAD NARROW (case 4) - positions match taller rectangle
             if(~dmenu.value == 4, {
-                var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
-                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
-                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
-                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
+                var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
+                var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+                var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+                var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+                var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
                 ~quadNarrowFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
                     .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
                     .value_(if((~quadNarrowState[\flOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\flOn]=ns; if(~synth.notNil){~synth.set(\flOn,ns)}; b.focus(nil); });
@@ -3394,13 +3396,14 @@ win.front;
                     .value_(if((~quadNarrowState[\rrOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\rrOn]=ns; if(~synth.notNil){~synth.set(\rrOn,ns)}; b.focus(nil); });
                 ~quadNarrowFLBtn.front; ~quadNarrowFRBtn.front; ~quadNarrowRLBtn.front; ~quadNarrowRRBtn.front;
             });
-            // QUAD WIDE (case 5)
+            // QUAD WIDE (case 5) - positions match wider rectangle
             if(~dmenu.value == 5, {
-                var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
-                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
-                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
-                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                var rectWidth = 170, rectHeight = 120, diagramCenterX = 160;
+                var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 78, speakerSize = 18;
+                var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+                var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+                var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+                var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
                 ~quadWideFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
                     .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
                     .value_(if((~quadWideState[\flOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\flOn]=ns; if(~synth.notNil){~synth.set(\flOn,ns)}; b.focus(nil); });
@@ -3415,7 +3418,7 @@ win.front;
                     .value_(if((~quadWideState[\rrOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\rrOn]=ns; if(~synth.notNil){~synth.set(\rrOn,ns)}; b.focus(nil); });
                 ~quadWideFLBtn.front; ~quadWideFRBtn.front; ~quadWideRLBtn.front; ~quadWideRRBtn.front;
             });
-            
+            // (Removed) In-layout quad panner – using main window panner for live metering view
             // Create on/off buttons and faders for Dolby 5.1.2 (case 7)
             if(~dmenu.value == 7, {
                 // All variable declarations must be at the absolute top of the block
@@ -3720,16 +3723,16 @@ win.front;
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
                     .focusColor_(Color.clear)
-                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 400, 0, 1))
+                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 4000, 0, 1))
                     .action_({ |sl|
-                        var hz = sl.value.linlin(0, 1, 80, 400); // 80-400 Hz
+                        var hz = (sl.value.linlin(0, 1, 80, 4000) / 10).round * 10; // 80-4000 Hz, stepped in 10s
                         ~dolbyState[\topHPF] = hz;
-                        if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.round.asInteger.asString ++ " Hz"; };
+                        if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.asInteger.asString ++ " Hz"; };
                         if(~synth.notNil) { ~synth.set(\topHPF, hz) };
                     });
 
                 ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 2, 44, 15))
-                    .string_(((~dolbyState[\topHPF] ? 180)).round.asInteger.asString ++ " Hz")
+                    .string_((((~dolbyState[\topHPF] ? 180) / 10).round * 10).asInteger.asString ++ " Hz")
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
@@ -3809,12 +3812,12 @@ win.front;
             if(~quadWideFRBtn.notNil) { try { ~quadWideFRBtn.remove; }; ~quadWideFRBtn = nil; };
             if(~quadWideRLBtn.notNil) { try { ~quadWideRLBtn.remove; }; ~quadWideRLBtn = nil; };
             if(~quadWideRRBtn.notNil) { try { ~quadWideRRBtn.remove; }; ~quadWideRRBtn = nil; };
+            // (Removed) Quad panner cleanup not needed (panner lives in main window)
             if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
             // Add cleanup for other layout controls here as needed
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
         }
     });
-
 // --- DIMENSION OVERLAY BUTTON ---
 ~dimensionBtn = Button(mainView, Rect(290, 410, 100, 35))
     .states_([["DIMENSION", Color.cyan, Color.black], ["DIMENSION", Color.black, Color.cyan]])
