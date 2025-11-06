@@ -82,6 +82,26 @@ var win, mainView,
     \tfrOn, 1              // Top Front Right on/off (1 = on, 0 = off)
 ]);
 
+// --- Quad layout state preservation variables (independent per layout) ---
+~quadSquareState = Dictionary.newFrom([
+    \flOn, 1,              // Front Left on/off (1 = on, 0 = off)
+    \frOn, 1,              // Front Right on/off (1 = on, 0 = off)
+    \rlOn, 1,              // Rear Left on/off (1 = on, 0 = off)
+    \rrOn, 1               // Rear Right on/off (1 = on, 0 = off)
+]);
+~quadNarrowState = Dictionary.newFrom([
+    \flOn, 1,              // Front Left on/off (1 = on, 0 = off)
+    \frOn, 1,              // Front Right on/off (1 = on, 0 = off)
+    \rlOn, 1,              // Rear Left on/off (1 = on, 0 = off)
+    \rrOn, 1               // Rear Right on/off (1 = on, 0 = off)
+]);
+~quadWideState = Dictionary.newFrom([
+    \flOn, 1,              // Front Left on/off (1 = on, 0 = off)
+    \frOn, 1,              // Front Right on/off (1 = on, 0 = off)
+    \rlOn, 1,              // Rear Left on/off (1 = on, 0 = off)
+    \rrOn, 1               // Rear Right on/off (1 = on, 0 = off)
+]);
+
 // --- Dimension overlay variables ---
 ~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
 ~dimensionWidthValue = nil; ~dimensionWidthHPFValue = nil; ~dimensionTrimValue = nil;
@@ -574,6 +594,33 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 .front;
         };
 
+        // --- Update synth with correct state when switching decoders (before recreating overlay) ---
+        if(~synth.notNil) {
+            var currentState;
+            if((idx >= 3) and: { idx <= 5 }, {
+                // Quad layouts - use appropriate quad state
+                currentState = if(idx == 3, { ~quadSquareState }, {
+                    if(idx == 4, { ~quadNarrowState }, { ~quadWideState })
+                });
+                ~synth.set(
+                    \flOn, currentState[\flOn] ? 1,
+                    \frOn, currentState[\frOn] ? 1,
+                    \rlOn, currentState[\rlOn] ? 1,
+                    \rrOn, currentState[\rrOn] ? 1
+                );
+            }, {
+                if((idx == 6) or: { idx == 7 }, {
+                    // Dolby layouts - use dolby state
+                    ~synth.set(
+                        \flOn, ~dolbyState[\flOn] ? 1,
+                        \frOn, ~dolbyState[\frOn] ? 1,
+                        \rlOn, ~dolbyState[\rlOn] ? 1,
+                        \rrOn, ~dolbyState[\rrOn] ? 1
+                    );
+                });
+            });
+        };
+        
         // --- Recreate layout overlay controls if open (treat decoder change like reopening layout) ---
         if(~layoutOverlay.notNil and: { ~layoutBtn.notNil and: { ~layoutBtn.value == 1 } }) {
             // Close the layout overlay first (this cleans up controls)
@@ -793,10 +840,10 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
                             quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
                             out = [
-                                quadOutFront[0], // LF (Speaker 1)
-                                quadOutFront[1], // FR (Speaker 2)
-                                quadOutRear[0],  // RL (Speaker 3)
-                                quadOutRear[1]   // RR (Speaker 4)
+                                quadOutFront[0] * flOn, // LF (Speaker 1)
+                                quadOutFront[1] * frOn, // FR (Speaker 2)
+                                quadOutRear[0]  * rlOn, // RL (Speaker 3)
+                                quadOutRear[1]  * rrOn  // RR (Speaker 4)
                             ];
                         });
                         if(outputs == 6, {
@@ -904,14 +951,30 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \zsynthAmbienceSize, zsSize,
                         \zsynthAmbienceDampening, zsDamp,
                         \zsynthAmbienceMix, zsMix,
-                        // Dolby control parameters
+                        // Dolby/Quad control parameters - use appropriate state based on decoder
                         \centerGain, ~dolbyState[\centerGain] ? 0.0,
                         \subGain, ~dolbyState[\subGain] ? 0.0,
                         \heightGain, ~dolbyState[\heightGain] ? 0.0,
-                        \flOn, ~dolbyState[\flOn] ? 1,
-                        \frOn, ~dolbyState[\frOn] ? 1,
-                        \rlOn, ~dolbyState[\rlOn] ? 1,
-                        \rrOn, ~dolbyState[\rrOn] ? 1,
+                        \flOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                            if(~dmenu.value == 3, { ~quadSquareState[\flOn] ? 1 }, {
+                                if(~dmenu.value == 4, { ~quadNarrowState[\flOn] ? 1 }, { ~quadWideState[\flOn] ? 1 })
+                            })
+                        }, { ~dolbyState[\flOn] ? 1 }),
+                        \frOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                            if(~dmenu.value == 3, { ~quadSquareState[\frOn] ? 1 }, {
+                                if(~dmenu.value == 4, { ~quadNarrowState[\frOn] ? 1 }, { ~quadWideState[\frOn] ? 1 })
+                            })
+                        }, { ~dolbyState[\frOn] ? 1 }),
+                        \rlOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                            if(~dmenu.value == 3, { ~quadSquareState[\rlOn] ? 1 }, {
+                                if(~dmenu.value == 4, { ~quadNarrowState[\rlOn] ? 1 }, { ~quadWideState[\rlOn] ? 1 })
+                            })
+                        }, { ~dolbyState[\rlOn] ? 1 }),
+                        \rrOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                            if(~dmenu.value == 3, { ~quadSquareState[\rrOn] ? 1 }, {
+                                if(~dmenu.value == 4, { ~quadNarrowState[\rrOn] ? 1 }, { ~quadWideState[\rrOn] ? 1 })
+                            })
+                        }, { ~dolbyState[\rrOn] ? 1 }),
                         \centerOn, ~dolbyState[\centerOn] ? 1,
                         \subOn, ~dolbyState[\subOn] ? 1,
                         \tflOn, ~dolbyState[\tflOn] ? 1,
@@ -1087,12 +1150,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                                 rearStereo  = Balance2.ar(out[1], out[2], quadLR); // RL, RR
                                 quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
                                 quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
-                                out = [
-                                    quadOutFront[0], // LF (Speaker 1)
-                                    quadOutFront[1], // FR (Speaker 2)
-                                    quadOutRear[0],  // RL (Speaker 3)
-                                    quadOutRear[1]   // RR (Speaker 4)
-                                ];
+                            out = [
+                                quadOutFront[0] * flOn, // LF (Speaker 1)
+                                quadOutFront[1] * frOn, // FR (Speaker 2)
+                                quadOutRear[0]  * rlOn, // RL (Speaker 3)
+                                quadOutRear[1]  * rrOn  // RR (Speaker 4)
+                            ];
                             });
                             if(outputs == 6, {
                                 // --- UHJ-PI 5.1 OUTPUT MAPPING ---
@@ -1205,14 +1268,30 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \zsynthAmbienceSize, zsSize2,
                             \zsynthAmbienceDampening, zsDamp2,
                             \zsynthAmbienceMix, zsMix2,
-                            // Dolby control parameters
+                            // Dolby/Quad control parameters - use appropriate state based on decoder
                             \centerGain, ~dolbyState[\centerGain] ? 0.0,
                             \subGain, ~dolbyState[\subGain] ? 0.0,
                             \heightGain, ~dolbyState[\heightGain] ? 0.0,
-                            \flOn, ~dolbyState[\flOn] ? 1,
-                            \frOn, ~dolbyState[\frOn] ? 1,
-                            \rlOn, ~dolbyState[\rlOn] ? 1,
-                            \rrOn, ~dolbyState[\rrOn] ? 1,
+                            \flOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                                if(~dmenu.value == 3, { ~quadSquareState[\flOn] ? 1 }, {
+                                    if(~dmenu.value == 4, { ~quadNarrowState[\flOn] ? 1 }, { ~quadWideState[\flOn] ? 1 })
+                                })
+                            }, { ~dolbyState[\flOn] ? 1 }),
+                            \frOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                                if(~dmenu.value == 3, { ~quadSquareState[\frOn] ? 1 }, {
+                                    if(~dmenu.value == 4, { ~quadNarrowState[\frOn] ? 1 }, { ~quadWideState[\frOn] ? 1 })
+                                })
+                            }, { ~dolbyState[\frOn] ? 1 }),
+                            \rlOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                                if(~dmenu.value == 3, { ~quadSquareState[\rlOn] ? 1 }, {
+                                    if(~dmenu.value == 4, { ~quadNarrowState[\rlOn] ? 1 }, { ~quadWideState[\rlOn] ? 1 })
+                                })
+                            }, { ~dolbyState[\rlOn] ? 1 }),
+                            \rrOn, if((~dmenu.value >= 3) and: { ~dmenu.value <= 5 }, {
+                                if(~dmenu.value == 3, { ~quadSquareState[\rrOn] ? 1 }, {
+                                    if(~dmenu.value == 4, { ~quadNarrowState[\rrOn] ? 1 }, { ~quadWideState[\rrOn] ? 1 })
+                                })
+                            }, { ~dolbyState[\rrOn] ? 1 }),
                             \centerOn, ~dolbyState[\centerOn] ? 1,
                             \subOn, ~dolbyState[\subOn] ? 1,
                             \tflOn, ~dolbyState[\tflOn] ? 1,
@@ -2719,68 +2798,59 @@ win.front;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
-                        3, { // Quad Square
-                            var squareSize = 140, halfSquare = squareSize / 2;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare + 25, squareSize, squareSize)); Pen.stroke;
-                            // Speaker 1: Front Left
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 3, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 2: Front Right
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 3: Rear Left
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 3, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 4: Rear Right
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] RL, [4] RR", Point(centerX - 82, 32), Font("Helvetica", 13), Color.cyan);
+                        3, { // Quad Square - use Dolby square size/position
+                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
+                            // FL
+                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // FR
+                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RL
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RR
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
-                        4, { // Quad Narrow
-                            var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2) + 25;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
-                            // Speaker 1: Front Left
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 2: Front Right
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 3: Rear Left
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 4: Rear Right
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] RL, [4] RR", Point(centerX - 82, 32), Font("Helvetica", 13), Color.cyan);
+                        4, { // Quad Narrow - match Quad/Dolby square size
+                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
+                            // Draw labels same as case 3
+                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
-                        5, { // Quad Wide
-                            var rectWidth = 140, rectHeight = 105, rectLeft = centerX - (rectWidth / 2), totalHeight = rectHeight + 20, rectTop = centerY - (totalHeight / 2) + 10 + 25;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
-                            // Speaker 1: Front Left
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 2: Front Right
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 3: Rear Left
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 4: Rear Right
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] RL, [4] RR", Point(centerX - 82, 32), Font("Helvetica", 13), Color.cyan);
+                        5, { // Quad Wide - match Quad/Dolby square size
+                            var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
+                            // Draw labels same as case 3
+                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         6, { // Dolby 5.1
                             var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18, frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9, frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9, centerX_speaker = layoutLeft + (layoutSize / 2) - 9, centerY_speaker = layoutTop - 9, surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7, surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7, subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
@@ -2909,18 +2979,18 @@ win.front;
             // Layout title showing encoder class only
             // For Dolby layouts, center over diagram (left side); for others, use full width
             ~layoutTitleText = StaticText(~layoutOverlay, Rect(
-                if((~dmenu.value == 6) or: { (~dmenu.value == 7) }, 5, 15),  // titleX: Center over diagram at x=5 for Dolby
+                if((~dmenu.value >= 3 and: { ~dmenu.value <= 7 }), 5, 15),  // For QUAD (3-5) and DOLBY (6-7), center over left diagram
                 10,  // y position
-                if((~dmenu.value == 6) or: { (~dmenu.value == 7) }, 150, 300),  // titleWidth
+                if((~dmenu.value >= 3 and: { ~dmenu.value <= 7 }), 150, 300),  // Narrow width for left-side diagrams
                 22   // height
             ))
                 .string_(([
                     "STEREO",
                     "BINAURAL IRCAM",
                     "BINAURAL CIPIC",
-                    "QUADRAPHONIC SQUARE",
-                    "QUADRAPHONIC NARROW",
-                    "QUADRAPHONIC WIDE",
+                    "QUAD SQUARE",
+                    "QUAD NARROW",
+                    "QUAD WIDE",
                     "DOLBY 5.1",
                     "DOLBY 5.1.2",
                     "OCTAGON"
@@ -2940,6 +3010,8 @@ win.front;
                 var surroundLeftX = 21, surroundLeftY = 182;
                 var surroundRightX = 121, surroundRightY = 182;
                 var subwooferX = 71, subwooferY = 132;
+                var controlStartX = 170, controlY = 14, sliderWidth = 35, sliderHeight = 164, controlSpacing = 43;
+                var rightmostFaderX;
                 
                 "Creating controls for Dolby 5.1 (case 6)".postln;
                 
@@ -3039,14 +3111,14 @@ win.front;
                         btn.focus(nil);
                     });
                 
-                // CENTER fader
-                StaticText(~layoutOverlay, Rect(170, 14, 35, 15))
-                    .string_("CENTER")
+                // Fader controls for CENTER (now middle slot after swapping with SUB)
+                StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY, sliderWidth, 15))
+                    .string_("C")
                     .align_(\center)
                     .stringColor_(Color.cyan)
-                    .font_(Font("Helvetica", 10).boldVariant);
+                    .font_(Font("Helvetica", 11).boldVariant);
                 
-                ~dolbyCenterGainSlider = Slider(~layoutOverlay, Rect(170, 32, 35, 164))
+                ~dolbyCenterGainSlider = Slider(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY + 18, sliderWidth, sliderHeight))
                     .orientation_(\vertical)
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
@@ -3061,12 +3133,204 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\centerGain, gain) };
                     });
                 
-                ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(170, 199, 35, 15))
+                ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, 199, sliderWidth, 15))
                     .string_((~dolbyState[\centerGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
                     .stringColor_(Color.cyan)
-                    .font_(Font("Helvetica", 10).boldVariant);
+                    .font_(Font("Helvetica", 11).boldVariant);
                 
+                // Fader controls for SUB (moved to rightmost slot)
+                StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY, sliderWidth, 15))
+                    .string_("SUB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                ~dolbySubGainSlider = Slider(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY + 18, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\subGain] ? 0.0).linlin(-12, 12, 0, 1))
+                    .action_({ |sl|
+                        var gain = sl.value.linlin(0, 1, -12, 12);
+                        ~dolbyState[\subGain] = gain;
+                        if(~dolbySubGainLabel.notNil) {
+                            ~dolbySubGainLabel.string = gain.round(0.1).asString ++ "dB";
+                        };
+                        if(~synth.notNil) { ~synth.set(\subGain, gain) };
+                    });
+                
+                ~dolbySubGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), 199, sliderWidth, 15))
+                    .string_((~dolbyState[\subGain] ? 0.0).round(0.1).asString ++ "dB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                // TOP (height) fader is still drawn, but visually dimmed by overlay (moved to leftmost slot)
+                StaticText(~layoutOverlay, Rect(controlStartX, controlY, sliderWidth, 15))
+                    .string_("TOP")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                ~dolbyHeightGainSlider = Slider(~layoutOverlay, Rect(controlStartX, controlY + 18, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\heightGain] ? 0.0).linlin(-12, 12, 0, 1))
+                    .action_({ |sl|
+                        var gain = sl.value.linlin(0, 1, -12, 12);
+                        ~dolbyState[\heightGain] = gain;
+                        if(~dolbyHeightGainLabel.notNil) {
+                            ~dolbyHeightGainLabel.string = gain.round(0.1).asString ++ "dB";
+                        };
+                        if(~synth.notNil) { ~synth.set(\heightGain, gain) };
+                    });
+
+                ~dolbyHeightGainLabel = StaticText(~layoutOverlay, Rect(controlStartX, 199, sliderWidth, 15))
+                    .string_((~dolbyState[\heightGain] ? 0.0).round(0.1).asString ++ "dB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                // dB scale labels (single set on the right, after TOP fader to match 5.1.2)
+                rightmostFaderX = controlStartX + (controlSpacing * 2) + sliderWidth;
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 14, 20, 15))
+                    .string_("+12")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + (sliderHeight / 4) - 7, 20, 15))
+                    .string_("+6")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + (sliderHeight / 2) - 7, 20, 15))
+                    .string_("0")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + (sliderHeight * 3 / 4) - 7, 20, 15))
+                    .string_("-6")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + sliderHeight - 7, 20, 15))
+                    .string_("-12")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                
+                // Draw tick marks BETWEEN the faders (between CENTER and SUB)
+                UserView(~layoutOverlay, Rect(controlStartX + sliderWidth, controlY + 18, 8, sliderHeight))
+                    .background_(Color.clear)
+                    .drawFunc_({ |view|
+                        Pen.color = Color.cyan;
+                        Pen.width = 1.5;
+                        // Major ticks
+                        Pen.line(Point(2, 0), Point(6, 0)); Pen.stroke; // +12dB
+                        Pen.line(Point(2, sliderHeight / 2), Point(6, sliderHeight / 2)); Pen.stroke; // 0dB
+                        Pen.line(Point(2, sliderHeight), Point(6, sliderHeight)); Pen.stroke; // -12dB
+                        // Minor ticks
+                        Pen.width = 1;
+                        Pen.line(Point(3, sliderHeight / 4), Point(5, sliderHeight / 4)); Pen.stroke; // +6dB
+                        Pen.line(Point(3, sliderHeight * 3 / 4), Point(5, sliderHeight * 3 / 4)); Pen.stroke; // -6dB
+                    });
+                
+                // Draw tick marks BETWEEN the faders (between SUB and TOP)
+                UserView(~layoutOverlay, Rect(controlStartX + controlSpacing + sliderWidth, controlY + 18, 8, sliderHeight))
+                    .background_(Color.clear)
+                    .drawFunc_({ |view|
+                        Pen.color = Color.cyan;
+                        Pen.width = 1.5;
+                        // Major ticks
+                        Pen.line(Point(2, 0), Point(6, 0)); Pen.stroke; // +12dB
+                        Pen.line(Point(2, sliderHeight / 2), Point(6, sliderHeight / 2)); Pen.stroke; // 0dB
+                        Pen.line(Point(2, sliderHeight), Point(6, sliderHeight)); Pen.stroke; // -12dB
+                        // Minor ticks
+                        Pen.width = 1;
+                        Pen.line(Point(3, sliderHeight / 4), Point(5, sliderHeight / 4)); Pen.stroke; // +6dB
+                        Pen.line(Point(3, sliderHeight * 3 / 4), Point(5, sliderHeight * 3 / 4)); Pen.stroke; // -6dB
+                    });
+
+                // Semi-transparent overlay covering the TOP label, slider, and bottom value (dim entire fader block), now at leftmost slot
+                if(~dolbyHeightOverlay.notNil) { ~dolbyHeightOverlay.remove; ~dolbyHeightOverlay = nil; };
+                ~dolbyHeightOverlay = View(~layoutOverlay, Rect(controlStartX, controlY, sliderWidth + 8, (199 + 15) - controlY))
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+                
+                // Extra slender faders BELOW the diagram and vertical faders
+                // Geometry: left aligns to right edge of speaker 3 box; right leaves space for value labels
+                // TOP LPF - now top horizontal slender fader (swapped with SUB)
+                ~dolbyTopHpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, controlY + 18 + sliderHeight + 30 + 3, 56, 15))
+                    .string_("TOP LPF")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                ~dolbyTopHpfSlider = Slider(~layoutOverlay, Rect((surroundLeftX + speakerSize) + 33, controlY + 18 + sliderHeight + 30, (((rightmostFaderX - 50) - (surroundLeftX + speakerSize)) - 9) - 2, 17))
+                    .orientation_(\horizontal)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 400, 0, 1))
+                    .action_({ |sl|
+                        var hz = sl.value.linlin(0, 1, 80, 400); // 80-400 Hz
+                        ~dolbyState[\topHPF] = hz;
+                        if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.round.asInteger.asString ++ " Hz"; };
+                        if(~synth.notNil) { ~synth.set(\topHPF, hz) };
+                    });
+
+                ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 1, 44, 15))
+                    .string_(((~dolbyState[\topHPF] ? 180)).round.asInteger.asString ++ " Hz")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                // SUB LPF - now bottom horizontal slender fader
+                ~dolbySubLpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, (controlY + 18 + sliderHeight + 30) + 18 + 6, 56, 15))
+                    .string_("SUB LPF")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                ~dolbySubLpfSlider = Slider(~layoutOverlay, Rect((surroundLeftX + speakerSize) + 33, (controlY + 18 + sliderHeight + 30) + 22, (((rightmostFaderX - 50) - (surroundLeftX + speakerSize)) - 9) - 2, 17))
+                    .orientation_(\horizontal)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\subLPF] ? 120).linlin(40, 200, 0, 1))
+                    .action_({ |sl|
+                        var hz = sl.value.linlin(0, 1, 40, 200); // 40-200 Hz
+                        ~dolbyState[\subLPF] = hz;
+                        if(~dolbySubLpfValue.notNil) { ~dolbySubLpfValue.string = hz.round.asInteger.asString ++ " Hz"; };
+                        if(~synth.notNil) { ~synth.set(\subLPF, hz) };
+                    });
+
+                ~dolbySubLpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, (controlY + 18 + sliderHeight + 30 + 18) + 5, 44, 15))
+                    .string_(((~dolbyState[\subLPF] ? 120)).round.asInteger.asString ++ " Hz")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                // Dim overlay for TOP LPF (label, fader, value) in Dolby 5.1 to match disabled TOP behavior (now top row)
+                if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
+                ~dolbyTopLpfOverlay = View(
+                    ~layoutOverlay,
+                    Rect(
+                        ((surroundLeftX + speakerSize) - 32 - 6 + 8) - 6, // a little left of label
+                        (controlY + 18 + sliderHeight + 30) - 1,     // moved up 3px
+                        ((controlStartX + (rightmostFaderX - controlStartX) + 44 + 6) - (((surroundLeftX + speakerSize) - 32 - 6 + 8) - 6)) - 34, // reduce right edge by 34px total
+                        24 // reduce bottom by 10px (was 34)
+                    )
+                )
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+
                 // Bring all buttons to front so they're clickable
                 ~dolbyFLSquareBtn.front;
                 ~dolbyFRSquareBtn.front;
@@ -3074,6 +3338,82 @@ win.front;
                 ~dolbyRRSquareBtn.front;
                 ~dolbyCenterSquareBtn.front;
                 ~dolbySubSquareBtn.front;
+            });
+            
+            // Create on/off buttons for QUAD SQUARE (case 3)
+            if(~dmenu.value == 3, {
+                var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                ~quadSquareFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~quadSquareState[\flOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\flOn] = ns; if(~synth.notNil) { ~synth.set(\flOn, ns) }; btn.focus(nil); });
+                ~quadSquareFRBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .states_([["2", Color.black, Color.cyan],["2", Color.cyan, Color.black]])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~quadSquareState[\frOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\frOn] = ns; if(~synth.notNil) { ~synth.set(\frOn, ns) }; btn.focus(nil); });
+                ~quadSquareRLBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .states_([["3", Color.black, Color.cyan],["3", Color.cyan, Color.black]])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~quadSquareState[\rlOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\rlOn] = ns; if(~synth.notNil) { ~synth.set(\rlOn, ns) }; btn.focus(nil); });
+                ~quadSquareRRBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .states_([["4", Color.black, Color.cyan],["4", Color.cyan, Color.black]])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~quadSquareState[\rrOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\rrOn] = ns; if(~synth.notNil) { ~synth.set(\rrOn, ns) }; btn.focus(nil); });
+                ~quadSquareFLBtn.front; ~quadSquareFRBtn.front; ~quadSquareRLBtn.front; ~quadSquareRRBtn.front;
+            });
+            // QUAD NARROW (case 4)
+            if(~dmenu.value == 4, {
+                var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                ~quadNarrowFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadNarrowState[\flOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\flOn]=ns; if(~synth.notNil){~synth.set(\flOn,ns)}; b.focus(nil); });
+                ~quadNarrowFRBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .states_([["2", Color.black, Color.cyan],["2", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadNarrowState[\frOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\frOn]=ns; if(~synth.notNil){~synth.set(\frOn,ns)}; b.focus(nil); });
+                ~quadNarrowRLBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .states_([["3", Color.black, Color.cyan],["3", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadNarrowState[\rlOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\rlOn]=ns; if(~synth.notNil){~synth.set(\rlOn,ns)}; b.focus(nil); });
+                ~quadNarrowRRBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .states_([["4", Color.black, Color.cyan],["4", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadNarrowState[\rrOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\rrOn]=ns; if(~synth.notNil){~synth.set(\rrOn,ns)}; b.focus(nil); });
+                ~quadNarrowFLBtn.front; ~quadNarrowFRBtn.front; ~quadNarrowRLBtn.front; ~quadNarrowRRBtn.front;
+            });
+            // QUAD WIDE (case 5)
+            if(~dmenu.value == 5, {
+                var layoutSize = 100, diagramCenterX = 80, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 84, speakerSize = 18;
+                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
+                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
+                ~quadWideFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadWideState[\flOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\flOn]=ns; if(~synth.notNil){~synth.set(\flOn,ns)}; b.focus(nil); });
+                ~quadWideFRBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .states_([["2", Color.black, Color.cyan],["2", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadWideState[\frOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\frOn]=ns; if(~synth.notNil){~synth.set(\frOn,ns)}; b.focus(nil); });
+                ~quadWideRLBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .states_([["3", Color.black, Color.cyan],["3", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadWideState[\rlOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\rlOn]=ns; if(~synth.notNil){~synth.set(\rlOn,ns)}; b.focus(nil); });
+                ~quadWideRRBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .states_([["4", Color.black, Color.cyan],["4", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
+                    .value_(if((~quadWideState[\rrOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadWideState[\rrOn]=ns; if(~synth.notNil){~synth.set(\rrOn,ns)}; b.focus(nil); });
+                ~quadWideFLBtn.front; ~quadWideFRBtn.front; ~quadWideRLBtn.front; ~quadWideRRBtn.front;
             });
             
             // Create on/off buttons and faders for Dolby 5.1.2 (case 7)
@@ -3090,6 +3430,7 @@ win.front;
                 var topFrontRightX = 121, topFrontRightY = 35;
                 var controlStartX = 170, controlY = 14, sliderWidth = 35, sliderHeight = 164, controlSpacing = 43;
                 var rightmostFaderX;
+                // (no extra layout vars for slim faders; compute inline below)
                 
                 ("Creating controls for Dolby 5.1.2 (case 7), decoder value: " ++ ~dmenu.value).postln;
                 // Speaker positions (matching drawFunc exactly for case 7)
@@ -3222,14 +3563,14 @@ win.front;
                         btn.focus(nil);
                     });
                 
-                // Fader controls for CENTER
-                StaticText(~layoutOverlay, Rect(controlStartX, controlY, sliderWidth, 15))
+                // Fader controls for CENTER (now middle slot after swapping with SUB)
+                StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY, sliderWidth, 15))
                     .string_("C")
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
                 
-                ~dolbyCenterGainSlider = Slider(~layoutOverlay, Rect(controlStartX, controlY + 18, sliderWidth, sliderHeight))
+                ~dolbyCenterGainSlider = Slider(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY + 18, sliderWidth, sliderHeight))
                     .orientation_(\vertical)
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
@@ -3244,20 +3585,26 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\centerGain, gain) };
                     });
                 
-                ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(controlStartX, 199, sliderWidth, 15))
+                ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, 199, sliderWidth, 15))
                     .string_((~dolbyState[\centerGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
                 
-                // Fader controls for SUB
-                StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY, sliderWidth, 15))
+                // Fader controls for TOP (height/ceiling speakers) moved to leftmost slot
+                StaticText(~layoutOverlay, Rect(controlStartX, controlY, sliderWidth, 15))
+                    .string_("TOP")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                // Fader controls for SUB (moved to rightmost slot)
+                StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY, sliderWidth, 15))
                     .string_("SUB")
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
                 
-                ~dolbySubGainSlider = Slider(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY + 18, sliderWidth, sliderHeight))
+                ~dolbySubGainSlider = Slider(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY + 18, sliderWidth, sliderHeight))
                     .orientation_(\vertical)
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
@@ -3272,20 +3619,13 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\subGain, gain) };
                     });
                 
-                ~dolbySubGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, 199, sliderWidth, 15))
+                ~dolbySubGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), 199, sliderWidth, 15))
                     .string_((~dolbyState[\subGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
                 
-                // Fader controls for TOP (height/ceiling speakers)
-                StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY, sliderWidth, 15))
-                    .string_("TOP")
-                    .align_(\center)
-                    .stringColor_(Color.cyan)
-                    .font_(Font("Helvetica", 11).boldVariant);
-                
-                ~dolbyHeightGainSlider = Slider(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY + 18, sliderWidth, sliderHeight))
+                ~dolbyHeightGainSlider = Slider(~layoutOverlay, Rect(controlStartX, controlY + 18, sliderWidth, sliderHeight))
                     .orientation_(\vertical)
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
@@ -3300,7 +3640,7 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\heightGain, gain) };
                     });
                 
-                ~dolbyHeightGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), 199, sliderWidth, 15))
+                ~dolbyHeightGainLabel = StaticText(~layoutOverlay, Rect(controlStartX, 199, sliderWidth, 15))
                     .string_((~dolbyState[\heightGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
                     .stringColor_(Color.cyan)
@@ -3308,7 +3648,7 @@ win.front;
                 
                 // dB scale labels (single set on the right, after TOP fader)
                 rightmostFaderX = controlStartX + (controlSpacing * 2) + sliderWidth;
-                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18, 20, 15))
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 14, 20, 15))
                     .string_("+12")
                     .align_(\left)
                     .stringColor_(Color.cyan)
@@ -3366,6 +3706,59 @@ win.front;
                         Pen.line(Point(3, sliderHeight / 4), Point(5, sliderHeight / 4)); Pen.stroke; // +6dB
                         Pen.line(Point(3, sliderHeight * 3 / 4), Point(5, sliderHeight * 3 / 4)); Pen.stroke; // -6dB
                     });
+
+                // Extra slender faders BELOW the diagram and vertical faders
+                // TOP LPF - now top horizontal slender fader (swapped with SUB)
+                ~dolbyTopHpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, controlY + 18 + sliderHeight + 30 + 3, 56, 15))
+                    .string_("TOP LPF")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                ~dolbyTopHpfSlider = Slider(~layoutOverlay, Rect((surroundLeftX + speakerSize) + 33, controlY + 18 + sliderHeight + 30, (((rightmostFaderX - 50) - (surroundLeftX + speakerSize)) - 9) - 2, 17))
+                    .orientation_(\horizontal)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 400, 0, 1))
+                    .action_({ |sl|
+                        var hz = sl.value.linlin(0, 1, 80, 400); // 80-400 Hz
+                        ~dolbyState[\topHPF] = hz;
+                        if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.round.asInteger.asString ++ " Hz"; };
+                        if(~synth.notNil) { ~synth.set(\topHPF, hz) };
+                    });
+
+                ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 2, 44, 15))
+                    .string_(((~dolbyState[\topHPF] ? 180)).round.asInteger.asString ++ " Hz")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                // SUB LPF - now bottom horizontal slender fader
+                ~dolbySubLpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, (controlY + 18 + sliderHeight + 30) + 18 + 6, 56, 15))
+                    .string_("SUB LPF")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+
+                ~dolbySubLpfSlider = Slider(~layoutOverlay, Rect((surroundLeftX + speakerSize) + 33, (controlY + 18 + sliderHeight + 30) + 22, (((rightmostFaderX - 50) - (surroundLeftX + speakerSize)) - 9) - 2, 17))
+                    .orientation_(\horizontal)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\subLPF] ? 120).linlin(40, 200, 0, 1))
+                    .action_({ |sl|
+                        var hz = sl.value.linlin(0, 1, 40, 200); // 40-200 Hz
+                        ~dolbyState[\subLPF] = hz;
+                        if(~dolbySubLpfValue.notNil) { ~dolbySubLpfValue.string = hz.round.asInteger.asString ++ " Hz"; };
+                        if(~synth.notNil) { ~synth.set(\subLPF, hz) };
+                    });
+
+                ~dolbySubLpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, (controlY + 18 + sliderHeight + 30 + 18) + 6, 44, 15))
+                    .string_(((~dolbyState[\subLPF] ? 120)).round.asInteger.asString ++ " Hz")
+                    .align_(\right)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
                 
                 // Bring all buttons to front so they're clickable
                 ~dolbyFLSquareBtn.front;
@@ -3398,6 +3791,25 @@ win.front;
             if(~dolbySubGainLabel.notNil) { try { ~dolbySubGainLabel.remove; }; ~dolbySubGainLabel = nil; };
             if(~dolbyHeightGainSlider.notNil) { try { ~dolbyHeightGainSlider.remove; }; ~dolbyHeightGainSlider = nil; };
             if(~dolbyHeightGainLabel.notNil) { try { ~dolbyHeightGainLabel.remove; }; ~dolbyHeightGainLabel = nil; };
+            if(~dolbyHeightOverlay.notNil) { try { ~dolbyHeightOverlay.remove; }; ~dolbyHeightOverlay = nil; };
+            if(~dolbySubLpfSlider.notNil) { try { ~dolbySubLpfSlider.remove; }; ~dolbySubLpfSlider = nil; };
+            if(~dolbySubLpfValue.notNil) { try { ~dolbySubLpfValue.remove; }; ~dolbySubLpfValue = nil; };
+            if(~dolbyTopHpfSlider.notNil) { try { ~dolbyTopHpfSlider.remove; }; ~dolbyTopHpfSlider = nil; };
+            if(~dolbyTopHpfValue.notNil) { try { ~dolbyTopHpfValue.remove; }; ~dolbyTopHpfValue = nil; };
+            // Quad layout specific buttons cleanup
+            if(~quadSquareFLBtn.notNil) { try { ~quadSquareFLBtn.remove; }; ~quadSquareFLBtn = nil; };
+            if(~quadSquareFRBtn.notNil) { try { ~quadSquareFRBtn.remove; }; ~quadSquareFRBtn = nil; };
+            if(~quadSquareRLBtn.notNil) { try { ~quadSquareRLBtn.remove; }; ~quadSquareRLBtn = nil; };
+            if(~quadSquareRRBtn.notNil) { try { ~quadSquareRRBtn.remove; }; ~quadSquareRRBtn = nil; };
+            if(~quadNarrowFLBtn.notNil) { try { ~quadNarrowFLBtn.remove; }; ~quadNarrowFLBtn = nil; };
+            if(~quadNarrowFRBtn.notNil) { try { ~quadNarrowFRBtn.remove; }; ~quadNarrowFRBtn = nil; };
+            if(~quadNarrowRLBtn.notNil) { try { ~quadNarrowRLBtn.remove; }; ~quadNarrowRLBtn = nil; };
+            if(~quadNarrowRRBtn.notNil) { try { ~quadNarrowRRBtn.remove; }; ~quadNarrowRRBtn = nil; };
+            if(~quadWideFLBtn.notNil) { try { ~quadWideFLBtn.remove; }; ~quadWideFLBtn = nil; };
+            if(~quadWideFRBtn.notNil) { try { ~quadWideFRBtn.remove; }; ~quadWideFRBtn = nil; };
+            if(~quadWideRLBtn.notNil) { try { ~quadWideRLBtn.remove; }; ~quadWideRLBtn = nil; };
+            if(~quadWideRRBtn.notNil) { try { ~quadWideRRBtn.remove; }; ~quadWideRRBtn = nil; };
+            if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
             // Add cleanup for other layout controls here as needed
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
         }
