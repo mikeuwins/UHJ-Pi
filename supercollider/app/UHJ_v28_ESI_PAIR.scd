@@ -2932,8 +2932,114 @@ win.front;
             
             // Create controls for Dolby 5.1 (case 6)
             if(~dmenu.value == 6, {
+                // All variable declarations must be at the absolute top of the block
+                var layoutSize = 100, diagramCenterX = 80, layoutLeft = 30, layoutTop = 84, speakerSize = 18;
+                var frontLeftX = 21, frontLeftY = 75;
+                var frontRightX = 121, frontRightY = 75;
+                var centerX_speaker = 71, centerY_speaker = 75;
+                var surroundLeftX = 21, surroundLeftY = 182;
+                var surroundRightX = 121, surroundRightY = 182;
+                var subwooferX = 71, subwooferY = 132;
+                
                 "Creating controls for Dolby 5.1 (case 6)".postln;
-                // Create ONE simple CENTER fader - exactly like EQ sliders
+                
+                // Speaker 1: Front Left (FL)
+                ~dolbyFLSquareBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .states_([
+                        ["1", Color.black, Color.cyan],
+                        ["1", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\flOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\flOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\flOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 2: Front Right (FR)
+                ~dolbyFRSquareBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .states_([
+                        ["2", Color.black, Color.cyan],
+                        ["2", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\frOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\frOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\frOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 3: Rear Left (RL)
+                ~dolbyRLSquareBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .states_([
+                        ["3", Color.black, Color.cyan],
+                        ["3", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\rlOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\rlOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rlOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 4: Rear Right (RR)
+                ~dolbyRRSquareBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .states_([
+                        ["4", Color.black, Color.cyan],
+                        ["4", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\rrOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\rrOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rrOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 5: Center (C)
+                ~dolbyCenterSquareBtn = Button(~layoutOverlay, Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize))
+                    .states_([
+                        ["5", Color.black, Color.cyan],
+                        ["5", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\centerOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\centerOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\centerOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // Speaker 6: Subwoofer (SUB)
+                ~dolbySubSquareBtn = Button(~layoutOverlay, Rect(subwooferX, subwooferY, speakerSize, speakerSize))
+                    .states_([
+                        ["6", Color.black, Color.cyan],
+                        ["6", Color.cyan, Color.black]
+                    ])
+                    .font_(Font("Helvetica", 13).boldVariant)
+                    .focusColor_(Color.clear)
+                    .value_(if((~dolbyState[\subOn] ? 1) == 1, 0, 1))
+                    .action_({ |btn|
+                        var newState = 1 - btn.value;
+                        ~dolbyState[\subOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\subOn, newState) };
+                        btn.focus(nil);
+                    });
+                
+                // CENTER fader
                 StaticText(~layoutOverlay, Rect(170, 14, 35, 15))
                     .string_("CENTER")
                     .align_(\center)
@@ -2960,6 +3066,14 @@ win.front;
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 10).boldVariant);
+                
+                // Bring all buttons to front so they're clickable
+                ~dolbyFLSquareBtn.front;
+                ~dolbyFRSquareBtn.front;
+                ~dolbyRLSquareBtn.front;
+                ~dolbyRRSquareBtn.front;
+                ~dolbyCenterSquareBtn.front;
+                ~dolbySubSquareBtn.front;
             });
             
             // Create on/off buttons and faders for Dolby 5.1.2 (case 7)
@@ -2974,6 +3088,8 @@ win.front;
                 var subwooferX = 71, subwooferY = 132;
                 var topFrontLeftX = 21, topFrontLeftY = 35;
                 var topFrontRightX = 121, topFrontRightY = 35;
+                var controlStartX = 170, controlY = 14, sliderWidth = 35, sliderHeight = 164, controlSpacing = 43;
+                var rightmostFaderX;
                 
                 ("Creating controls for Dolby 5.1.2 (case 7), decoder value: " ++ ~dmenu.value).postln;
                 // Speaker positions (matching drawFunc exactly for case 7)
@@ -3104,6 +3220,151 @@ win.front;
                         ~dolbyState[\tfrOn] = newState;
                         if(~synth.notNil) { ~synth.set(\tfrOn, newState) };
                         btn.focus(nil);
+                    });
+                
+                // Fader controls for CENTER
+                StaticText(~layoutOverlay, Rect(controlStartX, controlY, sliderWidth, 15))
+                    .string_("C")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                ~dolbyCenterGainSlider = Slider(~layoutOverlay, Rect(controlStartX, controlY + 18, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\centerGain] ? 0.0).linlin(-12, 12, 0, 1))
+                    .action_({ |sl|
+                        var gain = sl.value.linlin(0, 1, -12, 12);
+                        ~dolbyState[\centerGain] = gain;
+                        if(~dolbyCenterGainLabel.notNil) {
+                            ~dolbyCenterGainLabel.string = gain.round(0.1).asString ++ "dB";
+                        };
+                        if(~synth.notNil) { ~synth.set(\centerGain, gain) };
+                    });
+                
+                ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(controlStartX, 199, sliderWidth, 15))
+                    .string_((~dolbyState[\centerGain] ? 0.0).round(0.1).asString ++ "dB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                // Fader controls for SUB
+                StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY, sliderWidth, 15))
+                    .string_("SUB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                ~dolbySubGainSlider = Slider(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY + 18, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\subGain] ? 0.0).linlin(-12, 12, 0, 1))
+                    .action_({ |sl|
+                        var gain = sl.value.linlin(0, 1, -12, 12);
+                        ~dolbyState[\subGain] = gain;
+                        if(~dolbySubGainLabel.notNil) {
+                            ~dolbySubGainLabel.string = gain.round(0.1).asString ++ "dB";
+                        };
+                        if(~synth.notNil) { ~synth.set(\subGain, gain) };
+                    });
+                
+                ~dolbySubGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, 199, sliderWidth, 15))
+                    .string_((~dolbyState[\subGain] ? 0.0).round(0.1).asString ++ "dB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                // Fader controls for TOP (height/ceiling speakers)
+                StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY, sliderWidth, 15))
+                    .string_("TOP")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                ~dolbyHeightGainSlider = Slider(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY + 18, sliderWidth, sliderHeight))
+                    .orientation_(\vertical)
+                    .knobColor_(Color.cyan)
+                    .background_(Color.black)
+                    .focusColor_(Color.clear)
+                    .value_((~dolbyState[\heightGain] ? 0.0).linlin(-12, 12, 0, 1))
+                    .action_({ |sl|
+                        var gain = sl.value.linlin(0, 1, -12, 12);
+                        ~dolbyState[\heightGain] = gain;
+                        if(~dolbyHeightGainLabel.notNil) {
+                            ~dolbyHeightGainLabel.string = gain.round(0.1).asString ++ "dB";
+                        };
+                        if(~synth.notNil) { ~synth.set(\heightGain, gain) };
+                    });
+                
+                ~dolbyHeightGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), 199, sliderWidth, 15))
+                    .string_((~dolbyState[\heightGain] ? 0.0).round(0.1).asString ++ "dB")
+                    .align_(\center)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 11).boldVariant);
+                
+                // dB scale labels (single set on the right, after TOP fader)
+                rightmostFaderX = controlStartX + (controlSpacing * 2) + sliderWidth;
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18, 20, 15))
+                    .string_("+12")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + (sliderHeight / 4) - 7, 20, 15))
+                    .string_("+6")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + (sliderHeight / 2) - 7, 20, 15))
+                    .string_("0")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + (sliderHeight * 3 / 4) - 7, 20, 15))
+                    .string_("-6")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 18 + sliderHeight - 7, 20, 15))
+                    .string_("-12")
+                    .align_(\left)
+                    .stringColor_(Color.cyan)
+                    .font_(Font("Helvetica", 9));
+                
+                // Draw tick marks BETWEEN the faders (2 sets between the 3 faders)
+                // Between CENTER and SUB
+                UserView(~layoutOverlay, Rect(controlStartX + sliderWidth, controlY + 18, 8, sliderHeight))
+                    .background_(Color.clear)
+                    .drawFunc_({ |view|
+                        Pen.color = Color.cyan;
+                        Pen.width = 1.5;
+                        // Major ticks
+                        Pen.line(Point(2, 0), Point(6, 0)); Pen.stroke; // +12dB
+                        Pen.line(Point(2, sliderHeight / 2), Point(6, sliderHeight / 2)); Pen.stroke; // 0dB
+                        Pen.line(Point(2, sliderHeight), Point(6, sliderHeight)); Pen.stroke; // -12dB
+                        // Minor ticks
+                        Pen.width = 1;
+                        Pen.line(Point(3, sliderHeight / 4), Point(5, sliderHeight / 4)); Pen.stroke; // +6dB
+                        Pen.line(Point(3, sliderHeight * 3 / 4), Point(5, sliderHeight * 3 / 4)); Pen.stroke; // -6dB
+                    });
+                
+                // Between SUB and TOP
+                UserView(~layoutOverlay, Rect(controlStartX + controlSpacing + sliderWidth, controlY + 18, 8, sliderHeight))
+                    .background_(Color.clear)
+                    .drawFunc_({ |view|
+                        Pen.color = Color.cyan;
+                        Pen.width = 1.5;
+                        // Major ticks
+                        Pen.line(Point(2, 0), Point(6, 0)); Pen.stroke; // +12dB
+                        Pen.line(Point(2, sliderHeight / 2), Point(6, sliderHeight / 2)); Pen.stroke; // 0dB
+                        Pen.line(Point(2, sliderHeight), Point(6, sliderHeight)); Pen.stroke; // -12dB
+                        // Minor ticks
+                        Pen.width = 1;
+                        Pen.line(Point(3, sliderHeight / 4), Point(5, sliderHeight / 4)); Pen.stroke; // +6dB
+                        Pen.line(Point(3, sliderHeight * 3 / 4), Point(5, sliderHeight * 3 / 4)); Pen.stroke; // -6dB
                     });
                 
                 // Bring all buttons to front so they're clickable
