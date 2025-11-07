@@ -33,9 +33,9 @@ var win, mainView,
 
 // --- Ambience state preservation variables ---
 ~ambienceState = Dictionary.newFrom([
-    \sliderValues, [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0],  // Default values
+    \sliderValues, [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0],  // Default values
     \presetIndex, 0,  // Default preset index
-    \lastMix, 0.5     // Remember last nonzero mix value
+    \lastMix, 0.0     // Remember last nonzero mix value
 ]);
 
 // --- EQ state preservation variables ---
@@ -138,6 +138,10 @@ var win, mainView,
 ~binauralCIPICIds = [3, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 27, 28, 33, 40, 44, 48, 50, 51, 58, 59, 60, 61, 65, 119, 124, 126, 127, 131, 133, 134, 135, 137, 147, 148, 152, 153, 154, 155, 156, 158, 162, 163, 165];
 ~binauralIrcamProfileLabel = nil;
 ~binauralCipicProfileLabel = nil;
+~binauralLeftEarHit = nil;
+~binauralRightEarHit = nil;
+~prevBinauralIRCAMId = ~binauralIRCAMId;
+~prevBinauralCIPICId = ~binauralCIPICId;
 
 // --- Dimension overlay variables ---
 ~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
@@ -430,13 +434,13 @@ mainView.mouseUpAction_({
     .action_({ |btn| linkFaders = btn.value == 1; });
 
 // --- ENCODER/DECODER MENUS ---
-StaticText(mainView, Rect(180, 10, 140, 28))
+StaticText(mainView, Rect(188, 10, 140, 28))
     .string_("ENCODER")
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
 
-StaticText(mainView, Rect(360, 10, 140, 28))
+StaticText(mainView, Rect(345, 10, 140, 28))
     .string_("DECODER")
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
@@ -444,7 +448,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 // Encoder menu (Input format selection)
 ~emenu = EZPopUpMenu.new(
     mainView,
-    Rect(180, 45, 140, 35),
+    Rect(180, 45, 156, 35),
     "",
                     [
                         \UHJ -> { |a| configKeyE = \uhj; ("Encoder: UHJ").postln; },
@@ -500,10 +504,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     layout: \horz,
     gap: 0@0
 );
+~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
+~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
 // Decoder menu (Output format selection)
 ~dmenu = EZPopUpMenu.new(
     mainView,
-    Rect(360, 45, 140, 35),
+    Rect(343, 45, 157, 35),
     "",
     [
         \STEREO -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \stereo; },
@@ -678,7 +684,11 @@ StaticText(mainView, Rect(360, 10, 140, 28))
             ~layoutBtn.doAction;
         };
         // --- Audio engine reinitialization logic (must be last) ---
-        if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
+        if((configKeyD != (~prevConfigKeyD ? configKeyD))
+            || (inputs != (~prevInputs ? inputs))
+            || (outputs != (~prevOutputs ? outputs))
+            || (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId))
+            || (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId))) {
             // Save current synth parameters before reinitializing
             ~saveSynthParams.value();
             ~initAudioEngine.value();
@@ -703,6 +713,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
 // --- Track previous decoder and encoder key for always-reload logic ---
 ~prevConfigKeyD = configKeyD;
 ~prevConfigKeyE = configKeyE;
+~prevBinauralIRCAMId = ~binauralIRCAMId;
+~prevBinauralCIPICId = ~binauralCIPICId;
 
 // --- Input Source Detection for Mouse vs Headtracker ---
 // Track whether the last input was from mouse or headtracker
@@ -721,7 +733,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     var tryBoot;
     var needReboot;
     // Always reload kernels and restart synth on decoder or encoder change
-    needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
+    needReboot = (inputs != (~prevInputs ? inputs))
+        || (outputs != (~prevOutputs ? outputs))
+        || (configKeyD != (~prevConfigKeyD ? configKeyD))
+        || (configKeyE != (~prevConfigKeyE ? configKeyE))
+        || (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId))
+        || (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId));
     tryBoot = {
         if(s.serverBooting, {
             ("Server busy (booting), retrying audio engine init...").postln;
@@ -744,8 +761,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
-                        \superstereo, FoaEncoderKernel.newSuper,
-                        \maplin, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
+                        \superstereo, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
                         \phj, FoaEncoderKernel.newPHJ,  // PHJ encoder - kernel-based
                     ]);
 
@@ -780,7 +796,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                     });
                     s.sync(cond);
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1, lOn = 1, rOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
@@ -795,7 +811,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
                         eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
                         eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
-                        eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
+                        eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);     // Band 6
                         eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
                         
                         // Pre-processing for maplin encoder: stereo to quad via MaplinMatrix
@@ -875,6 +891,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         trans = ambient; // bypass FoaRTT
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
+                        if(outputs == 2, {
+                            out = [
+                                out[0] * lOn,
+                                out[1] * rOn
+                            ];
+                        });
                         if(outputs == 4, {
                             // --- Q-PANNER LOGIC (Balance2) ---
                             // out[0]=LF, out[1]=FR, out[2]=RL, out[3]=RR
@@ -1032,9 +1054,10 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         \s5On, ~octagonState[\s5On] ? 1,
                         \s6On, ~octagonState[\s6On] ? 1,
                         \s7On, ~octagonState[\s7On] ? 1,
-                        \s8On, ~octagonState[\s8On] ? 1
+                        \s8On, ~octagonState[\s8On] ? 1,
+                        \lOn, if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 }),
+                        \rOn, if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 })
                     ]);
-                    
                     // Restore saved parameters to new synth
                     ~restoreSynthParams.value();
 
@@ -1074,8 +1097,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
-                            \superstereo, FoaEncoderKernel.newSuper,
-                            \maplin, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
+                            \superstereo, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
                             \phj, FoaEncoderKernel.newPHJ,  // PHJ encoder - kernel-based
                         ]);
 
@@ -1104,7 +1126,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1, lOn = 1, rOn = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
@@ -1197,6 +1219,12 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             trans = ambient; // bypass FoaRTT
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
+                            if(outputs == 2, {
+                                out = [
+                                    out[0] * lOn,
+                                    out[1] * rOn
+                                ];
+                            });
                             if(outputs == 4, {
                                 // --- Q-PANNER LOGIC (Balance2) ---
                                 // out[0]=LF, out[1]=FR, out[2]=RL, out[3]=RR
@@ -1300,7 +1328,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
                             \maplinEffect, ~maplinState[\effect] ? 0.8,
                             \maplinDelay, ~maplinState[\delay] ? 0.4, 
-                            \maplinActive, ~maplinState[\active] ? 1,  // 1 = active, 0 = bypass
+                            \maplinActive, ~maplinActive ? 1,  // 1 = active, 0 = bypass
                             \maplinMode, if(configKeyE == \maplin, 1, 0),
                             // Dimension parameters
                             \dimensionWidth, dimWidth2,
@@ -1356,7 +1384,9 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                             \s5On, ~octagonState[\s5On] ? 1,
                             \s6On, ~octagonState[\s6On] ? 1,
                             \s7On, ~octagonState[\s7On] ? 1,
-                            \s8On, ~octagonState[\s8On] ? 1
+                            \s8On, ~octagonState[\s8On] ? 1,
+                            \lOn, if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 }),
+                            \rOn, if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 })
                         ]);
                         
                         // Restore saved parameters to new synth
@@ -1391,6 +1421,8 @@ StaticText(mainView, Rect(360, 10, 140, 28))
     ~prevOutputs = outputs;
     ~prevConfigKeyD = configKeyD;
     ~prevConfigKeyE = configKeyE;
+    ~prevBinauralIRCAMId = ~binauralIRCAMId;
+    ~prevBinauralCIPICId = ~binauralCIPICId;
 };
 
 // --- Level Meter Section ---
@@ -1501,7 +1533,6 @@ dbValue = cliToDbMaster.(lastInL);
 {
     ~initAudioEngine.value();
 }.defer(0.5);
-
 // --- HEADTRACKER AND PANNER CONTROLS (with Standard Knobs) ---
         // Create value display labels first
         ~rotateValue = StaticText(mainView, Rect(719, 80, 55, 20)).font_(Font("Helvetica", 11)).string_("0").align_(\left).stringColor_(Color.cyan);
@@ -1690,10 +1721,8 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
         ~tumbleKnob.valueAction_(0.5); ~tumbleKnob.enabled_(false);
         ~xyPanner.setXYActive(0.5, 0.5);
     });
-
 // --- Now trigger the overlay/enable logic for the correct initial state ---
 ~dmenu.globalAction.value(~dmenu);
-
 // --- Q-PANNER LABEL ---
 StaticText(mainView, Rect(629, 299, 110, 22))
     .string_("Q-PANNER")
@@ -2017,7 +2046,6 @@ win.front;
             ("Found AmbiVerbSC presets at: " ++ path).postln;
         };
     });
-
     if(presetDir.isNil) {
         ("AmbiVerbSC preset files not found in standard locations").postln;
         ("Using built-in room presets instead").postln;
@@ -2364,11 +2392,10 @@ win.front;
         ("Saved synth ambience params: " ++ ~ambienceState[\sliderValues]).postln;
     } {
         // Use default ambience settings if no stored values
-        ~ambienceState[\synthParams] = [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+        ~ambienceState[\synthParams] = [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
         ("Using default ambience params").postln;
     };
 };
-
 ~restoreSynthParams = {
     // Restore EQ parameters to new synth
     if(~synth.notNil and: { ~eqState[\synthParams].notNil }) {
@@ -2531,7 +2558,7 @@ win.front;
             // Parameter labels and values (use saved state or defaults)
             // 7 faders (CamelCase, ≤6 chars): Height, HDelay, Reverb, RDelay, RSize, Spread, Target
             sliderLabels = ["Height", "HDelay", "Reverb", "RDelay", "RSize", "Spread", "Target"];
-            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
+            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
             ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5; // Remember last nonzero mix value
             ~ambienceSliders = List[];
             ~ambienceValues = List[];
@@ -2817,21 +2844,27 @@ win.front;
                             // Center graphic between top title (ends at y=32) and HRTF ID controls (at y=233): midpoint = 132.5
                             // Current graphic center is ~163.5, so move up by 16px
                             var moveUp = 16;
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY, leftOn, rightOn;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
                             leftEarY = centerY + 25 + 25 - moveUp;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
                             rightEarY = centerY + 25 + 25 - moveUp;
+                            leftOn = ~binauralState[
+                                \lOn
+                            ] ? 1;
+                            rightOn = ~binauralState[
+                                \rOn
+                            ] ? 1;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
                             Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
                             Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.color = if(leftOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan); // Moved down 2px (5 -> 7)
-                            Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, if(leftOn == 1, { Color.black }, { Color.cyan })); // Moved down 2px (5 -> 7)
+                            Pen.color = if(rightOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan); // Moved down 2px (5 -> 7)
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan })); // Moved down 2px (5 -> 7)
                             // Do NOT move the description text
                             Pen.stringAtPoint("Headphone Listening using IRCAM HRTF Library", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
                         },
@@ -2839,21 +2872,23 @@ win.front;
                             // Center graphic between top title (ends at y=32) and HRTF ID controls (at y=233): midpoint = 132.5
                             // Current graphic center is ~163.5, so move up by 16px
                             var moveUp = 16;
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY, leftOn, rightOn;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
                             leftEarY = centerY + 25 + 25 - moveUp;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
                             rightEarY = centerY + 25 + 25 - moveUp;
+                            leftOn = ~binauralState[\lOn] ? 1;
+                            rightOn = ~binauralState[\rOn] ? 1;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
                             Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
                             Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.color = if(leftOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, if(leftOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.color = if(rightOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("Headphone Listening using CIPIC HRTF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         3, { // Quad Square - larger square (similar to v27)
@@ -3055,9 +3090,9 @@ win.front;
             // Layout title showing encoder class only
             // For Dolby layouts, center over diagram (left side); for others, use full width
             ~layoutTitleText = StaticText(~layoutOverlay, Rect(
-                if((~dmenu.value == 6) or: { ~dmenu.value == 7 }, 5, 0),  // For Dolby, align over left diagram
+                if((~dmenu.value == 6) || (~dmenu.value == 7), 5, 0),  // For Dolby, align over left diagram
                 10, // y position
-                if((~dmenu.value == 6) or: { ~dmenu.value == 7 }, 150, 320), // Dolby: narrow width; others: full width
+                if((~dmenu.value == 6) || (~dmenu.value == 7), 150, 320), // Dolby: narrow width; others: full width
                 22   // height
             ))
                 .string_(([
@@ -3355,7 +3390,6 @@ win.front;
                         if(~dolbyTopHpfValue.notNil) { ~dolbyTopHpfValue.string = hz.asInteger.asString ++ " Hz"; };
                         if(~synth.notNil) { ~synth.set(\topHPF, hz) };
                     });
-
                 ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 1, 44, 15))
                     .string_((((~dolbyState[\topHPF] ? 180) / 10).round * 10).asInteger.asString ++ " Hz")
                     .align_(\right)
@@ -3413,7 +3447,7 @@ win.front;
             });
             // Binaural IRCAM (case 1) – HRTF selection menu and grid chooser
             if(~dmenu.value == 1, {
-                var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds, gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos;
+                var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds, gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos, centerX, centerY, moveUp, earCupWidth, earCupHeight, earCupOffset, leftEarX, leftEarY, rightEarX, rightEarY;
                 // Hardcoded list of available IRCAM LISTEN subject IDs
                 ~binauralIRCAMIds = [1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1020, 1021, 1022, 1023, 1025, 1026, 1028, 1029, 1030, 1031, 1032, 1033, 1034, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059];
                 ("Found " ++ ~binauralIRCAMIds.size ++ " IRCAM IDs").postln;
@@ -3506,11 +3540,46 @@ win.front;
                          chooserWin.front;
                      });
                  ~binauralIrcamSelectBtn.front;
-            });
+
+                // Clickable mute targets for headphone ears
+                layoutBounds = ~layoutOverlay.bounds;
+                centerX = layoutBounds.width / 2;
+                centerY = layoutBounds.height / 2;
+                moveUp = 16;
+                earCupWidth = 20;
+                earCupHeight = 27;
+                earCupOffset = 55;
+                leftEarX = centerX - earCupOffset - (earCupWidth / 2);
+                leftEarY = centerY + 25 + 25 - moveUp;
+                rightEarX = centerX + earCupOffset - (earCupWidth / 2);
+                rightEarY = centerY + 25 + 25 - moveUp;
+
+                if(~binauralLeftEarHit.notNil) { try { ~binauralLeftEarHit.remove; }; ~binauralLeftEarHit = nil; };
+                if(~binauralRightEarHit.notNil) { try { ~binauralRightEarHit.remove; }; ~binauralRightEarHit = nil; };
+
+                ~binauralLeftEarHit = UserView(~layoutOverlay, Rect(leftEarX, leftEarY, earCupWidth, earCupHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\lOn] ? 1);
+                        ~binauralState[\lOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\lOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralLeftEarHit.front;
+
+                ~binauralRightEarHit = UserView(~layoutOverlay, Rect(rightEarX, rightEarY, earCupWidth, earCupHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\rOn] ? 1);
+                        ~binauralState[\rOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralRightEarHit.front;
+             });
             // Binaural CIPIC (case 2) – HRTF selection menu and grid chooser
             if(~dmenu.value == 2, {
-                var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds;
-                var gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos;
+                var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds, gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos, centerX, centerY, moveUp, earCupWidth, earCupHeight, earCupOffset, leftEarX, leftEarY, rightEarX, rightEarY;
                 ~binauralCIPICIds = [3, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 27, 28, 33, 40, 44, 48, 50, 51, 58, 59, 60, 61, 65, 119, 124, 126, 127, 131, 133, 134, 135, 137, 147, 148, 152, 153, 154, 155, 156, 158, 162, 163, 165];
                 ~binauralCIPICPendingId = ~binauralCIPICId;
 
@@ -3594,63 +3663,43 @@ win.front;
                     });
 
                 ~binauralCipicSelectBtn.front;
+
+                // Clickable mute targets for headphone ears (CIPIC layout)
+                layoutBounds = ~layoutOverlay.bounds;
+                centerX = layoutBounds.width / 2;
+                centerY = layoutBounds.height / 2;
+                moveUp = 16;
+                earCupWidth = 20;
+                earCupHeight = 27;
+                earCupOffset = 55;
+                leftEarX = centerX - earCupOffset - (earCupWidth / 2);
+                leftEarY = centerY + 25 + 25 - moveUp;
+                rightEarX = centerX + earCupOffset - (earCupWidth / 2);
+                rightEarY = centerY + 25 + 25 - moveUp;
+
+                if(~binauralLeftEarHit.notNil) { try { ~binauralLeftEarHit.remove; }; ~binauralLeftEarHit = nil; };
+                if(~binauralRightEarHit.notNil) { try { ~binauralRightEarHit.remove; }; ~binauralRightEarHit = nil; };
+
+                ~binauralLeftEarHit = UserView(~layoutOverlay, Rect(leftEarX, leftEarY, earCupWidth, earCupHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\lOn] ? 1);
+                        ~binauralState[\lOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\lOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralLeftEarHit.front;
+
+                ~binauralRightEarHit = UserView(~layoutOverlay, Rect(rightEarX, rightEarY, earCupWidth, earCupHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\rOn] ? 1);
+                        ~binauralState[\rOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralRightEarHit.front;
              });
-            
-            // Create on/off buttons for QUAD SQUARE (case 3) - positions match larger square
-            if(~dmenu.value == 3, {
-                var layoutSize = 140, diagramCenterX = 160, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
-                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
-                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
-                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
-                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
-                ~quadSquareFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
-                    .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]])
-                    .font_(Font("Helvetica", 13).boldVariant)
-                    .focusColor_(Color.clear)
-                    .value_(if((~quadSquareState[\flOn] ? 1) == 1, 0, 1))
-                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\flOn] = ns; if(~synth.notNil) { ~synth.set(\flOn, ns) }; btn.focus(nil); });
-                ~quadSquareFRBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
-                    .states_([["2", Color.black, Color.cyan],["2", Color.cyan, Color.black]])
-                    .font_(Font("Helvetica", 13).boldVariant)
-                    .focusColor_(Color.clear)
-                    .value_(if((~quadSquareState[\frOn] ? 1) == 1, 0, 1))
-                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\frOn] = ns; if(~synth.notNil) { ~synth.set(\frOn, ns) }; btn.focus(nil); });
-                ~quadSquareRLBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
-                    .states_([["3", Color.black, Color.cyan],["3", Color.cyan, Color.black]])
-                    .font_(Font("Helvetica", 13).boldVariant)
-                    .focusColor_(Color.clear)
-                    .value_(if((~quadSquareState[\rlOn] ? 1) == 1, 0, 1))
-                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\rlOn] = ns; if(~synth.notNil) { ~synth.set(\rlOn, ns) }; btn.focus(nil); });
-                ~quadSquareRRBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
-                    .states_([["4", Color.black, Color.cyan],["4", Color.cyan, Color.black]])
-                    .font_(Font("Helvetica", 13).boldVariant)
-                    .focusColor_(Color.clear)
-                    .value_(if((~quadSquareState[\rrOn] ? 1) == 1, 0, 1))
-                    .action_({ |btn| var ns = 1 - btn.value; ~quadSquareState[\rrOn] = ns; if(~synth.notNil) { ~synth.set(\rrOn, ns) }; btn.focus(nil); });
-                ~quadSquareFLBtn.front; ~quadSquareFRBtn.front; ~quadSquareRLBtn.front; ~quadSquareRRBtn.front;
-            });
-            // QUAD NARROW (case 4) - positions match taller rectangle
-            if(~dmenu.value == 4, {
-                var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
-                var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
-                var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
-                var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
-                var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
-                var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
-                ~quadNarrowFLBtn = Button(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
-                    .states_([["1", Color.black, Color.cyan],["1", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
-                    .value_(if((~quadNarrowState[\flOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\flOn]=ns; if(~synth.notNil){~synth.set(\flOn,ns)}; b.focus(nil); });
-                ~quadNarrowFRBtn = Button(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
-                    .states_([["2", Color.black, Color.cyan],["2", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
-                    .value_(if((~quadNarrowState[\frOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\frOn]=ns; if(~synth.notNil){~synth.set(\frOn,ns)}; b.focus(nil); });
-                ~quadNarrowRLBtn = Button(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
-                    .states_([["3", Color.black, Color.cyan],["3", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
-                    .value_(if((~quadNarrowState[\rlOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\rlOn]=ns; if(~synth.notNil){~synth.set(\rlOn,ns)}; b.focus(nil); });
-                ~quadNarrowRRBtn = Button(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
-                    .states_([["4", Color.black, Color.cyan],["4", Color.cyan, Color.black]]).font_(Font("Helvetica", 13).boldVariant).focusColor_(Color.clear)
-                    .value_(if((~quadNarrowState[\rrOn] ? 1) == 1, 0, 1)).action_({ |b| var ns=1-b.value; ~quadNarrowState[\rrOn]=ns; if(~synth.notNil){~synth.set(\rrOn,ns)}; b.focus(nil); });
-                ~quadNarrowFLBtn.front; ~quadNarrowFRBtn.front; ~quadNarrowRLBtn.front; ~quadNarrowRRBtn.front;
-            });
             // QUAD WIDE (case 5) - positions match wider rectangle
             if(~dmenu.value == 5, {
                 var rectWidth = 170, rectHeight = 120, diagramCenterX = 160;
@@ -3741,7 +3790,6 @@ win.front;
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~octagonS4Hit.front;
-
                 // Invisible hit target for square 5
                 speaker5Index = 2; angle5 = startAngle + (speaker5Index * angleStep);
                 x5 = centerX + (radius * cos(angle5));
@@ -3797,7 +3845,6 @@ win.front;
                     });
                 ~octagonS8Hit.front;
             });
-            // (Removed) In-layout quad panner – using main window panner for live metering view
             // Create on/off buttons and faders for Dolby 5.1.2 (case 7)
             if(~dmenu.value == 7, {
                 // All variable declarations must be at the absolute top of the block
@@ -4003,7 +4050,6 @@ win.front;
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
-                
                 ~dolbyHeightGainSlider = Slider(~layoutOverlay, Rect(controlStartX, controlY + 18, sliderWidth, sliderHeight))
                     .orientation_(\vertical)
                     .knobColor_(Color.cyan)
@@ -4018,7 +4064,6 @@ win.front;
                         };
                         if(~synth.notNil) { ~synth.set(\heightGain, gain) };
                     });
-                
                 ~dolbyHeightGainLabel = StaticText(~layoutOverlay, Rect(controlStartX, 199, sliderWidth, 15))
                     .string_((~dolbyState[\heightGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
@@ -4085,7 +4130,6 @@ win.front;
                         Pen.line(Point(3, sliderHeight / 4), Point(5, sliderHeight / 4)); Pen.stroke; // +6dB
                         Pen.line(Point(3, sliderHeight * 3 / 4), Point(5, sliderHeight * 3 / 4)); Pen.stroke; // -6dB
                     });
-
                 // Extra slender faders BELOW the diagram and vertical faders
                 // TOP LPF - now top horizontal slender fader (swapped with SUB)
                 ~dolbyTopHpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, controlY + 18 + sliderHeight + 30 + 3, 56, 15))
@@ -4160,6 +4204,8 @@ win.front;
             if(~binauralCipicSelectBtn.notNil) { try { ~binauralCipicSelectBtn.remove; }; ~binauralCipicSelectBtn = nil; };
             if(~binauralIrcamProfileLabel.notNil) { try { ~binauralIrcamProfileLabel.remove; }; ~binauralIrcamProfileLabel = nil; };
             if(~binauralCipicProfileLabel.notNil) { try { ~binauralCipicProfileLabel.remove; }; ~binauralCipicProfileLabel = nil; };
+            if(~binauralLeftEarHit.notNil) { try { ~binauralLeftEarHit.remove; }; ~binauralLeftEarHit = nil; };
+            if(~binauralRightEarHit.notNil) { try { ~binauralRightEarHit.remove; }; ~binauralRightEarHit = nil; };
         }
     });
 // --- DIMENSION OVERLAY BUTTON ---
@@ -4364,7 +4410,6 @@ win.front;
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
-            
             ~maplinDelayValue = StaticText(~dimensionOverlay, Rect(225, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("25 ms")
                 .align_(\center)
@@ -4423,7 +4468,6 @@ win.front;
                 });
 
             // CLOSE button removed - pressing Dimension button again closes the overlay
-
             ~dimensionOverlay.front;
             ~dimensionBtn.value_(1);
             
