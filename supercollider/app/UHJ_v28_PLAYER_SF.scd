@@ -3939,6 +3939,8 @@ AppClock.sched(0.1, {
             };
             if(~stereoLeftHit.notNil) { try { ~stereoLeftHit.remove; }; ~stereoLeftHit = nil; };
             if(~stereoRightHit.notNil) { try { ~stereoRightHit.remove; }; ~stereoRightHit = nil; };
+            if(~binauralLeftHit.notNil) { try { ~binauralLeftHit.remove; }; ~binauralLeftHit = nil; };
+            if(~binauralRightHit.notNil) { try { ~binauralRightHit.remove; }; ~binauralRightHit = nil; };
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -4033,41 +4035,51 @@ AppClock.sched(0.1, {
                             Pen.stringAtPoint("Optimum listening angles", Point(centerX - 70, 50), Font("Helvetica", 12, italic: true), Color.cyan);
                         },
                         1, { // IRCAM Binaural
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                            var moveUp = 16;
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY, leftOn, rightOn;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
-                            leftEarY = centerY + 25 + 25;
+                            leftEarY = centerY + 25 + 25 - moveUp;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
-                            rightEarY = centerY + 25 + 25;
+                            rightEarY = centerY + 25 + 25 - moveUp;
+                            leftOn = ~binauralState[\lOn] ? 1;
+                            rightOn = ~binauralState[\rOn] ? 1;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
-                            Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
-                            Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
+                            Pen.color = if(leftOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(leftEarX + 0.5, leftEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, if(leftOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.color = if(rightOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(rightEarX + 0.5, rightEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan }));
                             // Do NOT move the description text
-                            Pen.stringAtPoint("Headphone Listening using IRCAM HTRF Library", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("Headphone Listening using IRCAM HRTF Library", Point(centerX - 140, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         2, { // CIPIC Binaural
-                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY;
+                            var moveUp = 16;
+                            var earCupWidth = 20, earCupHeight = 27, earCupOffset = 55, arcCenterY = centerY - 25 + 25 - moveUp, arcRadius = 47, leftEarX, leftEarY, rightEarX, rightEarY, leftOn, rightOn;
                             leftEarX = centerX - earCupOffset - (earCupWidth / 2);
-                            leftEarY = centerY + 25 + 25;
+                            leftEarY = centerY + 25 + 25 - moveUp;
                             rightEarX = centerX + earCupOffset - (earCupWidth / 2);
-                            rightEarY = centerY + 25 + 25;
+                            rightEarY = centerY + 25 + 25 - moveUp;
+                            leftOn = ~binauralState[\lOn] ? 1;
+                            rightOn = ~binauralState[\rOn] ? 1;
                             Pen.color = Color.cyan; Pen.width = 2;
                             Pen.addArc(Point(centerX, arcCenterY), arcRadius, pi, pi); Pen.stroke;
-                            Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
-                            Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
-                            Pen.color = Color.black; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
+                            Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
+                            Pen.color = if(leftOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(leftEarX + 0.5, leftEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, if(leftOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.color = if(rightOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(rightEarX + 0.5, rightEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 5), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("Headphone Listening using CIPIC HTRF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
+                            Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("Headphone Listening using CIPIC HRTF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
                         3, { // Quad Square
                             var squareSize = 140, halfSquare = squareSize / 2;
@@ -4228,6 +4240,80 @@ AppClock.sched(0.1, {
                     });
                 ~stereoRightHit.front;
             };
+
+            if(~dmenu.value == 1) {
+                var layoutBounds_b = ~layoutOverlay.bounds;
+                var centerX_b = layoutBounds_b.width / 2;
+                var centerY_b = layoutBounds_b.height / 2;
+                var moveUp = 16;
+                var earCupWidth = 20;
+                var earCupHeight = 27;
+                var earCupOffset = 55;
+                var leftEarX = centerX_b - earCupOffset - (earCupWidth / 2);
+                var leftEarY = centerY_b + 25 + 25 - moveUp;
+                var rightEarX = centerX_b + earCupOffset - (earCupWidth / 2);
+                var rightEarY = centerY_b + 25 + 25 - moveUp;
+
+                if(~binauralLeftHit.notNil) { try { ~binauralLeftHit.remove; }; ~binauralLeftHit = nil; };
+                if(~binauralRightHit.notNil) { try { ~binauralRightHit.remove; }; ~binauralRightHit = nil; };
+
+                ~binauralLeftHit = UserView(~layoutOverlay, Rect(leftEarX, leftEarY, earCupWidth, earCupHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\lOn] ? 1);
+                        ~binauralState[\lOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\binauralLeftOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralLeftHit.front;
+
+                ~binauralRightHit = UserView(~layoutOverlay, Rect(rightEarX, rightEarY, earCupWidth, earCupHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\rOn] ? 1);
+                        ~binauralState[\rOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\binauralRightOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralRightHit.front;
+            };
+
+            if(~dmenu.value == 2) {
+                var layoutBounds_c = ~layoutOverlay.bounds;
+                var centerX_c = layoutBounds_c.width / 2;
+                var centerY_c = layoutBounds_c.height / 2;
+                var moveUp_c = 16;
+                var earCupWidth_c = 20;
+                var earCupHeight_c = 27;
+                var earCupOffset_c = 55;
+                var leftEarX_c = centerX_c - earCupOffset_c - (earCupWidth_c / 2);
+                var leftEarY_c = centerY_c + 25 + 25 - moveUp_c;
+                var rightEarX_c = centerX_c + earCupOffset_c - (earCupWidth_c / 2);
+                var rightEarY_c = centerY_c + 25 + 25 - moveUp_c;
+
+                if(~binauralLeftHit.notNil) { try { ~binauralLeftHit.remove; }; ~binauralLeftHit = nil; };
+                if(~binauralRightHit.notNil) { try { ~binauralRightHit.remove; }; ~binauralRightHit = nil; };
+
+                ~binauralLeftHit = UserView(~layoutOverlay, Rect(leftEarX_c, leftEarY_c, earCupWidth_c, earCupHeight_c))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\lOn] ? 1);
+                        ~binauralState[\lOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\binauralLeftOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralLeftHit.front;
+
+                ~binauralRightHit = UserView(~layoutOverlay, Rect(rightEarX_c, rightEarY_c, earCupWidth_c, earCupHeight_c))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~binauralState[\rOn] ? 1);
+                        ~binauralState[\rOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\binauralRightOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~binauralRightHit.front;
+            };
         } {
             if(~layoutOverlay.notNil) { 
                 ~layoutOverlay.remove; 
@@ -4237,6 +4323,8 @@ AppClock.sched(0.1, {
             ~layoutTitleText = nil;
             ~stereoLeftHit = nil; 
             ~stereoRightHit = nil;
+            ~binauralLeftHit = nil;
+            ~binauralRightHit = nil;
         }
     });
 
