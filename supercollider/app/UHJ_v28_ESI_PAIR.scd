@@ -140,6 +140,10 @@ var win, mainView,
 ~binauralCipicProfileLabel = nil;
 ~binauralLeftEarHit = nil;
 ~binauralRightEarHit = nil;
+~stereoLeftHit = nil;
+~stereoRightHit = nil;
+~quadSquareFLHit = nil; ~quadSquareFRHit = nil; ~quadSquareRLHit = nil; ~quadSquareRRHit = nil;
+~quadNarrowFLHit = nil; ~quadNarrowFRHit = nil; ~quadNarrowRLHit = nil; ~quadNarrowRRHit = nil;
 ~prevBinauralIRCAMId = ~binauralIRCAMId;
 ~prevBinauralCIPICId = ~binauralCIPICId;
 
@@ -2799,46 +2803,74 @@ win.front;
                         0, { // Stereo
                             var speakerWidth = 20, speakerHeight = 20, speakerSpacing = 120, leftSpeakerX, rightSpeakerX, speakerY;
                             var centerY_bottom = centerY + 80; // Center point further down at bottom of triangle
-                            var leftRotationAngle, rightRotationAngle;
-                            leftSpeakerX = centerX - (speakerSpacing / 2) - (speakerWidth / 2);
-                            rightSpeakerX = centerX + (speakerSpacing / 2) - (speakerWidth / 2);
+                            var leftRotationAngle, rightRotationAngle, leftCenterX, leftCenterY, rightCenterX, rightCenterY, leftOn, rightOn;
+                            var speakerHalfWidth, speakerHalfHeight, speakerHalfSpacing;
+                            speakerHalfWidth = speakerWidth * 0.5;
+                            speakerHalfHeight = speakerHeight * 0.5;
+                            speakerHalfSpacing = speakerSpacing * 0.5;
+                            leftSpeakerX = centerX - speakerHalfSpacing - speakerHalfWidth;
+                            rightSpeakerX = centerX + speakerHalfSpacing - speakerHalfWidth;
                             speakerY = centerY - 40; // Speakers at top of triangle
+                            leftCenterX = leftSpeakerX + speakerHalfWidth;
+                            leftCenterY = speakerY + speakerHalfHeight;
+                            rightCenterX = rightSpeakerX + speakerHalfWidth;
+                            rightCenterY = speakerY + speakerHalfHeight;
+                            leftOn = ~stereoState[\lOn] ? 1;
+                            rightOn = ~stereoState[\rOn] ? 1;
                             
-                            // Calculate rotation angles
-                            leftRotationAngle = atan2(centerY_bottom - speakerY, centerX - leftSpeakerX) + (pi / 2);
-                            rightRotationAngle = atan2(centerY_bottom - speakerY, centerX - rightSpeakerX) + (pi / 2);
+                            // Calculate rotation angles based on speaker centres
+                            leftRotationAngle = atan2(centerY_bottom - leftCenterY, centerX - leftCenterX) + (pi / 2);
+                            rightRotationAngle = atan2(centerY_bottom - rightCenterY, centerX - rightCenterX) + (pi / 2);
                             
-                            // Draw triangle linestesting on 
+                            // Draw triangle guide lines
                             Pen.color = Color.cyan; Pen.width = 1;
                             // Left diagonal from center to left speaker
-                            Pen.line(Point(centerX, centerY_bottom), Point(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
+                            Pen.line(Point(centerX, centerY_bottom), Point(leftCenterX, leftCenterY));
                             Pen.stroke;
                             // Right diagonal from center to right speaker
-                            Pen.line(Point(centerX, centerY_bottom), Point(rightSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
+                            Pen.line(Point(centerX, centerY_bottom), Point(rightCenterX, rightCenterY));
                             Pen.stroke;
                             
-                            // Speaker 1: Left (rotated to face center + 180° for upright text)
+                            // Speaker 1: Left (mute button styling)
                             Pen.push;
-                            Pen.translate(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2));
+                            Pen.translate(leftCenterX, leftCenterY);
                             Pen.rotate(leftRotationAngle + pi);
-                            Pen.translate(-10, -10);
+                            Pen.translate(0 - speakerHalfWidth, 0 - speakerHalfHeight);
+                            if(leftOn == 1, {
+                                Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("1", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
+                            }, {
                             Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("1", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            });
                             Pen.pop;
                             
-                            // Speaker 2: Right (rotated to face center + 180° for upright text)
+                            // Speaker 2: Right (mute button styling)
                             Pen.push;
-                            Pen.translate(rightSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2));
+                            Pen.translate(rightCenterX, rightCenterY);
                             Pen.rotate(rightRotationAngle + pi);
-                            Pen.translate(-10, -10);
+                            Pen.translate(0 - speakerHalfWidth, 0 - speakerHalfHeight);
+                            if(rightOn == 1, {
+                                Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("2", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
+                            }, {
                             Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("2", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            });
                             Pen.pop;
                             
+                            Pen.width = 1;
                             Pen.stringAtPoint("[1] L (-30°) & [2] R (+30°)", Point(centerX - 75, 32), Font("Helvetica", 13), Color.cyan);
                             Pen.stringAtPoint("Optimum listening angles", Point(centerX - 70, 50), Font("Helvetica", 12, italic: true), Color.cyan);
+                            Pen.width = 2;
                         },
                         1, { // IRCAM Binaural
                             // Center graphic between top title (ends at y=32) and HRTF ID controls (at y=233): midpoint = 132.5
@@ -2860,9 +2892,11 @@ win.front;
                             Pen.moveTo(Point(centerX - arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
                             Pen.moveTo(Point(centerX + arcRadius, centerY - 30 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = if(leftOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(leftEarX + 0.5, leftEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, if(leftOn == 1, { Color.black }, { Color.cyan })); // Moved down 2px (5 -> 7)
                             Pen.color = if(rightOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(rightEarX + 0.5, rightEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan })); // Moved down 2px (5 -> 7)
                             // Do NOT move the description text
@@ -2884,9 +2918,11 @@ win.front;
                             Pen.moveTo(Point(centerX - arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX - arcRadius, leftEarY)); Pen.stroke;
                             Pen.moveTo(Point(centerX + arcRadius, centerY - 25 + 25 - moveUp)); Pen.lineTo(Point(centerX + arcRadius, rightEarY)); Pen.stroke;
                             Pen.color = if(leftOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(leftEarX + 0.5, leftEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(leftEarX, leftEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(leftEarX + 6, leftEarY + 7), Font("Helvetica", 13).boldVariant, if(leftOn == 1, { Color.black }, { Color.cyan }));
                             Pen.color = if(rightOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(rightEarX + 0.5, rightEarY + 0.5, earCupWidth - 1, earCupHeight - 1), 2, 2); Pen.stroke;
                             Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(rightEarX, rightEarY, earCupWidth, earCupHeight)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("Headphone Listening using CIPIC HRTF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
@@ -2897,26 +2933,34 @@ win.front;
                             var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
                             var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
                             var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
+                            var flOn = ~quadSquareState[\flOn] ? 1;
+                            var frOn = ~quadSquareState[\frOn] ? 1;
+                            var rlOn = ~quadSquareState[\rlOn] ? 1;
+                            var rrOn = ~quadSquareState[\rrOn] ? 1;
                             Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 10)); Pen.stroke;
                             // FL
-                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.color = if(flOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontLeftX + 0.5, frontLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, if(flOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // FR
-                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.color = if(frOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontRightX + 0.5, frontRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, if(frOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // RL
-                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.color = if(rlOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundLeftX + 0.5, surroundLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, if(rlOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // RR
-                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.color = if(rrOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundRightX + 0.5, surroundRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, if(rrOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         4, { // Quad Narrow - taller rectangle (similar proportions to v27)
@@ -2926,12 +2970,35 @@ win.front;
                             var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
                             var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
                             var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
+                            var flOn = ~quadNarrowState[\flOn] ? 1;
+                            var frOn = ~quadNarrowState[\frOn] ? 1;
+                            var rlOn = ~quadNarrowState[\rlOn] ? 1;
+                            var rrOn = ~quadNarrowState[\rrOn] ? 1;
                             Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight + 8)); Pen.stroke;
-                            // Draw labels same as case 3
-                            Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            Pen.color = Color.black; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill; Pen.color = Color.cyan; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke; Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan); Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // FL
+                            Pen.color = if(flOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontLeftX + 0.5, frontLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, if(flOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // FR
+                            Pen.color = if(frOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontRightX + 0.5, frontRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, if(frOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RL
+                            Pen.color = if(rlOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundLeftX + 0.5, surroundLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, if(rlOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RR
+                            Pen.color = if(rrOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundRightX + 0.5, surroundRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, if(rrOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         5, { // Quad Wide - wider rectangle (similar proportions to v27)
                             var rectWidth = 170, rectHeight = 120, diagramCenterX = 160;
@@ -3445,6 +3512,158 @@ win.front;
                 ~dolbyCenterSquareBtn.front;
                 ~dolbySubSquareBtn.front;
             });
+            // Stereo layout (case 0) – clickable mute buttons for speakers
+            if(~dmenu.value == 0, {
+                var layoutBounds, centerX, centerY, speakerWidth, speakerHeight, speakerSpacing, speakerY, leftSpeakerX, rightSpeakerX;
+                var leftCenterX, leftCenterY, rightCenterX, rightCenterY, speakerHalfWidth, speakerHalfHeight, speakerHalfSpacing;
+                layoutBounds = ~layoutOverlay.bounds;
+                centerX = layoutBounds.width / 2;
+                centerY = layoutBounds.height / 2;
+                speakerWidth = 20;
+                speakerHeight = 20;
+                speakerSpacing = 120;
+                speakerY = centerY - 40;
+                speakerHalfWidth = speakerWidth * 0.5;
+                speakerHalfHeight = speakerHeight * 0.5;
+                speakerHalfSpacing = speakerSpacing * 0.5;
+                leftSpeakerX = centerX - speakerHalfSpacing - speakerHalfWidth;
+                rightSpeakerX = centerX + speakerHalfSpacing - speakerHalfWidth;
+                leftCenterX = leftSpeakerX + speakerHalfWidth;
+                leftCenterY = speakerY + speakerHalfHeight;
+                rightCenterX = rightSpeakerX + speakerHalfWidth;
+                rightCenterY = speakerY + speakerHalfHeight;
+
+                if(~stereoLeftHit.notNil) { try { ~stereoLeftHit.remove; }; ~stereoLeftHit = nil; };
+                if(~stereoRightHit.notNil) { try { ~stereoRightHit.remove; }; ~stereoRightHit = nil; };
+
+                ~stereoLeftHit = UserView(~layoutOverlay, Rect(leftCenterX - speakerHalfWidth, leftCenterY - speakerHalfHeight, speakerWidth, speakerHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~stereoState[\lOn] ? 1);
+                        ~stereoState[\lOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\lOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~stereoLeftHit.front;
+
+                ~stereoRightHit = UserView(~layoutOverlay, Rect(rightCenterX - speakerHalfWidth, rightCenterY - speakerHalfHeight, speakerWidth, speakerHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~stereoState[\rOn] ? 1);
+                        ~stereoState[\rOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~stereoRightHit.front;
+            });
+
+            if(~dmenu.value == 3, {
+                var diagramCenterX = 160, layoutSize = 140, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
+                var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
+                var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
+
+                if(~quadSquareFLHit.notNil) { try { ~quadSquareFLHit.remove; }; ~quadSquareFLHit = nil; };
+                if(~quadSquareFRHit.notNil) { try { ~quadSquareFRHit.remove; }; ~quadSquareFRHit = nil; };
+                if(~quadSquareRLHit.notNil) { try { ~quadSquareRLHit.remove; }; ~quadSquareRLHit = nil; };
+                if(~quadSquareRRHit.notNil) { try { ~quadSquareRRHit.remove; }; ~quadSquareRRHit = nil; };
+
+                ~quadSquareFLHit = UserView(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadSquareState[\flOn] ? 1);
+                        ~quadSquareState[\flOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\flOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadSquareFLHit.front;
+
+                ~quadSquareFRHit = UserView(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadSquareState[\frOn] ? 1);
+                        ~quadSquareState[\frOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\frOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadSquareFRHit.front;
+
+                ~quadSquareRLHit = UserView(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadSquareState[\rlOn] ? 1);
+                        ~quadSquareState[\rlOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rlOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadSquareRLHit.front;
+
+                ~quadSquareRRHit = UserView(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadSquareState[\rrOn] ? 1);
+                        ~quadSquareState[\rrOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rrOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadSquareRRHit.front;
+            });
+
+            if(~dmenu.value == 4, {
+                var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
+                var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
+                var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+                var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+                var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+                var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
+
+                if(~quadNarrowFLHit.notNil) { try { ~quadNarrowFLHit.remove; }; ~quadNarrowFLHit = nil; };
+                if(~quadNarrowFRHit.notNil) { try { ~quadNarrowFRHit.remove; }; ~quadNarrowFRHit = nil; };
+                if(~quadNarrowRLHit.notNil) { try { ~quadNarrowRLHit.remove; }; ~quadNarrowRLHit = nil; };
+                if(~quadNarrowRRHit.notNil) { try { ~quadNarrowRRHit.remove; }; ~quadNarrowRRHit = nil; };
+
+                ~quadNarrowFLHit = UserView(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadNarrowState[\flOn] ? 1);
+                        ~quadNarrowState[\flOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\flOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadNarrowFLHit.front;
+
+                ~quadNarrowFRHit = UserView(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadNarrowState[\frOn] ? 1);
+                        ~quadNarrowState[\frOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\frOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadNarrowFRHit.front;
+
+                ~quadNarrowRLHit = UserView(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadNarrowState[\rlOn] ? 1);
+                        ~quadNarrowState[\rlOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rlOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadNarrowRLHit.front;
+
+                ~quadNarrowRRHit = UserView(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~quadNarrowState[\rrOn] ? 1);
+                        ~quadNarrowState[\rrOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rrOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~quadNarrowRRHit.front;
+            });
+
             // Binaural IRCAM (case 1) – HRTF selection menu and grid chooser
             if(~dmenu.value == 1, {
                 var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds, gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos, centerX, centerY, moveUp, earCupWidth, earCupHeight, earCupOffset, leftEarX, leftEarY, rightEarX, rightEarY;
@@ -4206,6 +4425,16 @@ win.front;
             if(~binauralCipicProfileLabel.notNil) { try { ~binauralCipicProfileLabel.remove; }; ~binauralCipicProfileLabel = nil; };
             if(~binauralLeftEarHit.notNil) { try { ~binauralLeftEarHit.remove; }; ~binauralLeftEarHit = nil; };
             if(~binauralRightEarHit.notNil) { try { ~binauralRightEarHit.remove; }; ~binauralRightEarHit = nil; };
+            if(~stereoLeftHit.notNil) { try { ~stereoLeftHit.remove; }; ~stereoLeftHit = nil; };
+            if(~stereoRightHit.notNil) { try { ~stereoRightHit.remove; }; ~stereoRightHit = nil; };
+            if(~quadSquareFLHit.notNil) { try { ~quadSquareFLHit.remove; }; ~quadSquareFLHit = nil; };
+            if(~quadSquareFRHit.notNil) { try { ~quadSquareFRHit.remove; }; ~quadSquareFRHit = nil; };
+            if(~quadSquareRLHit.notNil) { try { ~quadSquareRLHit.remove; }; ~quadSquareRLHit = nil; };
+            if(~quadSquareRRHit.notNil) { try { ~quadSquareRRHit.remove; }; ~quadSquareRRHit = nil; };
+            if(~quadNarrowFLHit.notNil) { try { ~quadNarrowFLHit.remove; }; ~quadNarrowFLHit = nil; };
+            if(~quadNarrowFRHit.notNil) { try { ~quadNarrowFRHit.remove; }; ~quadNarrowFRHit = nil; };
+            if(~quadNarrowRLHit.notNil) { try { ~quadNarrowRLHit.remove; }; ~quadNarrowRLHit = nil; };
+            if(~quadNarrowRRHit.notNil) { try { ~quadNarrowRRHit.remove; }; ~quadNarrowRRHit = nil; };
         }
     });
 // --- DIMENSION OVERLAY BUTTON ---
