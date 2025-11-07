@@ -31,6 +31,13 @@ var win, mainView,
 // --- Player button state storage ---
 ~savedPlayerPlayState = -1; ~savedPlayerLoopState = -1;
 
+Platform.case(
+    \osx, { "Running on macOS".postln },
+    \linux, { "Running on Linux".postln },
+    \windows, { "Running on Windows".postln }
+);
+thisProcess.platform.name.postln;
+
 // --- Default album configuration ---
 // Change this to your preferred default album name (case-insensitive)
 ~preferredDefaultAlbum = "THE LONGEST DAY";
@@ -43,7 +50,10 @@ var win, mainView,
     // Get base path based on source
     if(isUSB, {
         basePath = ~usbBasePath.value;
-        if(basePath.isNil or: { (Platform.name == \osx) and: { File.exists(basePath +/+ "i_am_here.txt").not } }, {
+        if(basePath.isNil and: { Platform.name == \osx }, {
+            basePath = "/Volumes/UHJ";
+        });
+        if(basePath.isNil, {
             basePath = Atk.userSoundsDir ++ "/uhj";
         });
     }, {
@@ -103,32 +113,24 @@ var win, mainView,
 
 // Find artwork file with priority search
 ~findArtworkFile = { |albumPath, currentTrackPath|
-    var foundPath, artworkNames, extensions;
+    var foundPath, artworkNames, extensions, entries;
     
     "findArtworkFile called with: ".post; albumPath.postln; currentTrackPath.postln;
     
-    // If we have a current track path, try FLAC artwork first
     if(currentTrackPath.notNil, {
         "Trying FLAC artwork extraction...".postln;
         foundPath = ~findArtworkForTrack.value(currentTrackPath, albumPath);
         "FLAC artwork result: ".post; foundPath.postln;
         if(foundPath.notNil, {
             "findArtworkFile returning FLAC artwork: ".post; foundPath.postln;
-            // Return the FLAC artwork path immediately
             foundPath;
         });
-        // If FLAC artwork extraction failed, continue to fallback
     });
     
-    // Fall back to original folder artwork search (only if FLAC artwork wasn't found)
-    
     if(foundPath.isNil, {
-        // Priority order for artwork file names
         artworkNames = ["artwork", "cover", "folder"];
-        // Supported image extensions
         extensions = ["png", "jpg", "jpeg"];
         
-        // Search through all combinations of names and extensions
         artworkNames.do { |name|
             extensions.do { |ext|
                 if(foundPath.isNil, {
@@ -140,9 +142,8 @@ var win, mainView,
             };
         };
         
-        // If no specific artwork found, look for any .png or .jpg file
         if(foundPath.isNil, {
-            var entries = PathName(albumPath).entries.select { |entry| 
+            entries = PathName(albumPath).entries.select { |entry| 
                 entry.isFile and: { 
                     var ext = entry.extension.asString.toLower;
                     (ext == "png") or: (ext == "jpg") or: (ext == "jpeg");
@@ -178,10 +179,88 @@ var win, mainView,
     \surround, 0.8,   // Surround level
     \effect, 0.8,     // Effect level
     \delay, 0.4,      // Delay amount
-    \active, 0        // Active/bypass (default OFF)
+    \active, 1        // Active/bypass (default ON - 1 = active, 0 = bypass)
 ]);
 
+// --- Stereo/Binaural layout state preservation variables ---
+~stereoState = Dictionary.newFrom([
+    \lOn, 1,
+    \rOn, 1
+]);
 
+~binauralState = Dictionary.newFrom([
+    \lOn, 1,
+    \rOn, 1
+]);
+
+// --- Quad layout state preservation variables ---
+~quadSquareState = Dictionary.newFrom([
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1
+]);
+
+~quadNarrowState = Dictionary.newFrom([
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1
+]);
+
+~quadWideState = Dictionary.newFrom([
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1
+]);
+
+// --- Dolby (5.1 / 5.1.2) state preservation variables ---
+~dolbyState = Dictionary.newFrom([
+    \centerGain, 0.0,
+    \subGain, 0.0,
+    \heightGain, 0.0,
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1,
+    \centerOn, 1,
+    \subOn, 1,
+    \tflOn, 1,
+    \tfrOn, 1,
+    \subLPF, 120,
+    \topHPF, 180
+]);
+
+// --- Octagon layout state preservation variables ---
+~octagonState = Dictionary.newFrom([
+    \s1On, 1,
+    \s2On, 1,
+    \s3On, 1,
+    \s4On, 1,
+    \s5On, 1,
+    \s6On, 1,
+    \s7On, 1,
+    \s8On, 1
+]);
+
+// --- Layout overlay helper references ---
+~layoutDiagramView = nil;
+~layoutTitleText = nil;
+~stereoLeftHit = nil; ~stereoRightHit = nil;
+~binauralLeftHit = nil; ~binauralRightHit = nil;
+~quadSquareFLHit = nil; ~quadSquareFRHit = nil; ~quadSquareRLHit = nil; ~quadSquareRRHit = nil;
+~quadNarrowFLHit = nil; ~quadNarrowFRHit = nil; ~quadNarrowRLHit = nil; ~quadNarrowRRHit = nil;
+~quadWideFLHit = nil; ~quadWideFRHit = nil; ~quadWideRLHit = nil; ~quadWideRRHit = nil;
+~dolbyFLSquareBtn = nil; ~dolbyFRSquareBtn = nil; ~dolbyRLSquareBtn = nil; ~dolbyRRSquareBtn = nil;
+~dolbyCenterSquareBtn = nil; ~dolbySubSquareBtn = nil; ~dolbyTopLeftSquareBtn = nil; ~dolbyTopRightSquareBtn = nil;
+~dolbyCenterGainSlider = nil; ~dolbySubGainSlider = nil; ~dolbyHeightGainSlider = nil;
+~dolbyCenterGainLabel = nil; ~dolbySubGainLabel = nil; ~dolbyHeightGainLabel = nil;
+~dolbyTopHpfSlider = nil; ~dolbyTopHpfLabel = nil; ~dolbyTopHpfValue = nil;
+~dolbySubLpfSlider = nil; ~dolbySubLpfLabel = nil; ~dolbySubLpfValue = nil;
+~dolbyHeightOverlay = nil; ~dolbyTopLpfOverlay = nil;
+~octagonS1Hit = nil; ~octagonS2Hit = nil; ~octagonS3Hit = nil; ~octagonS4Hit = nil;
+~octagonS5Hit = nil; ~octagonS6Hit = nil; ~octagonS7Hit = nil; ~octagonS8Hit = nil;
 
 // --- Initial values for input section ---
 // lastInL = 127; // Start at max (0dB)
@@ -739,28 +818,21 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 });
 // ~fileList.front; // ensure on top of border
 
-// Helper to locate mounted USB volume (supports macOS / Linux)
+// Helper to locate mounted UHJ USB volume (case-insensitive, handles spaces)
 ~usbBasePath = {
-    var path;
-    if(Platform.name == \osx, {
-        var volumes = PathName("/Volumes").entries.select { |entry| entry.isFolder };
-        var markerMatch = volumes.detect { |entry| File.exists(entry.fullPath +/+ "i_am_here.txt") };
-        var uhjMatch = volumes.detect { |entry| entry.folderName.asString.toLower.beginsWith("uhj") };
-        if(markerMatch.notNil) {
-            path = markerMatch.fullPath;
-        } {
-            path = if(uhjMatch.notNil) { uhjMatch.fullPath } { nil };
-        };
-    }, {
-        var usbPaths = [
+    var path, searchRoots, found, volumes, userVolumes, uhjEntry;
+    var platform = thisProcess.platform.name;
+    ("~usbBasePath evaluating for platform: " ++ platform.asString).postln;
+    if(platform == \linux, {
+        searchRoots = [
             "/media/" ++ Platform.userHomeDir.basename ++ "/",
             "/media/pi/",
             "/mnt/",
             "/media/"
         ];
-        usbPaths.do { |base|
-            if(path.isNil and: { File.exists(base) }, {
-                var dirs = PathName(base).entries.select { |entry|
+        searchRoots.do { |root|
+            if(found.isNil and: { File.exists(root) }, {
+                var dirs = PathName(root).entries.select { |entry|
                     entry.isFolder and: {
                         entry.folderName != "root" and:
                         entry.folderName != Platform.userHomeDir.basename and:
@@ -769,33 +841,56 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                     }
                 };
                 if(dirs.size > 0) {
-                    path = dirs[0].fullPath;
+                    found = dirs[0].fullPath;
                 };
             });
         };
+        path = found;
+    }, {
+        volumes = PathName("/Volumes").entries.select { |entry| entry.isFolder };
+        userVolumes = volumes.reject { |entry|
+            var name = entry.folderName.asString;
+            name.beginsWith(".") or: {
+                [
+                    Platform.userHomeDir.basename.asString,
+                    "Macintosh HD",
+                    "MacintoshHD",
+                    "Time Machine",
+                    "TimeMachine",
+                    "Preboot",
+                    "Recovery"
+                ].includes(name) or: { entry.fullPath == "/" }
+            }
+        };
+        uhjEntry = userVolumes.detect { |entry| entry.folderName.asString.toLower.beginsWith("uhj") };
+        if(uhjEntry.notNil) {
+            path = uhjEntry.fullPath;
+        };
+        if(path.isNil and: { File.exists("/Volumes/UHJ") }) {
+            path = "/Volumes/UHJ";
+        };
+        if(path.isNil and: { File.exists("/Volumes/uhj") }) {
+            path = "/Volumes/uhj";
+        };
     });
+    ("~usbBasePath returning: " ++ (path ? "nil")).postln;
     path;
 };
 
 // Function to get USB folder options
 ~getUSBFolderOptions = {
     var usbBase = ~usbBasePath.value;
-    var markerFile;
-    var requireMarker = Platform.name == \osx;
     var folders;
     var usbEntries;
+    
+    if(usbBase.isNil and: { Platform.name == \osx }, {
+        usbBase = "/Volumes/UHJ";
+    });
     
     if(usbBase.isNil, {
         folders = ["<NO DRIVE>"];
     }, {
-        markerFile = usbBase +/+ "i_am_here.txt";
-        if(requireMarker and: { File.exists(markerFile).not }, {
-        folders = ["<NO DRIVE>"];
-    }, {
         // USB drive found - use the first folder inside the drive as content directory
-        if(File.exists(markerFile)) {
-            ("USB marker: " ++ File.readAllString(markerFile)).postln;
-        };
         folders = [];
             if(File.exists(usbBase), {
                 usbEntries = PathName(usbBase).entries.select { |entry|
@@ -805,7 +900,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                     folders = folders.add(entry.folderName.asString.toUpper);
                 };
         });
-    });
     });
     
     folders;
@@ -853,8 +947,10 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     if(isUSB, {
         // USB mode - resolve content directory first
         var usbBase = ~usbBasePath.value;
-        var requireMarker = Platform.name == \osx;
-        if(usbBase.isNil or: { requireMarker and: { File.exists(usbBase +/+ "i_am_here.txt").not } } or: { artistName == "<NO DRIVE>" }, {
+        if(usbBase.isNil and: { Platform.name == \osx }, {
+            usbBase = "/Volumes/UHJ";
+        });
+        if(usbBase.isNil or: { artistName == "<NO DRIVE>" }, {
             albumPath = "/tmp/"; // fallback path
         }, {
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
@@ -1010,14 +1106,18 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
 // Function to detect available JACK outputs and build decoder menu
 ~buildDecoderMenu = {
-    var availableOutputs, decoderItems;
+    var availableOutputs, decoderItems, platform;
     
-    // Detect number of JACK playback ports
-    availableOutputs = "jack_lsp | grep 'system:playback' | wc -l".unixCmdGetStdOut.asInteger;
-    if(availableOutputs == 0) {
-        // Fallback: assume at least stereo if detection fails
-        availableOutputs = 2;
-        ("Warning: Could not detect JACK outputs, assuming stereo").postln;
+    platform = thisProcess.platform.name;
+    if(platform == \osx) {
+        availableOutputs = 8;
+        "macOS detected – assuming 8 output channels".postln;
+    } {
+        availableOutputs = "jack_lsp | grep 'system:playback' | wc -l".unixCmdGetStdOut.asInteger;
+        if(availableOutputs == 0) {
+            availableOutputs = 2;
+            ("Warning: Could not detect JACK outputs, assuming stereo").postln;
+        };
     };
     
     ("Detected " ++ availableOutputs ++ " output channels").postln;
@@ -1270,7 +1370,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                         \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'dual'),
                         \stereo, FoaDecoderMatrix.newStereo,
-                        \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45)  // 5.1.2 matrix decoder (Equal mode, 45° elevation)
+                        \fiveonetwo, FoaDecoderMatrix.new5_0_2(\equal)  // 5.1.2 decoder (ATK order, routed in app)
                     ]);
 
                     // Get selected encoder and decoder
@@ -1384,19 +1484,21 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         
                         if(outputs == 8, {
                             if(configKeyD == \fiveonetwo, {
-                                // --- DOLBY 5.1.2 OUTPUT MAPPING ---
-                                // ATK diametric decoder: 8 speakers total
-                                // Map to 5.1.2: FL, FR, C, RL, RR, LFE, TFL, TFR
-                                var lowpass = BLowPass.ar((out[0] + out[1] + out[2] + out[5] + out[6]), 80, 1, 0.4) * 3.16; // Sum all horizontal speakers for LFE, 80Hz crossover, +10dB headroom
+                                // --- DOLBY 5.1.2 OUTPUT MAPPING (UHJ-Pi layout) ---
+                                // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
+                                var centerChan = out[0];
+                                var lowpass = BLowPass.ar((out[1] + out[4]), 80, 1, 0.4) * 3.16; // Sum FL + FR for LFE
+                                var heightTFL = HPF.ar(out[6], 180);
+                                var heightTFR = HPF.ar(out[5], 180);
                                 out = [
-                                    out[1], // FL (Speaker 1) - Front Left
-                                    out[2], // FR (Speaker 2) - Front Right
-                                    out[0], // C  (Speaker 3) - Center
-                                    out[5], // RL (Speaker 4) - Rear Left
-                                    out[6], // RR (Speaker 5) - Rear Right
-                                    lowpass, // LFE (Speaker 6) - Low Frequency Effects
-                                    out[3], // TFL (Speaker 7) - Top Front Left
-                                    out[4]  // TFR (Speaker 8) - Top Front Right
+                                    out[1],     // FL (Speaker 1) - Front Left
+                                    out[4],     // FR (Speaker 2) - Front Right
+                                    out[2],     // RL (Speaker 3) - Rear Left
+                                    out[3],     // RR (Speaker 4) - Rear Right
+                                    centerChan, // C  (Speaker 5) - Center
+                                    lowpass,    // SUB (Speaker 6) - Subwoofer/LFE
+                                    heightTFL,  // TFL (Speaker 7) - Top Front Left
+                                    heightTFR   // TFR (Speaker 8) - Top Front Right
                                 ];
                             }, {
                                 // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -1514,7 +1616,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             \fivezero, FoaDecoderMatrix.new5_0(irregKind: 'focused'),
                             \octagon, FoaDecoderMatrix.newPanto(8, 'flat', k: 'dual'),
                             \stereo, FoaDecoderMatrix.newStereo,
-                            \fiveonetwo, Foa512Matrix.newFoaDecoder(\equal, 45)  // 5.1.2 matrix decoder (Equal mode, 45° elevation)
+                            \fiveonetwo, FoaDecoderMatrix.new5_0_2(\equal)  // 5.1.2 decoder (ATK order, routed in app)
                         ]);
 
                         // Get selected encoder and decoder
@@ -2282,23 +2384,13 @@ win.front;
         if(isUSB, {
             // USB mode - quietly run mount helper if present, then refresh folders
             var usbBase = ~usbBasePath.value;
-            var markerFile;
             "are you there?".postln;
-            if(usbBase.notNil, {
-                markerFile = usbBase +/+ "i_am_here.txt";
-                if(File.exists(markerFile), {
-                    ("marker contents: " ++ File.readAllString(markerFile)).postln;
-                }, {
-                    if(Platform.name == \osx) {
-                        "marker missing".postln;
-                    } {
-                        ("USB base: " ++ usbBase).postln;
-                    };
-                });
-            }, {
+            "USB base resolved: ".post;
+            if(usbBase.notNil) { usbBase.postln; } { "nil".postln; };
+            if(usbBase.isNil, {
                 "USB base not found".postln;
             });
-            if((Platform.name == \linux) and: { File.exists("/usr/local/bin/mount-usb") }, {
+            if(File.exists("/usr/local/bin/mount-usb"), {
                 ("/usr/local/bin/mount-usb").unixCmdGetStdOut;
             });
             usbOptions = ~getUSBFolderOptions.value;
@@ -2318,9 +2410,10 @@ win.front;
             // Build album list for the selected artist
             var usbBase = ~usbBasePath.value;
             var artistPath;
-            var requireMarker = Platform.name == \osx;
-            var hasUsbAccess = usbBase.notNil and: { (requireMarker.not) or: { File.exists(usbBase +/+ "i_am_here.txt") } };
-            if(hasUsbAccess, {
+            if(usbBase.isNil and: { Platform.name == \osx }, {
+                usbBase = "/Volumes/UHJ";
+            });
+            if(usbBase.notNil, {
                 var actualArtistName = PathName(usbBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
                     entry.folderName.asString.toUpper == artistName 
                 };
@@ -2432,9 +2525,10 @@ win.front;
                     // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
                     var usbBase = ~usbBasePath.value;
                     var artistPath;
-                    var requireMarker = Platform.name == \osx;
-                    var hasUsbAccess = usbBase.notNil and: { (requireMarker.not) or: { File.exists(usbBase +/+ "i_am_here.txt") } };
-                    if(hasUsbAccess, {
+                    if(usbBase.isNil and: { Platform.name == \osx }, {
+                        usbBase = "/Volumes/UHJ";
+                    });
+                    if(usbBase.notNil, {
                         var actualArtistName = PathName(usbBase).entries.select { |entry| entry.isFolder }.detect { |entry|
                             entry.folderName.asString.toUpper == artistName
                         };
@@ -3479,33 +3573,27 @@ AppClock.sched(0.1, {
             ~playerArtwork = UserView(~playerOverlay, Rect(20, 40, 180, 180))
                 .background_(Color.black)
                 .drawFunc_({ |view|
-                    var artworkPath, currentTrackPath;
-                    "=== DRAW FUNC CALLED ===".postln;
+                    var artworkPath, currentTrackPath, margin, imageSize, xOffset, yOffset, fallbackImage;
                     if(~currentAlbumPath.notNil, {
-                        "=== INSIDE IF BLOCK ===".postln;
-                        // Get current track path if available
                         currentTrackPath = if(~filePaths.notNil and: { ~filePaths.size > 0 } and: { ~fileList.notNil }, {
                             var currentIdx = ~fileList.value ? 0;
                             ~filePaths[currentIdx];
                         });
-                        "=== AFTER currentTrackPath ASSIGNMENT ===".postln;
-                        // Debug output
+                        artworkPath = ~findArtworkFile.value(~currentAlbumPath, currentTrackPath);
+                        "=== DRAW FUNC CALLED ===".postln;
                         "Artwork debug - Album path: ".post; ~currentAlbumPath.postln;
                         "Artwork debug - Current track: ".post; currentTrackPath.postln;
-                        "=== ABOUT TO CALL findArtworkFile ===".postln;
-                        // Priority search for artwork files (FLAC first, then folder)
-                        artworkPath = ~findArtworkFile.value(~currentAlbumPath, currentTrackPath);
-                        "=== AFTER findArtworkFile CALL ===".postln;
                         "Artwork debug - Found artwork: ".post; artworkPath.postln;
-                        "Artwork debug - artworkPath type: ".post; artworkPath.class.postln;
                         "Artwork debug - artworkPath isNil: ".post; artworkPath.isNil.postln;
-                        "Artwork debug - About to check if artworkPath.notNil".postln;
                         if(artworkPath.notNil, {
                             try {
                                 var image = Image.open(artworkPath);
                                 if(image.notNil, {
-                                    image.drawInRect(Rect(0, 0, view.bounds.width, view.bounds.height), 
-                                                   Rect(0, 0, image.width, image.height), 2);
+                                    image.drawInRect(
+                                        Rect(0, 0, view.bounds.width, view.bounds.height),
+                                        Rect(0, 0, image.width, image.height),
+                                        2
+                                    );
                                 }, {
                                     Pen.color = Color.cyan;
                                     Pen.stringAtPoint("LOAD FAIL", Point(80, 100));
@@ -3515,21 +3603,21 @@ AppClock.sched(0.1, {
                                 Pen.stringAtPoint("ERROR", Point(90, 100));
                             };
                         }, {
-                            // Fallback to UHJ-Pi-180.png icon
                             try {
-                                var fallbackImage = Image.open("assets/UHJ-Pi-180.png");
+                                fallbackImage = Image.open("assets/UHJ-Pi-180.png");
                                 if(fallbackImage.notNil, {
-                                    // Calculate centered position with margins
-                                    var margin = 10;
-                                    var imageSize = view.bounds.width - (margin * 2);
-                                    var xOffset = margin;
-                                    var yOffset = (view.bounds.height - imageSize) / 2;
-                                    
-                                    fallbackImage.drawInRect(Rect(xOffset, yOffset, imageSize, imageSize), 
-                                                           Rect(0, 0, fallbackImage.width, fallbackImage.height), 0);
-                        }, {
-                            Pen.color = Color.cyan;
-                            Pen.stringAtPoint("NO ART", Point(85, 100));
+                                    margin = 10;
+                                    imageSize = view.bounds.width - (margin * 2);
+                                    xOffset = margin;
+                                    yOffset = (view.bounds.height - imageSize) / 2;
+                                    fallbackImage.drawInRect(
+                                        Rect(xOffset, yOffset, imageSize, imageSize),
+                                        Rect(0, 0, fallbackImage.width, fallbackImage.height),
+                                        0
+                                    );
+                                }, {
+                                    Pen.color = Color.cyan;
+                                    Pen.stringAtPoint("NO ART", Point(85, 100));
                                 });
                             } { |error|
                                 Pen.color = Color.cyan;
@@ -3845,6 +3933,12 @@ AppClock.sched(0.1, {
             if(~metersOverlay.notNil) { 
                 ~metersOverlay.remove; ~metersOverlay = nil; 
             };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil; 
+            };
+            if(~stereoLeftHit.notNil) { try { ~stereoLeftHit.remove; }; ~stereoLeftHit = nil; };
+            if(~stereoRightHit.notNil) { try { ~stereoRightHit.remove; }; ~stereoRightHit = nil; };
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -3854,16 +3948,16 @@ AppClock.sched(0.1, {
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
-            UserView(~layoutOverlay, Rect(0, 0, 320, 275))
+            ~layoutDiagramView = UserView(~layoutOverlay, Rect(0, 0, 320, 275))
                 .background_(Color.clear)
                 .drawFunc_({ |view|
                     var bounds = view.bounds;
                     var centerX = bounds.width / 2;
                     var centerY = bounds.height / 2;
                     var currentDecoderValue = ~dmenu.value;
-                    // Draw cyan border
+                    // Draw cyan border (matching v28_ESI)
                     Pen.width = 0.5;
-                    Pen.color = Color.white;
+                    Pen.color = Color.cyan;
                     Pen.addRect(Rect(0.25, 0.25, bounds.width - 0.5, bounds.height - 0.5));
                     Pen.stroke;
                     Pen.width = 2;
@@ -3871,42 +3965,68 @@ AppClock.sched(0.1, {
                         0, { // Stereo
                             var speakerWidth = 20, speakerHeight = 20, speakerSpacing = 120, leftSpeakerX, rightSpeakerX, speakerY;
                             var centerY_bottom = centerY + 80; // Center point further down at bottom of triangle
-                            var leftRotationAngle, rightRotationAngle;
-                            leftSpeakerX = centerX - (speakerSpacing / 2) - (speakerWidth / 2);
-                            rightSpeakerX = centerX + (speakerSpacing / 2) - (speakerWidth / 2);
+                            var leftRotationAngle, rightRotationAngle, leftCenterX, leftCenterY, rightCenterX, rightCenterY, leftOn, rightOn;
+                            var speakerHalfWidth, speakerHalfHeight, speakerHalfSpacing;
+                            speakerHalfWidth = speakerWidth * 0.5;
+                            speakerHalfHeight = speakerHeight * 0.5;
+                            speakerHalfSpacing = speakerSpacing * 0.5;
+                            leftSpeakerX = centerX - speakerHalfSpacing - speakerHalfWidth;
+                            rightSpeakerX = centerX + speakerHalfSpacing - speakerHalfWidth;
                             speakerY = centerY - 40; // Speakers at top of triangle
+                            leftCenterX = leftSpeakerX + speakerHalfWidth;
+                            leftCenterY = speakerY + speakerHalfHeight;
+                            rightCenterX = rightSpeakerX + speakerHalfWidth;
+                            rightCenterY = speakerY + speakerHalfHeight;
+                            leftOn = ~stereoState[\lOn] ? 1;
+                            rightOn = ~stereoState[\rOn] ? 1;
                             
-                            // Calculate rotation angles
-                            leftRotationAngle = atan2(centerY_bottom - speakerY, centerX - leftSpeakerX) + (pi / 2);
-                            rightRotationAngle = atan2(centerY_bottom - speakerY, centerX - rightSpeakerX) + (pi / 2);
+                            // Calculate rotation angles based on speaker centres
+                            leftRotationAngle = atan2(centerY_bottom - leftCenterY, centerX - leftCenterX) + (pi / 2);
+                            rightRotationAngle = atan2(centerY_bottom - rightCenterY, centerX - rightCenterX) + (pi / 2);
                             
-                            // Draw triangle linestesting on 
+                            // Draw triangle guide lines
                             Pen.color = Color.cyan; Pen.width = 1;
                             // Left diagonal from center to left speaker
-                            Pen.line(Point(centerX, centerY_bottom), Point(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
+                            Pen.line(Point(centerX, centerY_bottom), Point(leftCenterX, leftCenterY));
                             Pen.stroke;
                             // Right diagonal from center to right speaker
-                            Pen.line(Point(centerX, centerY_bottom), Point(rightSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2)));
+                            Pen.line(Point(centerX, centerY_bottom), Point(rightCenterX, rightCenterY));
                             Pen.stroke;
                             
-                            // Speaker 1: Left (rotated to face center + 180° for upright text)
+                            // Speaker 1: Left (mute button styling)
                             Pen.push;
-                            Pen.translate(leftSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2));
+                            Pen.translate(leftCenterX, leftCenterY);
                             Pen.rotate(leftRotationAngle + pi);
-                            Pen.translate(-10, -10);
-                            Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.translate(0 - speakerHalfWidth, 0 - speakerHalfHeight);
+                            if(leftOn == 1, {
+                                Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("1", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
+                            }, {
+                                Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("1", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            });
                             Pen.pop;
                             
-                            // Speaker 2: Right (rotated to face center + 180° for upright text)
+                            // Speaker 2: Right (mute button styling)
                             Pen.push;
-                            Pen.translate(rightSpeakerX + (speakerWidth / 2), speakerY + (speakerHeight / 2));
+                            Pen.translate(rightCenterX, rightCenterY);
                             Pen.rotate(rightRotationAngle + pi);
-                            Pen.translate(-10, -10);
-                            Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.translate(0 - speakerHalfWidth, 0 - speakerHalfHeight);
+                            if(rightOn == 1, {
+                                Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("2", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
+                            }, {
+                                Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                                Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
+                                Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
+                                Pen.stringAtPoint("2", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            });
                             Pen.pop;
                             
                             Pen.stringAtPoint("[1] L (-30°) & [2] R (+30°)", Point(centerX - 75, 32), Font("Helvetica", 13), Color.cyan);
@@ -4068,8 +4188,55 @@ AppClock.sched(0.1, {
                     );
                 });
             ~layoutOverlay.front;
+
+            if(~dmenu.value == 0) {
+                var layoutBounds = ~layoutOverlay.bounds;
+                var centerX = layoutBounds.width / 2;
+                var centerY = layoutBounds.height / 2;
+                var speakerWidth = 20;
+                var speakerHeight = 20;
+                var speakerSpacing = 120;
+                var speakerHalfWidth = speakerWidth * 0.5;
+                var speakerHalfHeight = speakerHeight * 0.5;
+                var speakerHalfSpacing = speakerSpacing * 0.5;
+                var speakerY = centerY - 40;
+                var leftCenterX = centerX - speakerHalfSpacing;
+                var leftCenterY = speakerY + speakerHalfHeight;
+                var rightCenterX = centerX + speakerHalfSpacing;
+                var rightCenterY = speakerY + speakerHalfHeight;
+
+                if(~stereoLeftHit.notNil) { try { ~stereoLeftHit.remove; }; ~stereoLeftHit = nil; };
+                if(~stereoRightHit.notNil) { try { ~stereoRightHit.remove; }; ~stereoRightHit = nil; };
+
+                ~stereoLeftHit = UserView(~layoutOverlay, Rect(leftCenterX - speakerHalfWidth, leftCenterY - speakerHalfHeight, speakerWidth, speakerHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~stereoState[\lOn] ? 1);
+                        ~stereoState[\lOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\lOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~stereoLeftHit.front;
+
+                ~stereoRightHit = UserView(~layoutOverlay, Rect(rightCenterX - speakerHalfWidth, rightCenterY - speakerHalfHeight, speakerWidth, speakerHeight))
+                    .background_(Color.clear)
+                    .mouseDownAction_({ |view, x, y, mod, button, count|
+                        var newState = 1 - (~stereoState[\rOn] ? 1);
+                        ~stereoState[\rOn] = newState;
+                        if(~synth.notNil) { ~synth.set(\rOn, newState); };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                    });
+                ~stereoRightHit.front;
+            };
         } {
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil; 
+            };
+            ~layoutDiagramView = nil;
+            ~layoutTitleText = nil;
+            ~stereoLeftHit = nil; 
+            ~stereoRightHit = nil;
         }
     });
 
@@ -4362,3 +4529,15 @@ if(Platform.case(\linux, { true }, { false })) {
         });
     };
 };
+
+// --- Binaural profile selection state ---
+~binauralIRCAMId = 1053;
+~binauralCIPICId = 12;
+~binauralIRCAMPendingId = ~binauralIRCAMId;
+~binauralCIPICPendingId = ~binauralCIPICId;
+~binauralIrcamSelectBtn = nil; ~binauralCipicSelectBtn = nil;
+~binauralIrcamChooserWin = nil; ~binauralCipicChooserWin = nil;
+~binauralIRCAMIds = nil; ~binauralCIPICIds = nil;
+
+// --- Ambience routing defaults ---
+~reverbTarget = \all;

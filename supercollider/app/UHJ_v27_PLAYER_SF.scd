@@ -43,7 +43,7 @@ var win, mainView,
     // Get base path based on source
     if(isUSB, {
         basePath = ~usbBasePath.value;
-        if(basePath.isNil or: { (Platform.name == \osx) and: { File.exists(basePath +/+ "i_am_here.txt").not } }, {
+        if(basePath.isNil or: { File.exists(basePath +/+ "i_am_here.txt").not }, {
             basePath = Atk.userSoundsDir ++ "/uhj";
         });
     }, {
@@ -180,6 +180,98 @@ var win, mainView,
     \delay, 0.4,      // Delay amount
     \active, 0        // Active/bypass (default OFF)
 ]);
+
+// --- Stereo/Binaural layout state preservation variables ---
+~stereoState = Dictionary.newFrom([
+    \lOn, 1,
+    \rOn, 1
+]);
+
+~binauralState = Dictionary.newFrom([
+    \lOn, 1,
+    \rOn, 1
+]);
+
+// --- Quad layout state preservation variables ---
+~quadSquareState = Dictionary.newFrom([
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1
+]);
+
+~quadNarrowState = Dictionary.newFrom([
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1
+]);
+
+~quadWideState = Dictionary.newFrom([
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1
+]);
+
+// --- Dolby (5.1 / 5.1.2) state preservation variables ---
+~dolbyState = Dictionary.newFrom([
+    \centerGain, 0.0,
+    \subGain, 0.0,
+    \heightGain, 0.0,
+    \flOn, 1,
+    \frOn, 1,
+    \rlOn, 1,
+    \rrOn, 1,
+    \centerOn, 1,
+    \subOn, 1,
+    \tflOn, 1,
+    \tfrOn, 1,
+    \subLPF, 120,
+    \topHPF, 180
+]);
+
+// --- Octagon layout state preservation variables ---
+~octagonState = Dictionary.newFrom([
+    \s1On, 1,
+    \s2On, 1,
+    \s3On, 1,
+    \s4On, 1,
+    \s5On, 1,
+    \s6On, 1,
+    \s7On, 1,
+    \s8On, 1
+]);
+
+// --- Layout overlay helper references ---
+~layoutDiagramView = nil;
+~layoutTitleText = nil;
+~stereoLeftHit = nil; ~stereoRightHit = nil;
+~binauralLeftEarHit = nil; ~binauralRightEarHit = nil;
+~quadSquareFLHit = nil; ~quadSquareFRHit = nil; ~quadSquareRLHit = nil; ~quadSquareRRHit = nil;
+~quadNarrowFLHit = nil; ~quadNarrowFRHit = nil; ~quadNarrowRLHit = nil; ~quadNarrowRRHit = nil;
+~quadWideFLHit = nil; ~quadWideFRHit = nil; ~quadWideRLHit = nil; ~quadWideRRHit = nil;
+~dolbyFLSquareBtn = nil; ~dolbyFRSquareBtn = nil; ~dolbyRLSquareBtn = nil; ~dolbyRRSquareBtn = nil;
+~dolbyCenterSquareBtn = nil; ~dolbySubSquareBtn = nil; ~dolbyTopLeftSquareBtn = nil; ~dolbyTopRightSquareBtn = nil;
+~dolbyCenterGainSlider = nil; ~dolbySubGainSlider = nil; ~dolbyHeightGainSlider = nil;
+~dolbyCenterGainLabel = nil; ~dolbySubGainLabel = nil; ~dolbyHeightGainLabel = nil;
+~dolbyTopHpfSlider = nil; ~dolbyTopHpfLabel = nil; ~dolbyTopHpfValue = nil;
+~dolbySubLpfSlider = nil; ~dolbySubLpfLabel = nil; ~dolbySubLpfValue = nil;
+~dolbyHeightOverlay = nil; ~dolbyTopLpfOverlay = nil;
+~octagonS1Hit = nil; ~octagonS2Hit = nil; ~octagonS3Hit = nil; ~octagonS4Hit = nil;
+~octagonS5Hit = nil; ~octagonS6Hit = nil; ~octagonS7Hit = nil; ~octagonS8Hit = nil;
+
+// --- Binaural profile selection state ---
+~binauralIRCAMId = 1053;
+~binauralCIPICId = 12;
+~binauralIRCAMPendingId = ~binauralIRCAMId;
+~binauralCIPICPendingId = ~binauralCIPICId;
+~binauralIrcamSelectBtn = nil; ~binauralCipicSelectBtn = nil;
+~binauralIrcamChooserWin = nil; ~binauralCipicChooserWin = nil;
+~binauralIRCAMIds = nil; ~binauralCIPICIds = nil;
+
+// --- Ambience routing default ---
+~reverbTarget = \all;
 
 
 
@@ -739,49 +831,18 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 });
 // ~fileList.front; // ensure on top of border
 
-// Helper to locate mounted USB volume (supports macOS / Linux)
+// Helper to locate mounted UHJ USB volume (case-insensitive, handles spaces)
 ~usbBasePath = {
-    var path;
-    if(Platform.name == \osx, {
-        var volumes = PathName("/Volumes").entries.select { |entry| entry.isFolder };
-        var markerMatch = volumes.detect { |entry| File.exists(entry.fullPath +/+ "i_am_here.txt") };
-        var uhjMatch = volumes.detect { |entry| entry.folderName.asString.toLower.beginsWith("uhj") };
-        if(markerMatch.notNil) {
-            path = markerMatch.fullPath;
-        } {
-            path = if(uhjMatch.notNil) { uhjMatch.fullPath } { nil };
-        };
-    }, {
-        var usbPaths = [
-            "/media/" ++ Platform.userHomeDir.basename ++ "/",
-            "/media/pi/",
-            "/mnt/",
-            "/media/"
-        ];
-        usbPaths.do { |base|
-            if(path.isNil and: { File.exists(base) }, {
-                var dirs = PathName(base).entries.select { |entry|
-                    entry.isFolder and: {
-                        entry.folderName != "root" and:
-                        entry.folderName != Platform.userHomeDir.basename and:
-                        entry.folderName != "pi" and:
-                        PathName(entry.fullPath).entries.size > 0
-                    }
-                };
-                if(dirs.size > 0) {
-                    path = dirs[0].fullPath;
-                };
-            });
-        };
-    });
-    path;
+    var volumes, match;
+    volumes = PathName("/Volumes").entries.select { |entry| entry.isFolder };
+    match = volumes.detect { |entry| entry.folderName.asString.toLower.beginsWith("uhj") };
+    if(match.notNil) { match.fullPath } { nil };
 };
 
 // Function to get USB folder options
 ~getUSBFolderOptions = {
     var usbBase = ~usbBasePath.value;
     var markerFile;
-    var requireMarker = Platform.name == \osx;
     var folders;
     var usbEntries;
     
@@ -789,13 +850,11 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         folders = ["<NO DRIVE>"];
     }, {
         markerFile = usbBase +/+ "i_am_here.txt";
-        if(requireMarker and: { File.exists(markerFile).not }, {
+        if(File.exists(markerFile).not, {
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - use the first folder inside the drive as content directory
-        if(File.exists(markerFile)) {
-            ("USB marker: " ++ File.readAllString(markerFile)).postln;
-        };
+        ("USB marker: " ++ File.readAllString(markerFile)).postln;
         folders = [];
             if(File.exists(usbBase), {
                 usbEntries = PathName(usbBase).entries.select { |entry|
@@ -853,8 +912,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     if(isUSB, {
         // USB mode - resolve content directory first
         var usbBase = ~usbBasePath.value;
-        var requireMarker = Platform.name == \osx;
-        if(usbBase.isNil or: { requireMarker and: { File.exists(usbBase +/+ "i_am_here.txt").not } } or: { artistName == "<NO DRIVE>" }, {
+        if(usbBase.isNil or: { File.exists(usbBase +/+ "i_am_here.txt").not } or: { artistName == "<NO DRIVE>" }, {
             albumPath = "/tmp/"; // fallback path
         }, {
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
@@ -2289,16 +2347,12 @@ win.front;
                 if(File.exists(markerFile), {
                     ("marker contents: " ++ File.readAllString(markerFile)).postln;
                 }, {
-                    if(Platform.name == \osx) {
-                        "marker missing".postln;
-                    } {
-                        ("USB base: " ++ usbBase).postln;
-                    };
+                    "marker missing".postln;
                 });
             }, {
                 "USB base not found".postln;
             });
-            if((Platform.name == \linux) and: { File.exists("/usr/local/bin/mount-usb") }, {
+            if(File.exists("/usr/local/bin/mount-usb"), {
                 ("/usr/local/bin/mount-usb").unixCmdGetStdOut;
             });
             usbOptions = ~getUSBFolderOptions.value;
@@ -2318,9 +2372,7 @@ win.front;
             // Build album list for the selected artist
             var usbBase = ~usbBasePath.value;
             var artistPath;
-            var requireMarker = Platform.name == \osx;
-            var hasUsbAccess = usbBase.notNil and: { (requireMarker.not) or: { File.exists(usbBase +/+ "i_am_here.txt") } };
-            if(hasUsbAccess, {
+            if(usbBase.notNil and: { File.exists(usbBase +/+ "i_am_here.txt") }, {
                 var actualArtistName = PathName(usbBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
                     entry.folderName.asString.toUpper == artistName 
                 };
@@ -2432,9 +2484,7 @@ win.front;
                     // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
                     var usbBase = ~usbBasePath.value;
                     var artistPath;
-                    var requireMarker = Platform.name == \osx;
-                    var hasUsbAccess = usbBase.notNil and: { (requireMarker.not) or: { File.exists(usbBase +/+ "i_am_here.txt") } };
-                    if(hasUsbAccess, {
+                    if(usbBase.notNil and: { File.exists(usbBase +/+ "i_am_here.txt") }, {
                         var actualArtistName = PathName(usbBase).entries.select { |entry| entry.isFolder }.detect { |entry|
                             entry.folderName.asString.toUpper == artistName
                         };
