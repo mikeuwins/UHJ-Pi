@@ -43,7 +43,7 @@ var win, mainView,
     // Get base path based on source
     if(isUSB, {
         basePath = ~usbBasePath.value;
-        if(basePath.isNil or: { File.exists(basePath +/+ "i_am_here.txt").not }, {
+        if(basePath.isNil or: { (Platform.name == \osx) and: { File.exists(basePath +/+ "i_am_here.txt").not } }, {
             basePath = Atk.userSoundsDir ++ "/uhj";
         });
     }, {
@@ -739,18 +739,49 @@ StaticText(mainView, Rect(38, 10, 120, 28))
 });
 // ~fileList.front; // ensure on top of border
 
-// Helper to locate mounted UHJ USB volume (case-insensitive, handles spaces)
+// Helper to locate mounted USB volume (supports macOS / Linux)
 ~usbBasePath = {
-    var volumes, match;
-    volumes = PathName("/Volumes").entries.select { |entry| entry.isFolder };
-    match = volumes.detect { |entry| entry.folderName.asString.toLower.beginsWith("uhj") };
-    if(match.notNil) { match.fullPath } { nil };
+    var path;
+    if(Platform.name == \osx, {
+        var volumes = PathName("/Volumes").entries.select { |entry| entry.isFolder };
+        var markerMatch = volumes.detect { |entry| File.exists(entry.fullPath +/+ "i_am_here.txt") };
+        var uhjMatch = volumes.detect { |entry| entry.folderName.asString.toLower.beginsWith("uhj") };
+        if(markerMatch.notNil) {
+            path = markerMatch.fullPath;
+        } {
+            path = if(uhjMatch.notNil) { uhjMatch.fullPath } { nil };
+        };
+    }, {
+        var usbPaths = [
+            "/media/" ++ Platform.userHomeDir.basename ++ "/",
+            "/media/pi/",
+            "/mnt/",
+            "/media/"
+        ];
+        usbPaths.do { |base|
+            if(path.isNil and: { File.exists(base) }, {
+                var dirs = PathName(base).entries.select { |entry|
+                    entry.isFolder and: {
+                        entry.folderName != "root" and:
+                        entry.folderName != Platform.userHomeDir.basename and:
+                        entry.folderName != "pi" and:
+                        PathName(entry.fullPath).entries.size > 0
+                    }
+                };
+                if(dirs.size > 0) {
+                    path = dirs[0].fullPath;
+                };
+            });
+        };
+    });
+    path;
 };
 
 // Function to get USB folder options
 ~getUSBFolderOptions = {
     var usbBase = ~usbBasePath.value;
     var markerFile;
+    var requireMarker = Platform.name == \osx;
     var folders;
     var usbEntries;
     
@@ -758,11 +789,13 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         folders = ["<NO DRIVE>"];
     }, {
         markerFile = usbBase +/+ "i_am_here.txt";
-        if(File.exists(markerFile).not, {
+        if(requireMarker and: { File.exists(markerFile).not }, {
         folders = ["<NO DRIVE>"];
     }, {
         // USB drive found - use the first folder inside the drive as content directory
-        ("USB marker: " ++ File.readAllString(markerFile)).postln;
+        if(File.exists(markerFile)) {
+            ("USB marker: " ++ File.readAllString(markerFile)).postln;
+        };
         folders = [];
             if(File.exists(usbBase), {
                 usbEntries = PathName(usbBase).entries.select { |entry|
@@ -820,7 +853,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     if(isUSB, {
         // USB mode - resolve content directory first
         var usbBase = ~usbBasePath.value;
-        if(usbBase.isNil or: { File.exists(usbBase +/+ "i_am_here.txt").not } or: { artistName == "<NO DRIVE>" }, {
+        var requireMarker = Platform.name == \osx;
+        if(usbBase.isNil or: { requireMarker and: { File.exists(usbBase +/+ "i_am_here.txt").not } } or: { artistName == "<NO DRIVE>" }, {
             albumPath = "/tmp/"; // fallback path
         }, {
             var usbEntries = PathName(usbBase).entries.select { |entry| entry.isFolder };
@@ -2255,12 +2289,16 @@ win.front;
                 if(File.exists(markerFile), {
                     ("marker contents: " ++ File.readAllString(markerFile)).postln;
                 }, {
-                    "marker missing".postln;
+                    if(Platform.name == \osx) {
+                        "marker missing".postln;
+                    } {
+                        ("USB base: " ++ usbBase).postln;
+                    };
                 });
             }, {
                 "USB base not found".postln;
             });
-            if(File.exists("/usr/local/bin/mount-usb"), {
+            if((Platform.name == \linux) and: { File.exists("/usr/local/bin/mount-usb") }, {
                 ("/usr/local/bin/mount-usb").unixCmdGetStdOut;
             });
             usbOptions = ~getUSBFolderOptions.value;
@@ -2280,7 +2318,9 @@ win.front;
             // Build album list for the selected artist
             var usbBase = ~usbBasePath.value;
             var artistPath;
-            if(usbBase.notNil and: { File.exists(usbBase +/+ "i_am_here.txt") }, {
+            var requireMarker = Platform.name == \osx;
+            var hasUsbAccess = usbBase.notNil and: { (requireMarker.not) or: { File.exists(usbBase +/+ "i_am_here.txt") } };
+            if(hasUsbAccess, {
                 var actualArtistName = PathName(usbBase).entries.select { |entry| entry.isFolder }.detect { |entry| 
                     entry.folderName.asString.toUpper == artistName 
                 };
@@ -2392,7 +2432,9 @@ win.front;
                     // Get actual subdirectories in the artist folder (account for USB drive name being ignored)
                     var usbBase = ~usbBasePath.value;
                     var artistPath;
-                    if(usbBase.notNil and: { File.exists(usbBase +/+ "i_am_here.txt") }, {
+                    var requireMarker = Platform.name == \osx;
+                    var hasUsbAccess = usbBase.notNil and: { (requireMarker.not) or: { File.exists(usbBase +/+ "i_am_here.txt") } };
+                    if(hasUsbAccess, {
                         var actualArtistName = PathName(usbBase).entries.select { |entry| entry.isFolder }.detect { |entry|
                             entry.folderName.asString.toUpper == artistName
                         };
