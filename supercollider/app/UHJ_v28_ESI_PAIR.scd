@@ -465,19 +465,29 @@ StaticText(mainView, Rect(345, 10, 140, 28))
         if(~synth.notNil) {
             ~synth.set(\maplinMode, if(configKeyE == \maplin, 1, 0));
             ("Updated maplinMode to: " ++ if(configKeyE == \maplin, 1, 0)).postln;
+        };
         
-            // If switching to Maplin encoder, send current Maplin parameter values to synth
-            if(configKeyE == \maplin) {
+        if(configKeyE == \maplin) {
+            // Ensure Maplin processing is enabled when selecting the encoder
+            ~maplinState[\active] = 1;
+            ~dimensionActive = 1;
+            ~setMaplinActive.(true);
+            if(~maplinActiveBtn.notNil) {
+                ~maplinActiveBtn.value_(0); // 0 = ON
+            };
+            if(~synth.notNil) {
                 ~synth.set(
                     \maplinSurround, ~maplinState[\surround] ? 0.8,
                     \maplinEffect, ~maplinState[\effect] ? 0.8,
                     \maplinDelay, ~maplinState[\delay] ? 0.4,
-                    \maplinActive, ~maplinState[\active] ? 1  // 1 = active, 0 = bypass
+                    \maplinActive, 1
                 );
-                ("Maplin parameters sent to synth: surround=" ++ (~maplinState[\surround] ? 0.8) ++ ", effect=" ++ (~maplinState[\effect] ? 0.8) ++ ", delay=" ++ (~maplinState[\delay] ? 0.4) ++ ", active=" ++ (~maplinState[\active] ? 1)).postln;
+                ("Maplin parameters sent to synth: surround=" ++ (~maplinState[\surround] ? 0.8) ++ ", effect=" ++ (~maplinState[\effect] ? 0.8) ++ ", delay=" ++ (~maplinState[\delay] ? 0.4) ++ ", active=1").postln;
             };
-            // Always send Dimension active state (works for all encoders)
-            ~synth.set(\dimensionActive, ~dimensionActive ? 1);
+        } {
+            if(~synth.notNil) {
+                ~synth.set(\dimensionActive, ~dimensionActive ? 1);
+            };
         };
         
         // Dimension button is now always visible (not encoder-dependent)
@@ -765,7 +775,8 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     // Define encoder kernels
                     encoderDict = Dictionary.newFrom([
                         \uhj, FoaEncoderKernel.newUHJ,
-                        \superstereo, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
+                        \superstereo, FoaEncoderKernel.newSuper,
+                        \maplin, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
                         \phj, FoaEncoderKernel.newPHJ,  // PHJ encoder - kernel-based
                     ]);
 
@@ -1101,7 +1112,8 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
                             \uhj, FoaEncoderKernel.newUHJ,
-                            \superstereo, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
+                            \superstereo, FoaEncoderKernel.newSuper,
+                            \maplin, FoaEncoderMatrix.newDirections([-45, 45, -135, 135].degrad),  // MaplinMatrix quad encoder
                             \phj, FoaEncoderKernel.newPHJ,  // PHJ encoder - kernel-based
                         ]);
 
