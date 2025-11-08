@@ -3941,6 +3941,9 @@ AppClock.sched(0.1, {
             if(~stereoRightHit.notNil) { try { ~stereoRightHit.remove; }; ~stereoRightHit = nil; };
             if(~binauralLeftHit.notNil) { try { ~binauralLeftHit.remove; }; ~binauralLeftHit = nil; };
             if(~binauralRightHit.notNil) { try { ~binauralRightHit.remove; }; ~binauralRightHit = nil; };
+            if(~binauralIrcamProfileLabel.notNil) { try { ~binauralIrcamProfileLabel.remove; }; ~binauralIrcamProfileLabel = nil; };
+            if(~binauralIrcamSelectBtn.notNil) { try { ~binauralIrcamSelectBtn.remove; }; ~binauralIrcamSelectBtn = nil; };
+            if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -4253,6 +4256,100 @@ AppClock.sched(0.1, {
                 var leftEarY = centerY_b + 25 + 25 - moveUp;
                 var rightEarX = centerX_b + earCupOffset - (earCupWidth / 2);
                 var rightEarY = centerY_b + 25 + 25 - moveUp;
+                var labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, buttonH, gridRows, gridSpacing, yPos;
+
+                if(~binauralIRCAMIds.isNil) {
+                    ~binauralIRCAMIds = [1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1020, 1021, 1022, 1023, 1025, 1026, 1028, 1029, 1030, 1031, 1032, 1033, 1034, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059];
+                };
+                ~binauralIRCAMPendingId = ~binauralIRCAMId;
+
+                gridRows = 8;
+                gridSpacing = 3;
+                buttonH = ((layoutBounds_b.height - 3 - (9 * gridSpacing)) / gridRows).floor;
+                labelWidth = 90;
+                dropdownWidth = 80;
+                totalWidth = labelWidth + dropdownWidth;
+                groupStartX = (320 - totalWidth) / 2;
+                labelX = groupStartX;
+                dropdownX = groupStartX + labelWidth;
+                yPos = 240 - 7;
+
+                ~binauralIrcamProfileLabel = StaticText(~layoutOverlay, Rect(labelX, yPos, labelWidth, buttonH))
+                    .string_("PROFILE")
+                    .stringColor_(Color.cyan)
+                    .font_(Font("LCD 5x7 Segment Monospace", 13))
+                    .align_(\left)
+                    .background_(Color.clear);
+                ~binauralIrcamProfileLabel.front;
+
+                ~binauralIrcamSelectBtn = Button(~layoutOverlay, Rect(dropdownX, yPos, dropdownWidth, buttonH))
+                    .states_([[ (~binauralIRCAMPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                              [ (~binauralIRCAMPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ]])
+                    .font_(Font("LCD 5x7 Segment Monospace", 11))
+                    .focusColor_(Color.clear)
+                    .action_({
+                        var layoutBounds, winWidth, winHeight, mainViewBounds, winBounds, winX, winY, cols, rows, spacing, buttonW, totalUsedW, totalUsedH, extraW, extraH, startX, startY, chooserView;
+
+                        if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+
+                        layoutBounds = ~layoutOverlay.bounds;
+                        winWidth = layoutBounds.width - 3;
+                        winHeight = layoutBounds.height - 3;
+                        mainViewBounds = mainView.bounds;
+                        winBounds = win.bounds;
+                        winX = winBounds.left + mainViewBounds.left + layoutBounds.left + 2;
+                        winY = winBounds.top + mainViewBounds.top + layoutBounds.top - 8;
+                        cols = 6; rows = 8; spacing = 3;
+                        buttonW = ((winWidth - (7 * spacing)) / cols).floor;
+                        buttonH = ((winHeight - (9 * spacing)) / rows).floor;
+                        totalUsedW = (cols * buttonW) + ((cols - 1) * spacing);
+                        totalUsedH = (rows * buttonH) + ((rows - 1) * spacing);
+                        extraW = (winWidth - totalUsedW) / 2;
+                        extraH = (winHeight - totalUsedH) / 2;
+                        startX = extraW.floor;
+                        startY = extraH.floor;
+
+                        ~binauralIrcamChooserWin = Window.new("IRCAM IDs", Rect(winX, winY, winWidth, winHeight), border: false)
+                            .alwaysOnTop_(true);
+                        chooserView = CompositeView(~binauralIrcamChooserWin, ~binauralIrcamChooserWin.view.bounds)
+                            .background_(Color.black);
+
+                        ~binauralIRCAMIds.do({ |id, i|
+                            var r = (i / cols).floor;
+                            var c = i % cols;
+                            if(r < rows) {
+                                var x = startX + (c * (buttonW + spacing));
+                                var y = startY + (r * (buttonH + spacing));
+                                var isLoaded = (id == ~binauralIRCAMId);
+                                Button(chooserView, Rect(x, y, buttonW, buttonH))
+                                    .states_([[id.asString.padLeft(4, "0"), Color.cyan, Color.black],
+                                              [id.asString.padLeft(4, "0"), Color.black, Color.cyan]])
+                                    .value_(if(isLoaded, 1, 0))
+                                    .font_(Font("LCD 5x7 Segment Monospace", 11))
+                                    .focusColor_(Color.clear)
+                                    .canFocus_(false)
+                                    .action_({
+                                        ~binauralIRCAMId = id;
+                                        ~binauralIRCAMPendingId = id;
+                                        if(~binauralIrcamSelectBtn.notNil) {
+                                            ~binauralIrcamSelectBtn.states_([[ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                                                                              [ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ]]);
+                                        };
+                                        if(~binauralIrcamChooserWin.notNil) {
+                                            ~binauralIrcamChooserWin.close;
+                                            ~binauralIrcamChooserWin = nil;
+                                        };
+                                        ~saveSynthParams.value();
+                                        ~initAudioEngine.value();
+                                    });
+                            };
+                        });
+
+                        if(~binauralIrcamChooserWin.notNil) {
+                            ~binauralIrcamChooserWin.front;
+                        };
+                    });
+                ~binauralIrcamSelectBtn.front;
 
                 if(~binauralLeftHit.notNil) { try { ~binauralLeftHit.remove; }; ~binauralLeftHit = nil; };
                 if(~binauralRightHit.notNil) { try { ~binauralRightHit.remove; }; ~binauralRightHit = nil; };
