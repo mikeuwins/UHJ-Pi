@@ -4488,7 +4488,12 @@ AppClock.sched(0.1, {
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
-            StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
+            StaticText(~layoutOverlay, Rect(
+                if((~dmenu.value == 6) || (~dmenu.value == 7), 5, 10),
+                5,
+                if((~dmenu.value == 6) || (~dmenu.value == 7), 150, 300),
+                22
+            ))
                 .string_((["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"][~dmenu.value ? 0]))
                 .align_(\center)
                 .stringColor_(Color.cyan)
