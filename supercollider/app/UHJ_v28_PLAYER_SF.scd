@@ -1359,7 +1359,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var tryBoot;
     var needReboot;
     var dimVals, dimWidth, dimWidthHPF, dimTrim;
-    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState, flState, frState, rlState, rrState;
+    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState, flState, frState, rlState, rrState, centerState, subState, tflState, tfrState, centerGainVal, subGainVal, heightGainVal, subLpfVal, topHpfVal;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE)) or: (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId)) or: (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId));
     tryBoot = {
@@ -1427,8 +1427,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
-                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1541,15 +1541,17 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         if(outputs == 6, {
                             // --- DOLBY 5.1 OUTPUT MAPPING (Consumer Standard) ---
                             // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
-                            // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub
-                            var lowpass = BLowPass.ar((out[0] + out[1] + out[2] + out[3] + out[4]), 80, 1, 0.4) * 3.16; // Sum all speakers for LFE, 80Hz crossover, +10dB headroom
+                            // Map to consumer standard: [1] FL, [2] FR, [3] RL, [4] RR, [5] C, [6] Sub
+                            lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
+                            centerChan = out[0] * centerGain.dbamp * centerOn;
+                            subChan = lowpass * subGain.dbamp * subOn;
                             out = [
-                                out[1], // FL (Speaker 1) - Front Left
-                                out[4], // FR (Speaker 2) - Front Right  
-                                out[0], // C  (Speaker 3) - Center
-                                out[2], // RL (Speaker 4) - Rear Left
-                                out[3], // RR (Speaker 5) - Rear Right
-                                lowpass // Sub (Speaker 6) - Subwoofer
+                                out[1] * flOn, // FL (Speaker 1) - Front Left
+                                out[4] * frOn, // FR (Speaker 2) - Front Right  
+                                out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                centerChan,    // C  (Speaker 5) - Center
+                                subChan        // Sub (Speaker 6) - Subwoofer
                             ];
                         });
                         
@@ -1557,19 +1559,20 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             if(configKeyD == \fiveonetwo, {
                                 // --- DOLBY 5.1.2 OUTPUT MAPPING (UHJ-Pi layout) ---
                                 // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
-                                var centerChan = out[0];
-                                var lowpass = BLowPass.ar((out[1] + out[4]), 80, 1, 0.4) * 3.16; // Sum FL + FR for LFE
-                                var heightTFL = HPF.ar(out[6], 180);
-                                var heightTFR = HPF.ar(out[5], 180);
+                                centerChan = out[0] * centerGain.dbamp * centerOn;
+                                lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
+                                subChan = lowpass * subGain.dbamp * subOn;
+                                heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
+                                heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
                                 out = [
-                                    out[1],     // FL (Speaker 1) - Front Left
-                                    out[4],     // FR (Speaker 2) - Front Right
-                                    out[2],     // RL (Speaker 3) - Rear Left
-                                    out[3],     // RR (Speaker 4) - Rear Right
-                                    centerChan, // C  (Speaker 5) - Center
-                                    lowpass,    // SUB (Speaker 6) - Subwoofer/LFE
-                                    heightTFL,  // TFL (Speaker 7) - Top Front Left
-                                    heightTFR   // TFR (Speaker 8) - Top Front Right
+                                    out[1] * flOn, // FL (Speaker 1) - Front Left
+                                    out[4] * frOn, // FR (Speaker 2) - Front Right
+                                    out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                    out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                    centerChan,    // C  (Speaker 5) - Center
+                                    subChan,       // SUB (Speaker 6) - Subwoofer/LFE
+                                    heightTFL,     // TFL (Speaker 7) - Top Front Left
+                                    heightTFR      // TFR (Speaker 8) - Top Front Right
                                 ];
                             }, {
                                 // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -1631,6 +1634,12 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             });
                         });
                     });
+                    if((configKeyD == \fivezero) or: { configKeyD == \fiveonetwo }, {
+                        flState = ~dolbyState[\flOn] ? 1;
+                        frState = ~dolbyState[\frOn] ? 1;
+                        rlState = ~dolbyState[\rlOn] ? 1;
+                        rrState = ~dolbyState[\rrOn] ? 1;
+                    });
                     zsAmount = (ambienceVals[0] ? 0.0) * 100;
                     zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
                     zsTrim = (zsynthVals[2] ? 0.5).linlin(0, 1, -12, 12);
@@ -1638,6 +1647,15 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     zsSize = (zsynthVals[4] ? 0.625).linlin(0, 1, 0.1, 3.0);
                     zsDamp = zsynthVals[5] ? 0.2;
                     zsMix = (zsynthVals[6] ? 0.7) * 100;
+                    centerState = ~dolbyState[\centerOn] ? 1;
+                    subState = ~dolbyState[\subOn] ? 1;
+                    tflState = if(configKeyD == \fiveonetwo, { ~dolbyState[\tflOn] ? 1 }, { 1 });
+                    tfrState = if(configKeyD == \fiveonetwo, { ~dolbyState[\tfrOn] ? 1 }, { 1 });
+                    centerGainVal = ~dolbyState[\centerGain] ? 0.0;
+                    subGainVal = ~dolbyState[\subGain] ? 0.0;
+                    heightGainVal = ~dolbyState[\heightGain] ? 0.0;
+                    subLpfVal = ~dolbyState[\subLPF] ? 120;
+                    topHpfVal = ~dolbyState[\topHPF] ? 180;
 
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                         \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -1662,7 +1680,16 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \flOn, flState,
                         \frOn, frState,
                         \rlOn, rlState,
-                        \rrOn, rrState
+                        \rrOn, rrState,
+                        \centerOn, centerState,
+                        \subOn, subState,
+                        \tflOn, tflState,
+                        \tfrOn, tfrState,
+                        \centerGain, centerGainVal,
+                        \subGain, subGainVal,
+                        \heightGain, heightGainVal,
+                        \subLPF, subLpfVal,
+                        \topHPF, topHpfVal
                     ]);
                     // Load first track from file list (if available) but don't start playing
                     { 
@@ -1766,8 +1793,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
-                            var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
+                            var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, centerChan, subChan, heightTFL, heightTFR, lowpass;
                             // Audio source from SFPlayer bus - variable channels based on encoder
                             src = In.ar(~playerBus.index, inputs);
                             // Amplitude scaling
@@ -1801,7 +1828,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             
                             // Encode to ambisonic using selected encoder
                             encode = FoaEncode.ar(encodeInput, encoder);
-                            // Ambience processing
+                            // Ambience processing stays as-is in this branch
                             ambient = AmbiVerbSC.ar(encode,
                                 mix: ambience,
                                 preDelay: preDelay,
@@ -1809,7 +1836,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 lowRT: lowRT,
                                 highRT: highRT,
                                 dispersion: dispersion,
-                                size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
+                                size: \Brahmssaal,
                                 modWidth: modWidth,
                                 modRate: modRate,
                                 coupRate: 0.5,
@@ -1820,7 +1847,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 maxPreDelay: 10,
                                 feedbackSpread: 1
                             );
-                            // Spatial transformations (rotation, tilt, tumble)
+                            // Apply rotation/tilt/tumble
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
@@ -1847,33 +1874,37 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             if(outputs == 6, {
                                 // --- DOLBY 5.1 OUTPUT MAPPING (Consumer Standard) ---
                                 // ATK 5.0 decoder: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR
-                                // Map to consumer standard: [1] FL, [2] FR, [3] C, [4] RL, [5] RR, [6] Sub
-                                var lowpass = BLowPass.ar((out[1] + out[4]), 120, 1, 0.4); // Sum FL + FR for sub
+                                // Map to consumer standard: [1] FL, [2] FR, [3] RL, [4] RR, [5] C, [6] Sub
+                                lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
+                                centerChan = out[0] * centerGain.dbamp * centerOn;
+                                subChan = lowpass * subGain.dbamp * subOn;
                                 out = [
-                                    out[1], // FL (Speaker 1) - Front Left
-                                    out[4], // FR (Speaker 2) - Front Right  
-                                    out[0], // C  (Speaker 3) - Center
-                                    out[2], // RL (Speaker 4) - Rear Left
-                                    out[3], // RR (Speaker 5) - Rear Right
-                                    lowpass // Sub (Speaker 6) - Subwoofer
+                                    out[1] * flOn, // FL (Speaker 1) - Front Left
+                                    out[4] * frOn, // FR (Speaker 2) - Front Right  
+                                    out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                    out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                    centerChan,    // C  (Speaker 5) - Center
+                                    subChan        // Sub (Speaker 6) - Subwoofer
                                 ];
                             });
                             
                             if(outputs == 8, {
                                 if(configKeyD == \fiveonetwo, {
                                     // --- DOLBY 5.1.2 OUTPUT MAPPING ---
-                                    // ATK diametric decoder: 8 speakers total
-                                    // Map to 5.1.2: FL, FR, C, RL, RR, TFL, TFR, LFE
-                                    var lowpass = BLowPass.ar((out[1] + out[2]), 120, 1, 0.4); // Sum FL + FR for LFE
+                                    lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
+                                    centerChan = out[0] * centerGain.dbamp * centerOn;
+                                    subChan = lowpass * subGain.dbamp * subOn;
+                                    heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
+                                    heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
                                     out = [
-                                        out[1], // FL (Speaker 1) - Front Left
-                                        out[2], // FR (Speaker 2) - Front Right
-                                        out[0], // C  (Speaker 3) - Center
-                                        out[5], // RL (Speaker 4) - Rear Left
-                                        out[6], // RR (Speaker 5) - Rear Right
-                                        out[3], // TFL (Speaker 6) - Top Front Left
-                                        out[4], // TFR (Speaker 7) - Top Front Right
-                                        lowpass // LFE (Speaker 8) - Low Frequency Effects
+                                        out[1] * flOn, // FL (Speaker 1) - Front Left
+                                        out[4] * frOn, // FR (Speaker 2) - Front Right
+                                        out[2] * rlOn, // RL (Speaker 3) - Rear Left
+                                        out[3] * rrOn, // RR (Speaker 4) - Rear Right
+                                        centerChan,    // C  (Speaker 5) - Center
+                                        subChan,       // SUB (Speaker 6) - Subwoofer
+                                        heightTFL,     // TFL (Speaker 7) - Top Front Left
+                                        heightTFR      // TFR (Speaker 8) - Top Front Right
                                     ];
                                 }, {
                                     // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
@@ -1933,6 +1964,30 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 });
                             });
                         });
+                if((configKeyD == \fivezero) or: { configKeyD == \fiveonetwo }, {
+                    flState = ~dolbyState[\flOn] ? 1;
+                    frState = ~dolbyState[\frOn] ? 1;
+                    rlState = ~dolbyState[\rlOn] ? 1;
+                    rrState = ~dolbyState[\rrOn] ? 1;
+                });
+                ambienceVals = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
+                zsynthVals = ~zsynthState[\sliderValues] ? [0.3, 0.07, 0.5, 0.0, 0.625, 0.2, 0.7];
+                zsAmount = (ambienceVals[0] ? 0.0) * 100;
+                zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
+                zsTrim = (zsynthVals[2] ? 0.5).linlin(0, 1, -12, 12);
+                zsSource = if((~zsynthState[\heightSource] ? 0) == 0, 0, 1);
+                zsSize = (zsynthVals[4] ? 0.625).linlin(0, 1, 0.1, 3.0);
+                zsDamp = zsynthVals[5] ? 0.2;
+                zsMix = (zsynthVals[6] ? 0.7) * 100;
+                centerState = ~dolbyState[\centerOn] ? 1;
+                subState = ~dolbyState[\subOn] ? 1;
+                tflState = if(configKeyD == \fiveonetwo, { ~dolbyState[\tflOn] ? 1 }, { 1 });
+                tfrState = if(configKeyD == \fiveonetwo, { ~dolbyState[\tfrOn] ? 1 }, { 1 });
+                centerGainVal = ~dolbyState[\centerGain] ? 0.0;
+                subGainVal = ~dolbyState[\subGain] ? 0.0;
+                heightGainVal = ~dolbyState[\heightGain] ? 0.0;
+                subLpfVal = ~dolbyState[\subLPF] ? 120;
+                topHpfVal = ~dolbyState[\topHPF] ? 180;
 
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -1956,7 +2011,16 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             \flOn, flState,
                             \frOn, frState,
                             \rlOn, rlState,
-                            \rrOn, rrState]);
+                    \rrOn, rrState,
+                    \centerOn, centerState,
+                    \subOn, subState,
+                    \tflOn, tflState,
+                    \tfrOn, tfrState,
+                    \centerGain, centerGainVal,
+                    \subGain, subGainVal,
+                    \heightGain, heightGainVal,
+                    \subLPF, subLpfVal,
+                    \topHPF, topHpfVal]);
                         
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
@@ -3681,6 +3745,23 @@ AppClock.sched(0.1, {
             });
         });
         ~synth.set(\lOn, leftState, \rOn, rightState, \flOn, flGate, \frOn, frGate, \rlOn, rlGate, \rrOn, rrGate);
+        if((configKeyD == \fivezero) or: { configKeyD == \fiveonetwo }) {
+            ~synth.set(
+                \centerOn, ~dolbyState[\centerOn] ? 1,
+                \subOn, ~dolbyState[\subOn] ? 1,
+                \centerGain, ~dolbyState[\centerGain] ? 0.0,
+                \subGain, ~dolbyState[\subGain] ? 0.0,
+                \subLPF, ~dolbyState[\subLPF] ? 120
+            );
+            if(configKeyD == \fiveonetwo, {
+                ~synth.set(
+                    \tflOn, ~dolbyState[\tflOn] ? 1,
+                    \tfrOn, ~dolbyState[\tfrOn] ? 1,
+                    \heightGain, ~dolbyState[\heightGain] ? 0.0,
+                    \topHPF, ~dolbyState[\topHPF] ? 180
+                );
+            });
+        };
     };
 };
 // --- AmbiVerbSC Preset Recall Function ---
