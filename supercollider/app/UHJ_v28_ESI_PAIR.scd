@@ -467,7 +467,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
             ("Updated maplinMode to: " ++ if(configKeyE == \maplin, 1, 0)).postln;
         };
         
-        if(configKeyE == \maplin) {
+            if(configKeyE == \maplin) {
             // Ensure Maplin processing is enabled when selecting the encoder
             ~maplinState[\active] = 1;
             ~dimensionActive = 1;
@@ -486,7 +486,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
             };
         } {
             if(~synth.notNil) {
-                ~synth.set(\dimensionActive, ~dimensionActive ? 1);
+            ~synth.set(\dimensionActive, ~dimensionActive ? 1);
             };
         };
         
@@ -2649,7 +2649,7 @@ win.front;
                                 0, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
                                 1, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,30).round(0.1).asString ++ " ms"); },
                                 2, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
-                                3, { ~ambienceValues[i].string = ((sl.value.linlin(0,1,0,0.25) * 1000).round(1).asString ++ " ms"); },
+                                3, { ~ambienceValues[i].string = ((sl.value.linlin(0,1,0,0.25) * 1000).round.asInteger.asString ++ " ms"); },
                                 4, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.5,2.5).round(0.01).asString ++ "s"); },
                                 5, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.1,2.0).round(0.01).asString); },
                                 6, { updateTargetReadout.(if(sl.value < 0.25, 0.0, if(sl.value > 0.75, 1.0, 0.5))); }

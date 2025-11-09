@@ -3878,7 +3878,7 @@ AppClock.sched(0.1, {
                                 },
                                 3, {
                                     var pd = sl.value.linlin(0,1,0,0.25);
-                                    ~ambienceValues[i].string = ((pd * 1000).round(1).asString ++ "ms");
+                                    ~ambienceValues[i].string = ((pd * 1000).round.asInteger.asString ++ "ms");
                                     ~synth.set(\preDelay, pd);
                                 },
                                 4, {
