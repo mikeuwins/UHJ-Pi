@@ -167,10 +167,19 @@ thisProcess.platform.name.postln;
 
 // --- Ambience state preservation variables ---
 ~ambienceState = Dictionary.newFrom([
-    \sliderValues, [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0],  // Default values
+    \sliderValues, [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0],  // Height, HDelay, Reverb, RDelay, RSize, Spread, Target
     \presetIndex, 0,  // Default preset index
-    \lastMix, 0.5     // Remember last nonzero mix value
+    \lastMix, 0.0     // Remember last nonzero mix value
 ]);
+~ambienceLastMix = ~ambienceState[\lastMix];
+
+// --- ZSynth state preservation variables ---
+~zsynthState = Dictionary.newFrom([
+    \sliderValues, [0.3, 0.07, 0.5, 0.0, 0.625, 0.2, 0.7],
+    \heightSource, 0,
+    \presetIndex, 0
+]);
+~zsynthSliders = nil; ~zsynthValues = nil; ~zsynthPresetMenu = nil;
 
 // --- EQ state preservation variables ---
 ~eqState = Dictionary.newFrom([
@@ -910,8 +919,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 usbEntries.do { |entry|
                     folders = folders.add(entry.folderName.asString.toUpper);
                 };
-            });
-        });
+    });
+    });
     
     folders;
 };
@@ -1127,10 +1136,10 @@ StaticText(mainView, Rect(346, 10, 154, 28))
         availableOutputs = 8;
         "macOS detected – assuming 8 output channels".postln;
     } {
-        availableOutputs = "jack_lsp | grep 'system:playback' | wc -l".unixCmdGetStdOut.asInteger;
-        if(availableOutputs == 0) {
-            availableOutputs = 2;
-            ("Warning: Could not detect JACK outputs, assuming stereo").postln;
+    availableOutputs = "jack_lsp | grep 'system:playback' | wc -l".unixCmdGetStdOut.asInteger;
+    if(availableOutputs == 0) {
+        availableOutputs = 2;
+        ("Warning: Could not detect JACK outputs, assuming stereo").postln;
         };
     };
     
@@ -1343,6 +1352,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var tryBoot;
     var needReboot;
     var dimVals, dimWidth, dimWidthHPF, dimTrim;
+    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
     tryBoot = {
@@ -1570,9 +1580,18 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             dimVals = [dimVals[0], 0.5, dimVals[3]];
                         };
                     };
+                    ambienceVals = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
+                    zsynthVals = ~zsynthState[\sliderValues] ? [0.3, 0.07, 0.5, 0.0, 0.625, 0.2, 0.7];
                     dimWidth = (dimVals[0] ? 0.0) * 0.70;
                     dimWidthHPF = (dimVals[1] ? 0.5).linlin(0, 1, 80, 400);
                     dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
+                    zsAmount = (ambienceVals[0] ? 0.0) * 100;
+                    zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
+                    zsTrim = (zsynthVals[2] ? 0.5).linlin(0, 1, -12, 12);
+                    zsSource = if((~zsynthState[\heightSource] ? 0) == 0, 0, 1);
+                    zsSize = (zsynthVals[4] ? 0.625).linlin(0, 1, 0.1, 3.0);
+                    zsDamp = zsynthVals[5] ? 0.2;
+                    zsMix = (zsynthVals[6] ? 0.7) * 100;
 
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                         \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -1583,7 +1602,15 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \dimensionWidth, dimWidth,
                         \dimensionWidthHPF, dimWidthHPF,
                         \dimensionOutputTrim, dimTrim,
-                        \dimensionActive, ~dimensionActive ? 0]);
+                        \dimensionActive, ~dimensionActive ? 0,
+                        \zsynthHeightAmount, zsAmount,
+                        \zsynthHeightDelay, zsDelay,
+                        \zsynthHeightTrim, zsTrim,
+                        \zsynthHeightSource, zsSource,
+                        \zsynthAmbienceSize, zsSize,
+                        \zsynthAmbienceDampening, zsDamp,
+                        \zsynthAmbienceMix, zsMix
+                    ]);
                     // Load first track from file list (if available) but don't start playing
                     { 
                         if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
@@ -3150,6 +3177,9 @@ AppClock.sched(0.1, {
         ~ambienceState[\presetIndex] = ~ambiencePresetMenu.value;
         ("Saved preset index: " ++ ~ambienceState[\presetIndex]).postln;
     };
+    if(~ambienceLastMix.notNil) {
+        ~ambienceState[\lastMix] = ~ambienceLastMix;
+    };
 };
 
 ~restoreAmbienceState = {
@@ -3433,25 +3463,39 @@ AppClock.sched(0.1, {
     
     // Restore ambience parameters to new synth
     if(~synth.notNil and: { ~ambienceState[\synthParams].notNil }) {
-        var params = ~ambienceState[\synthParams];
+        var params, heightVal, heightDelayVal, mixVal, preDelayVal, sizeBase, lowRT, highRT, spreadVal, targetSnap;
+        params = ~ambienceState[\synthParams];
         if(params.size >= 7) {
-            // Convert slider values (0-1) to synth parameter ranges (matching GUI slider actions)
+            heightVal = params[0] ? 0.0;
+            heightDelayVal = params[1] ? 0.0;
+            mixVal = params[2] ? 0.0;
+            preDelayVal = params[3] ? 0.0;
+            sizeBase = (params[4] ? 0.0).linlin(0, 1, 0.5, 2.5);
+            lowRT = (sizeBase * 0.7).clip(0.1, 2.0);
+            highRT = (sizeBase * 1.3).clip(0.2, 4.0);
+            spreadVal = (params[5] ? 0.0).linlin(0, 1, 0.1, 2.0);
+            targetSnap = if(params[6] < 0.25, 0.0, if(params[6] > 0.75, 1.0, 0.5));
+
             ~synth.set(
-                \ambience, (params[0] ? 0).linlin(0, 1, 0, 0.2),    // Mix: 0-20%
-                \preDelay, params[1] ? 0,                            // PreDelay: direct value
-                \lowRT, (params[2] ? 0.2).linlin(0, 1, 0.2, 4),     // LowRT: 0.2-4s  
-                \highRT, (params[3] ? 2).linlin(0, 1, 0.2, 4),      // HighRT: 0.2-4s
-                \dispersion, params[4] ? 1,                          // Dispersion: direct value
-                \modWidth, params[5] ? 0.2,                          // ModWidth: direct value
-                \modRate, params[6] ? 0.3                            // ModRate: direct value
+                \zsynthHeightAmount, heightVal * 100,
+                \zsynthHeightDelay, heightDelayVal.linlin(0, 1, 0, 30),
+                \ambience, mixVal.linlin(0, 1, 0, 0.2),
+                \preDelay, preDelayVal.linlin(0, 1, 0, 0.5),
+                \lowRT, lowRT,
+                \highRT, highRT,
+                \dispersion, spreadVal,
+                \reverbTarget, if(targetSnap == 0.0, 0, if(targetSnap == 1.0, 2, 1))
             );
-            ("Restored synth ambience params (converted): mix=" ++ (params[0] ? 0).linlin(0, 1, 0, 0.2) ++ ", others=" ++ params[1..6]).postln;
+            if(~zsynthState[\heightSource].notNil) {
+                ~synth.set(\zsynthHeightSource, ~zsynthState[\heightSource]);
+            };
+            ~ambienceLastMix = mixVal;
+            ("Restored synth ambience/Z params: height=" ++ (heightVal * 100) ++ "%, mix=" ++ mixVal.linlin(0, 1, 0, 0.2)).postln;
         } {
             ("Warning: ambience params array too small: " ++ params).postln;
         };
     };
 
-    // Restore Dimension parameters to new synth
     if(~synth.notNil and: { ~dimensionState[\sliderValues].notNil }) {
         var dimVals, width, widthHPF, trim;
         dimVals = ~dimensionState[\sliderValues];
@@ -3473,47 +3517,29 @@ AppClock.sched(0.1, {
         );
         ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 0)).postln;
     };
-
-    // Apply default Z Synthesis parameters (will be user-adjustable later)
-    if(~synth.notNil) {
-        ~synth.set(
-            \zsynthHeightAmount, 30,
-            \zsynthHeightDelay, 7,
-            \zsynthHeightTrim, 0,
-            \zsynthHeightSource, 0,
-            \zsynthAmbienceSize, 2.5,
-            \zsynthAmbienceDampening, 0.2,
-            \zsynthAmbienceMix, 70
-        );
-    };
 };
 
 // --- AmbiVerbSC Preset Recall Function ---
 ~recallAmbiVerbSCPreset = { |presetName|
-    var presetData, roomName;
+    var presetData, roomName, baseRT;
 
     if(~ambiencePresetDict.notNil and: { ~ambiencePresetDict[presetName].notNil }) {
         presetData = ~ambiencePresetDict[presetName];
         roomName = presetData[\roomName];
 
-        // Ensure roomName is not nil
         if(roomName.isNil) {
             ("Warning: No room name found in preset " ++ presetName ++ ", using Brahmssaal").postln;
             roomName = "Brahmssaal";
         };
 
-        // Update sliders with preset values
         if(~ambienceSliders.notNil) {
-            // Map preset values to slider ranges
-            ~ambienceSliders[0].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Mix
-            ~ambienceSliders[1].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // PreDelay
-            ~ambienceSliders[2].value_(presetData[\lowRT].linlin(0.01, 2, 0, 1)); // LowRT
-            ~ambienceSliders[3].value_(presetData[\highRT].linlin(0.01, 4, 0, 1)); // HighRT
-            ~ambienceSliders[4].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Dispersion
-            ~ambienceSliders[5].value_(presetData[\modWidth].linlin(0, 1, 0, 1)); // ModWidth
-            ~ambienceSliders[6].value_(presetData[\modRate].linlin(0, 1, 0, 1)); // ModRate
+            // Index mapping: 2=Reverb, 3=RDelay, 4=RSize, 5=Spread
+            ~ambienceSliders[2].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Reverb mix
+            ~ambienceSliders[3].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // RDelay
+            baseRT = (((presetData[\lowRT] / 0.7) + (presetData[\highRT] / 1.3)) * 0.5).clip(0.5, 2.5);
+            ~ambienceSliders[4].value_(baseRT.linlin(0, 1, 0, 1)); // RSize macro
+            ~ambienceSliders[5].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Spread
 
-            // Trigger slider actions to update synth
             ~ambienceSliders.do({ |slider, i|
                 if(slider.action.notNil) {
                     slider.action.value(slider);
@@ -3521,17 +3547,13 @@ AppClock.sched(0.1, {
             });
         };
 
-        // Update synth with new room and parameters (without breaking audio)
         if(~synth.notNil) {
-            // Use synth.set() instead of recreating to avoid signal break
             ~synth.set(
                 \ambience, presetData[\mix].linlin(0, 1, 0, 0.2),
-                \preDelay, presetData[\preDelay].linlin(0, 0.5, 0, 1),
-                \lowRT, presetData[\lowRT].linlin(0.01, 2, 0.1, 2),
-                \highRT, presetData[\highRT].linlin(0.01, 4, 0.2, 4),
-                \dispersion, presetData[\dispersion].linlin(0.1, 2, 0.1, 2),
-                \modWidth, presetData[\modWidth].linlin(0, 1, 0, 1),
-                \modRate, presetData[\modRate].linlin(0, 1, 0, 1),
+                \preDelay, presetData[\preDelay],
+                \lowRT, presetData[\lowRT].clip(0.1, 2),
+                \highRT, presetData[\highRT].clip(0.2, 4),
+                \dispersion, presetData[\dispersion].clip(0.1, 2),
                 \size, roomName.asSymbol
             );
         };
@@ -3548,77 +3570,81 @@ AppClock.sched(0.1, {
     .action_({ |btn|
         var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
         if(btn.value == 1) {
-            // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { 
-                ~saveEqState.value(); // Save state before removing EQ overlay
+                ~saveEqState.value();
                 ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
-                ~saveMaplinState.value(); // Save state before removing maplin overlay
+                ~saveMaplinState.value();
                 ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); 
             };
             if(~playerOverlay.notNil) { 
-                // Save button states before removing overlay
                 if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
                 if(~playerLoopBtn.notNil, { ~savedPlayerLoopState = ~playerLoopBtn.value; });
                 ~playerOverlay.remove; ~playerOverlay = nil; ~playerBtn.value_(0); 
             };
-            // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
             ~dimensionBtn.value_(0);
             ~metersBtn.value_(0);
             ~playerBtn.value_(0);
-            
-            // Remove meters overlay when AMBIENCE is active
             if(~metersOverlay.notNil) { 
                 ~metersOverlay.remove; ~metersOverlay = nil; 
             };
-            // --- Remove any previous Ambience overlay and controls to prevent duplicates ---
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
-            // --- Initialize layout variables (fix nil error) ---
             sliderWidth = 32; sliderHeight = 140; startX = 12; gap = 44;
-            // Create Ambience overlay directly in main window
             ~ambienceOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
             UserView(~ambienceOverlay, Rect(0, 0, 320, 275))
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.white;
+                    Pen.color = Color.cyan;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
-            StaticText(~ambienceOverlay, Rect(10, 5, 120, 22))
-                .string_("AMBIENCE")
+            StaticText(~ambienceOverlay, Rect(10, 7, 160, 20))
+                .string_("REVERB PRESETS")
                 .align_(\left)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
                 .background_(Color.clear);
 
-            // Load AmbiVerbSC presets if not already loaded
-            if(~ambiencePresetNames.isNil) {
+            if(~ambiencePresetDict.isNil) {
                 var presetData = ~loadAmbiVerbSCPresets.value();
                 ~ambiencePresetNames = presetData[0];
                 ~ambiencePresetDict = presetData[1];
             };
 
-            // Preset selector (dropdown)
-            ~ambiencePresetMenu = PopUpMenu(~ambienceOverlay, Rect(140, 7, 170, 20))
+            ~ambiencePresetMenu = PopUpMenu(~ambienceOverlay, Rect(160, 7, 150, 20))
                 .items_(["Default", "High Verb", "Huge Hall", "Large Hall", "Low Verb", "Mod Echo", "Spatial Delay", "Time Modulation"])
                 .font_(Font("Helvetica", 11))
                 .background_(Color.black)
                 .stringColor_(Color.cyan)
-                .value_(~ambienceState[\presetIndex] ? 0) // Use saved preset index
+                .value_(~ambienceState[\presetIndex] ? 0)
                 .action_({ |menu|
                     var selectedPreset = ~ambiencePresetNames[menu.value];
                     ~recallAmbiVerbSCPreset.value(selectedPreset);
                 });
-            // Parameter labels and values (use saved state or defaults)
-            sliderLabels = ["Reverb", "PreDly", "LoRT", "HiRT", "Disp", "MWid", "MRate"];
-            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0];
-            ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5; // Remember last nonzero mix value
+            [44, 88, 132, 176, 220, 264].do({ |tx|
+                UserView(~ambienceOverlay, Rect(tx, 55, 12, sliderHeight))
+                    .background_(Color.clear)
+                    .drawFunc_({ |view|
+                        Pen.color = Color.cyan;
+                        Pen.width = 1.5;
+                        Pen.line(Point(2, 0), Point(10, 0)); Pen.stroke;
+                        Pen.line(Point(2, 70), Point(10, 70)); Pen.stroke;
+                        Pen.line(Point(2, 140), Point(10, 140)); Pen.stroke;
+                        Pen.width = 1;
+                        Pen.line(Point(4, 35), Point(9, 35)); Pen.stroke;
+                        Pen.line(Point(4, 105), Point(9, 105)); Pen.stroke;
+                    });
+            });
+
+            sliderLabels = ["Height", "HDelay", "Reverb", "RDelay", "RSize", "Spread", "Target"];
+            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
+            ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5;
             ~ambienceSliders = List[];
             ~ambienceValues = List[];
             sliderLabels.do({ |label, i|
@@ -3636,26 +3662,63 @@ AppClock.sched(0.1, {
                     .knobColor_(Color.cyan)
                     .value_(params[i])
                     .action_({ |sl|
-                        var val = (sl.value * 100).round(0.1);
-                        ~ambienceValues[i].string = val.asString ++ "%";
+                        var valPct = (sl.value * 100).round(0.1);
+                        var updateTargetReadout = { |snap|
+                            var labelText = if(snap <= 0.25, "Lower", if(snap >= 0.75, "Height", "All"));
+                            ~ambienceValues[i].string = labelText;
+                        };
                         if(~synth.notNil) {
                             switch(i,
                                 0, {
-                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
-                                    // --- Sync ON/OFF button with Mix slider ---
-                                    if(sl.value > 0) {
-                                        ~ambienceOnOffBtn.value_(1);
-                                        ~ambienceLastMix = sl.value;
-                                    } {
-                                        ~ambienceOnOffBtn.value_(0);
-                                    }
+                                    ~ambienceValues[i].string = valPct.asString ++ "%";
+                                    ~synth.set(\zsynthHeightAmount, (sl.value * 100));
                                 },
-                                1, { ~synth.set(\preDelay, sl.value.linlin(0,1,0,0.5)); },
-                                2, { ~synth.set(\lowRT, sl.value.linlin(0,1,0.1,2)); },
-                                3, { ~synth.set(\highRT, sl.value.linlin(0,1,0.2,4)); },
-                                4, { ~synth.set(\dispersion, sl.value.linlin(0,1,0.1,2)); },
-                                5, { ~synth.set(\modWidth, sl.value); },
-                                6, { ~synth.set(\modRate, sl.value); }
+                                1, {
+                                    var ms = sl.value.linlin(0,1,0,30).round(0.1);
+                                    ~ambienceValues[i].string = (ms.asString ++ "ms");
+                                    ~synth.set(\zsynthHeightDelay, ms);
+                                },
+                                2, {
+                                    ~ambienceValues[i].string = valPct.asString ++ "%";
+                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
+                                    if(sl.value > 0) { ~ambienceOnOffBtn.value_(1); ~ambienceLastMix = sl.value; } { ~ambienceOnOffBtn.value_(0); };
+                                },
+                                3, {
+                                    var pd = sl.value.linlin(0,1,0,0.5);
+                                    ~ambienceValues[i].string = (pd.round(0.01).asString ++ "s");
+                                    ~synth.set(\preDelay, pd);
+                                },
+                                4, {
+                                    var base = sl.value.linlin(0,1,0.5,2.5);
+                                    var low = (base * 0.7).clip(0.1, 2.0);
+                                    var high = (base * 1.3).clip(0.2, 4.0);
+                                    ~ambienceValues[i].string = (base.round(0.01).asString ++ "s");
+                                    ~synth.set(\lowRT, low); ~synth.set(\highRT, high);
+                                },
+                                5, {
+                                    var disp = sl.value.linlin(0,1,0.1,2.0);
+                                    ~ambienceValues[i].string = (disp.round(0.01).asString);
+                                    ~synth.set(\dispersion, disp);
+                                },
+                                6, {
+                                    var snap = if(sl.value < 0.25, 0.0, if(sl.value > 0.75, 1.0, 0.5));
+                                    sl.value = snap;
+                                    updateTargetReadout.(snap);
+                                    ~reverbTarget = if(snap == 0.0, \lower, if(snap == 1.0, \height, \all));
+                                    if(~synth.notNil) {
+                                        ~synth.set(\reverbTarget, if(snap == 0.0, 0, if(snap == 1.0, 2, 1)));
+                                    };
+                                }
+                            );
+                        } {
+                            switch(i,
+                                0, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
+                                1, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,30).round(0.1).asString ++ " ms"); },
+                                2, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
+                                3, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,0.5).round(0.01).asString ++ "s"); },
+                                4, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.5,2.5).round(0.01).asString ++ "s"); },
+                                5, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.1,2.0).round(0.01).asString); },
+                                6, { updateTargetReadout.(if(sl.value < 0.25, 0.0, if(sl.value > 0.75, 1.0, 0.5))); }
                             );
                         }
                     });
@@ -3664,61 +3727,63 @@ AppClock.sched(0.1, {
                     .string_((params[i] * 100).asString ++ "%")
                     .align_(\center)
                     .stringColor_(Color.cyan)
-                    .font_(Font("Helvetica", 9))
+                    .font_(Font("Helvetica", 10))
                     .background_(Color.clear);
                 ~ambienceValues.add(valDisp);
             });
-            // --- ON/OFF toggle for Ambience (controls Mix sent to synth, but does NOT move slider) ---
-            // (Removed stray .states_, .font_, .value_, .action_ lines that were not attached to a Button)
-            // --- Mix slider action: always updates value label and, if ON, sends to synth ---
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
-                if(~synth.notNil) {
+                if(~synth.notNil and: { ~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 } }) {
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
-                }
+                };
             });
-            // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
             if(~ambienceOnOffBtn.notNil) { ~ambienceOnOffBtn.value_(0); };
             if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
-            // Close button
-            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
-                .states_([["CLOSE", Color.cyan, Color.black]])
+            
+            ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
+                .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
-                .action_({
-                    ~saveAmbienceState.value(); // Save state before closing
-                    ~ambienceOverlay.remove;
-                    ~ambienceOverlay = nil;
-                    ~ambienceBtn.value_(0);
+                .focusColor_(Color.clear)
+                .value_(0)
+                .action_({ |btn|
+                    if(~synth.notNil and: { ~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil } }) {
+                        if(btn.value == 1) {
+                            ~synth.set(\ambience, ~ambienceSliders[0].value.linlin(0, 1, 0, 0.2));
+                        } {
+                            ~ambienceLastMix = ~ambienceSliders[0].value;
+                            ~synth.set(\ambience, 0);
+                        };
+                    };
                 });
-            // Place RESET button before CLOSE button in the Ambience overlay:
-            Button(~ambienceOverlay, Rect(18, 230, 80, 28))
-                .states_([ ["RESET", Color.cyan, Color.black] ])
+            
+            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
+                .states_([["RESET", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 11))
+                .focusColor_(Color.clear)
                 .action_({
-                    // Reset to default preset
                     if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
-                        ~ambiencePresetMenu.value_(0); // Select first preset
+                        ~ambiencePresetMenu.value_(0);
                         ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
-                    }
+                    };
                 });
-            Button(~ambienceOverlay, Rect(222, 230, 80, 28))
-                .states_([ ["CLOSE", Color.cyan, Color.black] ])
+
+            ~ambienceEnhanceBtn = Button(~ambienceOverlay, Rect(18, 230, 80, 28))
+                .states_([["HEIGHT", Color.cyan, Color.black], ["HEIGHT", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
-                .action_({
-                    ~saveAmbienceState.value(); // Save state before closing
-                    ~ambienceOverlay.remove;
-                    ~ambienceOverlay = nil;
-                    ~ambienceBtn.value_(0);
+                .focusColor_(Color.clear)
+                .value_(~zsynthState[\heightSource] ? 0)
+                .action_({ |btn|
+                    var src = if(btn.value == 1, 1, 0);
+                    ~zsynthState[\heightSource] = src;
+                    if(~synth.notNil) { ~synth.set(\zsynthHeightSource, src); };
                 });
             ~ambienceOverlay.front;
-            // Restore saved state or apply default preset on overlay open
             if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
                 ("Found saved state, restoring...").postln;
-                ~restoreAmbienceState.value(); // Restore saved slider values
+                ~restoreAmbienceState.value();
             } {
                 ("No saved state, applying default preset...").postln;
-                // Apply default preset if no saved state
                 if(~ambiencePresetNames.notNil and: { ~ambiencePresetNames.size > 0 }) {
                     ~recallAmbiVerbSCPreset.value(~ambiencePresetNames[0]);
                 }
