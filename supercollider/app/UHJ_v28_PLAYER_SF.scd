@@ -4834,6 +4834,7 @@ AppClock.sched(0.1, {
                         var newState = 1 - btn.value;
                         ~dolbyState[\flOn] = newState;
                         if(~synth.notNil) { ~synth.set(\flOn, newState) };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                         btn.focus(nil);
                     });
                 
@@ -4850,6 +4851,7 @@ AppClock.sched(0.1, {
                         var newState = 1 - btn.value;
                         ~dolbyState[\frOn] = newState;
                         if(~synth.notNil) { ~synth.set(\frOn, newState) };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                         btn.focus(nil);
                     });
                 
@@ -4866,6 +4868,7 @@ AppClock.sched(0.1, {
                         var newState = 1 - btn.value;
                         ~dolbyState[\rlOn] = newState;
                         if(~synth.notNil) { ~synth.set(\rlOn, newState) };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                         btn.focus(nil);
                     });
                 // Speaker 4: Rear Right (RR)
@@ -4881,6 +4884,7 @@ AppClock.sched(0.1, {
                         var newState = 1 - btn.value;
                         ~dolbyState[\rrOn] = newState;
                         if(~synth.notNil) { ~synth.set(\rrOn, newState) };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                         btn.focus(nil);
                     });
                 
@@ -4897,6 +4901,7 @@ AppClock.sched(0.1, {
                         var newState = 1 - btn.value;
                         ~dolbyState[\centerOn] = newState;
                         if(~synth.notNil) { ~synth.set(\centerOn, newState) };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                         btn.focus(nil);
                     });
                 
@@ -4913,6 +4918,7 @@ AppClock.sched(0.1, {
                         var newState = 1 - btn.value;
                         ~dolbyState[\subOn] = newState;
                         if(~synth.notNil) { ~synth.set(\subOn, newState) };
+                        if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                         btn.focus(nil);
                     });
                 
