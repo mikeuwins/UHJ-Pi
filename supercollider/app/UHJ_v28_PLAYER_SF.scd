@@ -1357,7 +1357,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var tryBoot;
     var needReboot;
     var dimVals, dimWidth, dimWidthHPF, dimTrim;
-    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState;
+    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState, flState, frState, rlState, rrState;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE)) or: (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId)) or: (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId));
     tryBoot = {
@@ -1425,7 +1425,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1|
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
@@ -1521,10 +1521,10 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
                             quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
                             out = [
-                                quadOutFront[0], // LF (Speaker 1)
-                                quadOutFront[1], // FR (Speaker 2)
-                                quadOutRear[0],  // RL (Speaker 3)
-                                quadOutRear[1]   // RR (Speaker 4)
+                                quadOutFront[0] * flOn, // LF (Speaker 1)
+                                quadOutFront[1] * frOn, // FR (Speaker 2)
+                                quadOutRear[0]  * rlOn, // RL (Speaker 3)
+                                quadOutRear[1]  * rrOn  // RR (Speaker 4)
                             ];
                         });
                         if(outputs == 6, {
@@ -1599,6 +1599,13 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
                     leftOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
                     rightOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
+                    flState = 1; frState = 1; rlState = 1; rrState = 1;
+                    if(configKeyD == \quadsquare, {
+                        flState = ~quadSquareState[\flOn] ? 1;
+                        frState = ~quadSquareState[\frOn] ? 1;
+                        rlState = ~quadSquareState[\rlOn] ? 1;
+                        rrState = ~quadSquareState[\rrOn] ? 1;
+                    });
                     zsAmount = (ambienceVals[0] ? 0.0) * 100;
                     zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
                     zsTrim = (zsynthVals[2] ? 0.5).linlin(0, 1, -12, 12);
@@ -1625,7 +1632,11 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \zsynthAmbienceDampening, zsDamp,
                         \zsynthAmbienceMix, zsMix,
                         \lOn, leftOnState,
-                        \rOn, rightOnState
+                        \rOn, rightOnState,
+                        \flOn, flState,
+                        \frOn, frState,
+                        \rlOn, rlState,
+                        \rrOn, rrState
                     ]);
                     // Load first track from file list (if available) but don't start playing
                     { 
@@ -1729,8 +1740,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, lOn = 1, rOn = 1|
-                            var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
+                            var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             // Audio source from SFPlayer bus - variable channels based on encoder
                             src = In.ar(~playerBus.index, inputs);
                             // Amplitude scaling
@@ -1801,10 +1812,10 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 quadOutFront = frontStereo * ((quadFR + 1) * 0.5); // scale front by 0..1
                                 quadOutRear  = rearStereo  * ((1 - quadFR) * 0.5); // scale rear by 1..0
                                 out = [
-                                    quadOutFront[0], // LF (Speaker 1)
-                                    quadOutFront[1], // FR (Speaker 2)
-                                    quadOutRear[0],  // RL (Speaker 3)
-                                    quadOutRear[1]   // RR (Speaker 4)
+                                quadOutFront[0] * flOn, // LF (Speaker 1)
+                                quadOutFront[1] * frOn, // FR (Speaker 2)
+                                quadOutRear[0]  * rlOn, // RL (Speaker 3)
+                                quadOutRear[1]  * rrOn  // RR (Speaker 4)
                                 ];
                             });
                             if(outputs == 6, {
@@ -1875,6 +1886,13 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
                         leftOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
                         rightOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
+                        flState = 1; frState = 1; rlState = 1; rrState = 1;
+                        if(configKeyD == \quadsquare, {
+                            flState = ~quadSquareState[\flOn] ? 1;
+                            frState = ~quadSquareState[\frOn] ? 1;
+                            rlState = ~quadSquareState[\rlOn] ? 1;
+                            rrState = ~quadSquareState[\rrOn] ? 1;
+                        });
 
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -1886,8 +1904,19 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             \dimensionWidthHPF, dimWidthHPF,
                             \dimensionOutputTrim, dimTrim,
                             \dimensionActive, ~dimensionActive ? 0,
+                            \zsynthHeightAmount, zsAmount,
+                            \zsynthHeightDelay, zsDelay,
+                            \zsynthHeightTrim, zsTrim,
+                            \zsynthHeightSource, zsSource,
+                            \zsynthAmbienceSize, zsSize,
+                            \zsynthAmbienceDampening, zsDamp,
+                            \zsynthAmbienceMix, zsMix,
                             \lOn, leftOnState,
-                            \rOn, rightOnState]);
+                            \rOn, rightOnState,
+                            \flOn, flState,
+                            \frOn, frState,
+                            \rlOn, rlState,
+                            \rrOn, rrState]);
                         
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
@@ -2838,6 +2867,10 @@ AppClock.sched(0.1, {
                 ~binauralCipicProfileLabel = nil;
                 ~binauralCipicSelectBtn = nil;
                 if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+                ~quadSquareFLHit = nil;
+                ~quadSquareFRHit = nil;
+                ~quadSquareRLHit = nil;
+                ~quadSquareRRHit = nil;
             };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
@@ -3556,10 +3589,17 @@ AppClock.sched(0.1, {
         ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 0)).postln;
     };
     if(~synth.notNil) {
-        var leftState, rightState;
+        var leftState, rightState, flGate, frGate, rlGate, rrGate;
         leftState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
         rightState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
-        ~synth.set(\lOn, leftState, \rOn, rightState);
+        flGate = 1; frGate = 1; rlGate = 1; rrGate = 1;
+        if(configKeyD == \quadsquare, {
+            flGate = ~quadSquareState[\flOn] ? 1;
+            frGate = ~quadSquareState[\frOn] ? 1;
+            rlGate = ~quadSquareState[\rlOn] ? 1;
+            rrGate = ~quadSquareState[\rrOn] ? 1;
+        });
+        ~synth.set(\lOn, leftState, \rOn, rightState, \flOn, flGate, \frOn, frGate, \rlOn, rlGate, \rrOn, rrGate);
     };
 };
 // --- AmbiVerbSC Preset Recall Function ---
@@ -4462,26 +4502,41 @@ AppClock.sched(0.1, {
                             Pen.stringAtPoint("2", Point(rightEarX + 6, rightEarY + 7), Font("Helvetica", 13).boldVariant, if(rightOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("Headphone Listening using CIPIC HRTF Library", Point(centerX - 138, 32), Font("Helvetica", 13), Color.cyan);
                         },
-                        3, { // Quad Square
-                            var squareSize = 140, halfSquare = squareSize / 2;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare, centerY - halfSquare + 25, squareSize, squareSize)); Pen.stroke;
-                            // Speaker 1: Front Left
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(centerX - halfSquare - 3, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 2: Front Right
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 9 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 3: Rear Left
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(centerX - halfSquare - 3, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 4: Rear Right
-                            Pen.color = Color.black; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(centerX - halfSquare - 10 + squareSize, centerY - halfSquare - 10 + squareSize + 25, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(centerX - halfSquare - 3 + squareSize, centerY - halfSquare - 10 + squareSize + 1 + 25), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] RL, [4] RR", Point(centerX - 82, 32), Font("Helvetica", 13), Color.cyan);
+                        3, { // Quad Square - larger square (similar to v27)
+                            var layoutSize = 140, diagramCenterX = 160, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
+                            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+                            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+                            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
+                            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
+                            var flOn = ~quadSquareState[\flOn] ? 1;
+                            var frOn = ~quadSquareState[\frOn] ? 1;
+                            var rlOn = ~quadSquareState[\rlOn] ? 1;
+                            var rrOn = ~quadSquareState[\rrOn] ? 1;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 10)); Pen.stroke;
+                            // FL
+                            Pen.color = if(flOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontLeftX + 0.5, frontLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, if(flOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // FR
+                            Pen.color = if(frOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontRightX + 0.5, frontRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, if(frOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RL
+                            Pen.color = if(rlOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundLeftX + 0.5, surroundLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, if(rlOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RR
+                            Pen.color = if(rrOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundRightX + 0.5, surroundRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, if(rrOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         4, { // Quad Narrow
                             var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2) + 25;
@@ -4752,7 +4807,60 @@ AppClock.sched(0.1, {
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~binauralRightHit.front;
-            };
+        };
+
+        if(~dmenu.value == 3, {
+            var diagramCenterX = 160, layoutSize = 140, layoutLeft = diagramCenterX - (layoutSize / 2), layoutTop = 70, speakerSize = 18;
+            var frontLeftX = layoutLeft - 9, frontLeftY = layoutTop - 9;
+            var frontRightX = layoutLeft + layoutSize - 9, frontRightY = layoutTop - 9;
+            var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 10;
+            var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 10;
+
+            if(~quadSquareFLHit.notNil) { try { ~quadSquareFLHit.remove; }; ~quadSquareFLHit = nil; };
+            if(~quadSquareFRHit.notNil) { try { ~quadSquareFRHit.remove; }; ~quadSquareFRHit = nil; };
+            if(~quadSquareRLHit.notNil) { try { ~quadSquareRLHit.remove; }; ~quadSquareRLHit = nil; };
+            if(~quadSquareRRHit.notNil) { try { ~quadSquareRRHit.remove; }; ~quadSquareRRHit = nil; };
+
+            ~quadSquareFLHit = UserView(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadSquareState[\flOn] ? 1);
+                    ~quadSquareState[\flOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\flOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadSquareFLHit.front;
+
+            ~quadSquareFRHit = UserView(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadSquareState[\frOn] ? 1);
+                    ~quadSquareState[\frOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\frOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadSquareFRHit.front;
+
+            ~quadSquareRLHit = UserView(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadSquareState[\rlOn] ? 1);
+                    ~quadSquareState[\rlOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\rlOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadSquareRLHit.front;
+
+            ~quadSquareRRHit = UserView(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadSquareState[\rrOn] ? 1);
+                    ~quadSquareState[\rrOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\rrOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadSquareRRHit.front;
+        });
 
             if(~dmenu.value == 2) {
                 var layoutBounds_c = ~layoutOverlay.bounds;
