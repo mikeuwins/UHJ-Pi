@@ -1605,6 +1605,20 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         frState = ~quadSquareState[\frOn] ? 1;
                         rlState = ~quadSquareState[\rlOn] ? 1;
                         rrState = ~quadSquareState[\rrOn] ? 1;
+                    }, {
+                        if(configKeyD == \quadnarrow, {
+                            flState = ~quadNarrowState[\flOn] ? 1;
+                            frState = ~quadNarrowState[\frOn] ? 1;
+                            rlState = ~quadNarrowState[\rlOn] ? 1;
+                            rrState = ~quadNarrowState[\rrOn] ? 1;
+                        }, {
+                            if(configKeyD == \quadwide, {
+                                flState = ~quadWideState[\flOn] ? 1;
+                                frState = ~quadWideState[\frOn] ? 1;
+                                rlState = ~quadWideState[\rlOn] ? 1;
+                                rrState = ~quadWideState[\rrOn] ? 1;
+                            });
+                        });
                     });
                     zsAmount = (ambienceVals[0] ? 0.0) * 100;
                     zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
@@ -1892,6 +1906,20 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             frState = ~quadSquareState[\frOn] ? 1;
                             rlState = ~quadSquareState[\rlOn] ? 1;
                             rrState = ~quadSquareState[\rrOn] ? 1;
+                        }, {
+                            if(configKeyD == \quadnarrow, {
+                                flState = ~quadNarrowState[\flOn] ? 1;
+                                frState = ~quadNarrowState[\frOn] ? 1;
+                                rlState = ~quadNarrowState[\rlOn] ? 1;
+                                rrState = ~quadNarrowState[\rrOn] ? 1;
+                            }, {
+                                if(configKeyD == \quadwide, {
+                                    flState = ~quadWideState[\flOn] ? 1;
+                                    frState = ~quadWideState[\frOn] ? 1;
+                                    rlState = ~quadWideState[\rlOn] ? 1;
+                                    rrState = ~quadWideState[\rrOn] ? 1;
+                                });
+                            });
                         });
 
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
@@ -2871,6 +2899,10 @@ AppClock.sched(0.1, {
                 ~quadSquareFRHit = nil;
                 ~quadSquareRLHit = nil;
                 ~quadSquareRRHit = nil;
+                ~quadNarrowFLHit = nil;
+                ~quadNarrowFRHit = nil;
+                ~quadNarrowRLHit = nil;
+                ~quadNarrowRRHit = nil;
             };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
@@ -3598,6 +3630,20 @@ AppClock.sched(0.1, {
             frGate = ~quadSquareState[\frOn] ? 1;
             rlGate = ~quadSquareState[\rlOn] ? 1;
             rrGate = ~quadSquareState[\rrOn] ? 1;
+        }, {
+            if(configKeyD == \quadnarrow, {
+                flGate = ~quadNarrowState[\flOn] ? 1;
+                frGate = ~quadNarrowState[\frOn] ? 1;
+                rlGate = ~quadNarrowState[\rlOn] ? 1;
+                rrGate = ~quadNarrowState[\rrOn] ? 1;
+            }, {
+                if(configKeyD == \quadwide, {
+                    flGate = ~quadWideState[\flOn] ? 1;
+                    frGate = ~quadWideState[\frOn] ? 1;
+                    rlGate = ~quadWideState[\rlOn] ? 1;
+                    rrGate = ~quadWideState[\rrOn] ? 1;
+                });
+            });
         });
         ~synth.set(\lOn, leftState, \rOn, rightState, \flOn, flGate, \frOn, frGate, \rlOn, rlGate, \rrOn, rrGate);
     };
@@ -4538,26 +4584,42 @@ AppClock.sched(0.1, {
                             Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, if(rrOn == 1, { Color.black }, { Color.cyan }));
                             Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
-                        4, { // Quad Narrow
-                            var rectHeight = 140, rectWidth = (rectHeight * 0.75).asInteger, rectLeft = centerX - (rectWidth / 2), rectTop = centerY - (rectHeight / 2) + 25;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight)); Pen.stroke;
-                            // Speaker 1: Front Left
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("1", Point(rectLeft - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 2: Front Right
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("2", Point(rectLeft + rectWidth - 3, rectTop - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 3: Rear Left
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("3", Point(rectLeft - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            // Speaker 4: Rear Right
-                            Pen.color = Color.black; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft + rectWidth - 10, rectTop + rectHeight - 10, 20, 20)); Pen.stroke;
-                            Pen.stringAtPoint("4", Point(rectLeft + rectWidth - 3, rectTop + rectHeight - 9), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("[1] FL, [2] FR, [3] RL, [4] RR", Point(centerX - 82, 32), Font("Helvetica", 13), Color.cyan);
+                        4, { // Quad Narrow - taller rectangle (similar to v27)
+                            var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
+                            var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
+                            var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+                            var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+                            var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+                            var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
+                            var flOn = ~quadNarrowState[\flOn] ? 1;
+                            var frOn = ~quadNarrowState[\frOn] ? 1;
+                            var rlOn = ~quadNarrowState[\rlOn] ? 1;
+                            var rrOn = ~quadNarrowState[\rrOn] ? 1;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(rectLeft, rectTop, rectWidth, rectHeight + 8)); Pen.stroke;
+                            // FL
+                            Pen.color = if(flOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontLeftX + 0.5, frontLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, if(flOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // FR
+                            Pen.color = if(frOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(frontRightX + 0.5, frontRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, if(frOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RL
+                            Pen.color = if(rlOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundLeftX + 0.5, surroundLeftY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("3", Point(surroundLeftX + 5, surroundLeftY + 2), Font("Helvetica", 13).boldVariant, if(rlOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("RL", Point(surroundLeftX + 3, surroundLeftY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // RR
+                            Pen.color = if(rrOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(surroundRightX, surroundRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(surroundRightX + 0.5, surroundRightY + 0.5, speakerSize - 1, speakerSize - 1), 2, 2); Pen.stroke;
+                            Pen.stringAtPoint("4", Point(surroundRightX + 5, surroundRightY + 2), Font("Helvetica", 13).boldVariant, if(rrOn == 1, { Color.black }, { Color.cyan }));
+                            Pen.stringAtPoint("RR", Point(surroundRightX + 2, surroundRightY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         5, { // Quad Wide
                             var rectWidth = 140, rectHeight = 105, rectLeft = centerX - (rectWidth / 2), totalHeight = rectHeight + 20, rectTop = centerY - (totalHeight / 2) + 10 + 25;
@@ -4820,6 +4882,10 @@ AppClock.sched(0.1, {
             if(~quadSquareFRHit.notNil) { try { ~quadSquareFRHit.remove; }; ~quadSquareFRHit = nil; };
             if(~quadSquareRLHit.notNil) { try { ~quadSquareRLHit.remove; }; ~quadSquareRLHit = nil; };
             if(~quadSquareRRHit.notNil) { try { ~quadSquareRRHit.remove; }; ~quadSquareRRHit = nil; };
+            if(~quadNarrowFLHit.notNil) { try { ~quadNarrowFLHit.remove; }; ~quadNarrowFLHit = nil; };
+            if(~quadNarrowFRHit.notNil) { try { ~quadNarrowFRHit.remove; }; ~quadNarrowFRHit = nil; };
+            if(~quadNarrowRLHit.notNil) { try { ~quadNarrowRLHit.remove; }; ~quadNarrowRLHit = nil; };
+            if(~quadNarrowRRHit.notNil) { try { ~quadNarrowRRHit.remove; }; ~quadNarrowRRHit = nil; };
 
             ~quadSquareFLHit = UserView(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
                 .background_(Color.clear)
@@ -4860,6 +4926,60 @@ AppClock.sched(0.1, {
                     if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                 });
             ~quadSquareRRHit.front;
+        });
+
+        if(~dmenu.value == 4, {
+            var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
+            var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
+            var frontLeftX = rectLeft - 9, frontLeftY = rectTop - 9;
+            var frontRightX = rectLeft + rectWidth - 9, frontRightY = rectTop - 9;
+            var surroundLeftX = rectLeft - 9, surroundLeftY = rectTop + rectHeight - 9 + 8;
+            var surroundRightX = rectLeft + rectWidth - 9, surroundRightY = rectTop + rectHeight - 9 + 8;
+
+            if(~quadNarrowFLHit.notNil) { try { ~quadNarrowFLHit.remove; }; ~quadNarrowFLHit = nil; };
+            if(~quadNarrowFRHit.notNil) { try { ~quadNarrowFRHit.remove; }; ~quadNarrowFRHit = nil; };
+            if(~quadNarrowRLHit.notNil) { try { ~quadNarrowRLHit.remove; }; ~quadNarrowRLHit = nil; };
+            if(~quadNarrowRRHit.notNil) { try { ~quadNarrowRRHit.remove; }; ~quadNarrowRRHit = nil; };
+
+            ~quadNarrowFLHit = UserView(~layoutOverlay, Rect(frontLeftX, frontLeftY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadNarrowState[\flOn] ? 1);
+                    ~quadNarrowState[\flOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\flOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadNarrowFLHit.front;
+
+            ~quadNarrowFRHit = UserView(~layoutOverlay, Rect(frontRightX, frontRightY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadNarrowState[\frOn] ? 1);
+                    ~quadNarrowState[\frOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\frOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadNarrowFRHit.front;
+
+            ~quadNarrowRLHit = UserView(~layoutOverlay, Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadNarrowState[\rlOn] ? 1);
+                    ~quadNarrowState[\rlOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\rlOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadNarrowRLHit.front;
+
+            ~quadNarrowRRHit = UserView(~layoutOverlay, Rect(surroundRightX, surroundRightY, speakerSize, speakerSize))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~quadNarrowState[\rrOn] ? 1);
+                    ~quadNarrowState[\rrOn] = newState;
+                    if(~synth.notNil) { ~synth.set(\rrOn, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~quadNarrowRRHit.front;
         });
 
             if(~dmenu.value == 2) {
