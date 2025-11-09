@@ -169,9 +169,11 @@ thisProcess.platform.name.postln;
 ~ambienceState = Dictionary.newFrom([
     \sliderValues, [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0],  // Height, HDelay, Reverb, RDelay, RSize, Spread, Target
     \presetIndex, 0,  // Default preset index
-    \lastMix, 0.0     // Remember last nonzero mix value
+    \lastMix, 0.0,    // Remember last nonzero mix value
+    \active, 0        // Reverb on/off state (0 = off, 1 = on)
 ]);
 ~ambienceLastMix = ~ambienceState[\lastMix];
+~ambienceRestoring = false;
 
 // --- ZSynth state preservation variables ---
 ~zsynthState = Dictionary.newFrom([
@@ -3288,9 +3290,13 @@ AppClock.sched(0.1, {
     if(~ambienceLastMix.notNil) {
         ~ambienceState[\lastMix] = ~ambienceLastMix;
     };
+    if(~ambienceOnOffBtn.notNil) {
+        ~ambienceState[\active] = ~ambienceOnOffBtn.value;
+    };
 };
 
 ~restoreAmbienceState = {
+    ~ambienceRestoring = true;
     if(~ambienceSliders.notNil and: { ~ambienceState[\sliderValues].notNil }) {
         ("Restoring ambience state: " ++ ~ambienceState[\sliderValues]).postln;
         ~ambienceSliders.do({ |slider, i|
@@ -3304,6 +3310,21 @@ AppClock.sched(0.1, {
     if(~ambiencePresetMenu.notNil and: { ~ambienceState[\presetIndex].notNil }) {
         ("Restoring preset index: " ++ ~ambienceState[\presetIndex]).postln;
         ~ambiencePresetMenu.value_(~ambienceState[\presetIndex]);
+    };
+    ~ambienceRestoring = false;
+    if(~ambienceOnOffBtn.notNil) {
+        var active = ~ambienceState[\active] ? 0;
+        var mixSlider = if(~ambienceSliders.notNil and: { ~ambienceSliders.size > 2 }, { ~ambienceSliders[2] }, { nil });
+        var mixVal = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
+        ~ambienceOnOffBtn.value_(active);
+        ~ambienceState[\active] = active;
+        if(~synth.notNil) {
+            if(active == 1) {
+                ~synth.set(\ambience, mixVal.linlin(0, 1, 0, 0.2));
+            } {
+                ~synth.set(\ambience, 0);
+            };
+        };
     };
 };
 
@@ -3586,7 +3607,7 @@ AppClock.sched(0.1, {
             ~synth.set(
                 \zsynthHeightAmount, heightVal * 100,
                 \zsynthHeightDelay, heightDelayVal.linlin(0, 1, 0, 30),
-                \ambience, mixVal.linlin(0, 1, 0, 0.2),
+                \ambience, if((~ambienceState[\active] ? 0) == 1, { mixVal.linlin(0, 1, 0, 0.2) }, { 0 }),
                 \preDelay, preDelayVal.linlin(0, 1, 0, 0.5),
                 \lowRT, lowRT,
                 \highRT, highRT,
@@ -3597,7 +3618,7 @@ AppClock.sched(0.1, {
                 ~synth.set(\zsynthHeightSource, ~zsynthState[\heightSource]);
             };
             ~ambienceLastMix = mixVal;
-            ("Restored synth ambience/Z params: height=" ++ (heightVal * 100) ++ "%, mix=" ++ mixVal.linlin(0, 1, 0, 0.2)).postln;
+            ("Restored synth ambience/Z params: height=" ++ (heightVal * 100) ++ "%, mix=" ++ if((~ambienceState[\active] ? 0) == 1, { mixVal.linlin(0, 1, 0, 0.2) }, { 0 })).postln;
         } {
             ("Warning: ambience params array too small: " ++ params).postln;
         };
@@ -3827,9 +3848,23 @@ AppClock.sched(0.1, {
                                     ~synth.set(\zsynthHeightDelay, ms);
                                 },
                                 2, {
+                                    var currentMix = sl.value;
                                     ~ambienceValues[i].string = valPct.asString ++ "%";
-                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
-                                    if(sl.value > 0) { ~ambienceOnOffBtn.value_(1); ~ambienceLastMix = sl.value; } { ~ambienceOnOffBtn.value_(0); };
+                                    if(~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 }) {
+                                        if(~synth.notNil) { ~synth.set(\ambience, currentMix.linlin(0, 1, 0, 0.2)); };
+                                        ~ambienceLastMix = currentMix;
+                                    } {
+                                        ~ambienceLastMix = currentMix;
+                                    };
+                                    if(~ambienceRestoring.not and: { ~ambienceOnOffBtn.notNil }) {
+                                        if(currentMix > 0 and: { ~ambienceOnOffBtn.value == 0 }) {
+                                            ~ambienceOnOffBtn.valueAction_(1);
+                                        } {
+                                            if(currentMix <= 0 and: { ~ambienceOnOffBtn.value == 1 }) {
+                                                ~ambienceOnOffBtn.valueAction_(0);
+                                            };
+                                        };
+                                    };
                                 },
                                 3, {
                                     var pd = sl.value.linlin(0,1,0,0.5);
@@ -3886,8 +3921,6 @@ AppClock.sched(0.1, {
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 };
             });
-            if(~ambienceOnOffBtn.notNil) { ~ambienceOnOffBtn.value_(0); };
-            if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
             
             ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
                 .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
@@ -3895,13 +3928,21 @@ AppClock.sched(0.1, {
                 .focusColor_(Color.clear)
                 .value_(0)
                 .action_({ |btn|
-                    if(~synth.notNil and: { ~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil } }) {
-                        if(btn.value == 1) {
-                            ~synth.set(\ambience, ~ambienceSliders[0].value.linlin(0, 1, 0, 0.2));
-                        } {
-                            ~ambienceLastMix = ~ambienceSliders[0].value;
-                            ~synth.set(\ambience, 0);
+                    var mixSlider = if(~ambienceSliders.notNil and: { ~ambienceSliders.size > 2 }, { ~ambienceSliders[2] }, { nil });
+                    if(btn.value == 1) {
+                        var mixVal = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
+                        if(mixVal <= 0 and: { ~ambienceLastMix.notNil and: { ~ambienceLastMix > 0 } }) {
+                            mixVal = ~ambienceLastMix;
+                            if(mixSlider.notNil) { mixSlider.value_(mixVal); };
                         };
+                        ~ambienceLastMix = mixVal;
+                        ~ambienceState[\active] = 1;
+                        if(~synth.notNil) { ~synth.set(\ambience, mixVal.linlin(0, 1, 0, 0.2)); };
+                    } {
+                        var currentMix = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
+                        ~ambienceLastMix = currentMix;
+                        ~ambienceState[\active] = 0;
+                        if(~synth.notNil) { ~synth.set(\ambience, 0); };
                     };
                 });
             
