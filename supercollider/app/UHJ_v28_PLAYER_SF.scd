@@ -5248,6 +5248,12 @@ AppClock.sched(0.1, {
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
+            if(~playerOverlay.notNil) { 
+                if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
+                if(~playerLoopBtn.notNil, { ~savedPlayerLoopState = ~playerLoopBtn.value; });
+                ~playerOverlay.remove; ~playerOverlay = nil; 
+            };
+            ~playerBtn.value_(0);
             
             if(~metersOverlay.notNil) { 
                 ~metersOverlay.remove; ~metersOverlay = nil; 
