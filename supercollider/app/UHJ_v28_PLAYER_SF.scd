@@ -192,7 +192,7 @@ thisProcess.platform.name.postln;
     \surround, 0.8,   // Surround level
     \effect, 0.8,     // Effect level
     \delay, 0.4,      // Delay amount
-    \active, 1        // Active/bypass (default ON - 1 = active, 0 = bypass)
+    \active, 0        // Active/bypass (default OFF - 1 = active, 0 = bypass)
 ]);
 
 // --- Dimension processing state preservation variables ---
