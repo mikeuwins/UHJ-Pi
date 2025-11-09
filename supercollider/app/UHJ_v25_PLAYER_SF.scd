@@ -912,6 +912,7 @@ StaticText(mainView, Rect(360, 10, 140, 28))
                 s.options.memSize = 65536;
                 s.options.numOutputBusChannels = outputs;
                 s.options.numInputBusChannels = inputs;
+                s.options.device = "UHJ";
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({

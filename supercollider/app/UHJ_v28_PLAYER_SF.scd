@@ -182,6 +182,13 @@ thisProcess.platform.name.postln;
     \active, 1        // Active/bypass (default ON - 1 = active, 0 = bypass)
 ]);
 
+// --- Dimension processing state preservation variables ---
+~dimensionActive = 0;  // Default OFF (1 = active, 0 = bypass)
+~dimensionState = Dictionary.newFrom([
+    \sliderValues, [0.0, 0.5, 0.5],  // width, widthHPF (normalized), outputTrim (normalized 0-1)
+    \presetIndex, 0   // Default preset index
+]);
+
 // --- Stereo/Binaural layout state preservation variables ---
 ~stereoState = Dictionary.newFrom([
     \lOn, 1,
@@ -1328,6 +1335,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var decoderDict, encoderDict;
     var tryBoot;
     var needReboot;
+    var dimVals, dimWidth, dimWidthHPF, dimTrim;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
     tryBoot = {
@@ -1394,8 +1402,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
-                        var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70|
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1423,15 +1431,38 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             delayTime: maplinDelay,
                             active: maplinActive
                         );
-                        
                         // Select input for encoding: quad (if maplin) or variable channels (others)
                         encodeInput = Select.ar(maplinMode, [eqed, maplinQuad]);
                         
                         // Encode to ambisonic using selected encoder
                         encode = FoaEncode.ar(encodeInput, encoder);
                         
+                        // Dimension processing with bypass support
+                        dimensioned = if(dimensionActive > 0,
+                            FoaDimension.ar(
+                                encode,
+                                width: dimensionWidth,
+                                widthHPF: dimensionWidthHPF,
+                                lfGain: 0,
+                                hfGain: 0,
+                                outputTrim: dimensionOutputTrim
+                            ),
+                            encode
+                        );
+                        
+                        // Z Synthesis processing (synthesize Z from X/Y with decorrelation and ambience)
+                        zsynth = FoaZSynthesis.ar(dimensioned,
+                            heightAmount: zsynthHeightAmount,
+                            heightDelay: zsynthHeightDelay,
+                            heightTrim: zsynthHeightTrim,
+                            heightSource: zsynthHeightSource,
+                            ambienceSize: zsynthAmbienceSize,
+                            ambienceDampening: zsynthAmbienceDampening,
+                            ambienceMix: zsynthAmbienceMix
+                        );
+                        
                         // Ambience processing
-                        ambient = AmbiVerbSC.ar(encode,
+                        ambient = AmbiVerbSC.ar(zsynth,
                             mix: ambience,
                             preDelay: preDelay,
                             crossoverFreq: 3000,
@@ -1524,12 +1555,28 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Start the synth
+                    dimVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5];
+                    if(dimVals.size == 2) {
+                        dimVals = [dimVals[0], 0.5, dimVals[1]];
+                    } {
+                        if(dimVals.size >= 4) {
+                            dimVals = [dimVals[0], 0.5, dimVals[3]];
+                        };
+                    };
+                    dimWidth = (dimVals[0] ? 0.0) * 0.70;
+                    dimWidthHPF = (dimVals[1] ? 0.5).linlin(0, 1, 80, 400);
+                    dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
+
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
-                        \maplinSurround, ~maplinState[\surround], 
-                        \maplinEffect, ~maplinState[\effect],
-                        \maplinDelay, ~maplinState[\delay], 
-                        \maplinActive, ~maplinState[\active],
-                        \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                        \maplinSurround, ~maplinState[\surround] ? 0.8, 
+                        \maplinEffect, ~maplinState[\effect] ? 0.8,
+                        \maplinDelay, ~maplinState[\delay] ? 0.4, 
+                        \maplinActive, ~maplinState[\active] ? 1,
+                        \maplinMode, if(configKeyE == \maplin, 1, 0),
+                        \dimensionWidth, dimWidth,
+                        \dimensionWidthHPF, dimWidthHPF,
+                        \dimensionOutputTrim, dimTrim,
+                        \dimensionActive, ~dimensionActive ? 0]);
                     // Load first track from file list (if available) but don't start playing
                     { 
                         if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
@@ -1758,12 +1805,28 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         s.sync(cond);
 
                         // Start the synth
+                        dimVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5];
+                        if(dimVals.size == 2) {
+                            dimVals = [dimVals[0], 0.5, dimVals[1]];
+                        } {
+                            if(dimVals.size >= 4) {
+                                dimVals = [dimVals[0], 0.5, dimVals[3]];
+                            };
+                        };
+                        dimWidth = (dimVals[0] ? 0.0) * 0.70;
+                        dimWidthHPF = (dimVals[1] ? 0.5).linlin(0, 1, 80, 400);
+                        dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
+
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
-                            \maplinSurround, ~maplinState[\surround], 
-                            \maplinEffect, ~maplinState[\effect],
-                            \maplinDelay, ~maplinState[\delay], 
-                            \maplinActive, ~maplinState[\active],
-                            \maplinMode, if(configKeyE == \maplin, 1, 0)]);
+                            \maplinSurround, ~maplinState[\surround] ? 0.8, 
+                            \maplinEffect, ~maplinState[\effect] ? 0.8,
+                            \maplinDelay, ~maplinState[\delay] ? 0.4, 
+                            \maplinActive, ~maplinState[\active] ? 1,
+                            \maplinMode, if(configKeyE == \maplin, 1, 0),
+                            \dimensionWidth, dimWidth,
+                            \dimensionWidthHPF, dimWidthHPF,
+                            \dimensionOutputTrim, dimTrim,
+                            \dimensionActive, ~dimensionActive ? 0]);
                         
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
@@ -3263,6 +3326,42 @@ AppClock.sched(0.1, {
         } {
             ("Warning: ambience params array too small: " ++ params).postln;
         };
+    };
+
+    // Restore Dimension parameters to new synth
+    if(~synth.notNil and: { ~dimensionState[\sliderValues].notNil }) {
+        var dimVals, width, widthHPF, trim;
+        dimVals = ~dimensionState[\sliderValues];
+        if(dimVals.size == 2) {
+            dimVals = [dimVals[0], 0.5, dimVals[1]];
+        } {
+            if(dimVals.size >= 4) {
+                dimVals = [dimVals[0], 0.5, dimVals[3]];
+            };
+        };
+        width = (dimVals[0] ? 0.0) * 0.70;
+        widthHPF = (dimVals[1] ? 0.5).linlin(0, 1, 80, 400);
+        trim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
+        ~synth.set(
+            \dimensionWidth, width,
+            \dimensionWidthHPF, widthHPF,
+            \dimensionOutputTrim, trim,
+            \dimensionActive, ~dimensionActive ? 0
+        );
+        ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 0)).postln;
+    };
+
+    // Apply default Z Synthesis parameters (will be user-adjustable later)
+    if(~synth.notNil) {
+        ~synth.set(
+            \zsynthHeightAmount, 30,
+            \zsynthHeightDelay, 7,
+            \zsynthHeightTrim, 0,
+            \zsynthHeightSource, 0,
+            \zsynthAmbienceSize, 2.5,
+            \zsynthAmbienceDampening, 0.2,
+            \zsynthAmbienceMix, 70
+        );
     };
 };
 
