@@ -196,7 +196,7 @@ thisProcess.platform.name.postln;
 ]);
 
 // --- Dimension processing state preservation variables ---
-~dimensionActive = 1;  // Default ON (1 = active, 0 = bypass)
+~dimensionActive = 0;  // Default OFF (1 = active, 0 = bypass)
 ~dimensionState = Dictionary.newFrom([
     \sliderValues, [0.0, 0.5, 0.5],  // width, widthHPF (normalized), outputTrim (normalized 0-1)
     \presetIndex, 0   // Default preset index
@@ -1637,7 +1637,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \dimensionWidth, dimWidth,
                         \dimensionWidthHPF, dimWidthHPF,
                         \dimensionOutputTrim, dimTrim,
-                        \dimensionActive, ~dimensionActive ? 0,
+                        \dimensionActive, ~dimensionActive ? 1,
                         \zsynthHeightAmount, zsAmount,
                         \zsynthHeightDelay, zsDelay,
                         \zsynthHeightTrim, zsTrim,
@@ -1931,7 +1931,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             \dimensionWidth, dimWidth,
                             \dimensionWidthHPF, dimWidthHPF,
                             \dimensionOutputTrim, dimTrim,
-                            \dimensionActive, ~dimensionActive ? 0,
+                            \dimensionActive, ~dimensionActive ? 1,
                             \zsynthHeightAmount, zsAmount,
                             \zsynthHeightDelay, zsDelay,
                             \zsynthHeightTrim, zsTrim,
@@ -3620,9 +3620,9 @@ AppClock.sched(0.1, {
             \dimensionWidth, width,
             \dimensionWidthHPF, widthHPF,
             \dimensionOutputTrim, trim,
-            \dimensionActive, ~dimensionActive ? 0
+            \dimensionActive, ~dimensionActive ? 1
         );
-        ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 0)).postln;
+        ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 1)).postln;
     };
     if(~synth.notNil) {
         var leftState, rightState, flGate, frGate, rlGate, rrGate;
