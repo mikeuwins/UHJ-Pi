@@ -2462,7 +2462,7 @@ win.front;
         if(~ambienceSliders.notNil) {
             // Index mapping: 2=Reverb, 3=RDelay, 4=RSize, 5=Spread, 6=Target
             ~ambienceSliders[2].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Reverb mix
-            ~ambienceSliders[3].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // RDelay
+            ~ambienceSliders[3].value_((presetData[\preDelay] ? 0.0).clip(0, 0.25).linlin(0, 0.25, 0, 1)); // RDelay
             baseRT = (((presetData[\lowRT] / 0.7) + (presetData[\highRT] / 1.3)) * 0.5).clip(0.5, 2.5);
             ~ambienceSliders[4].value_(baseRT.linlin(0, 1, 0, 1)); // RSize macro
             ~ambienceSliders[5].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Spread
@@ -2574,7 +2574,7 @@ win.front;
             // Parameter labels and values (use saved state or defaults)
             // 7 faders (CamelCase, ≤6 chars): Height, HDelay, Reverb, RDelay, RSize, Spread, Target
             sliderLabels = ["Height", "HDelay", "Reverb", "RDelay", "RSize", "Spread", "Target"];
-            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
+            params = ~ambienceState[\sliderValues] ? [0.3, 0.0, 0.0, 0.2, 0.0, 0.0, 0.0];
             ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5; // Remember last nonzero mix value
             ~ambienceSliders = List[];
             ~ambienceValues = List[];
@@ -2615,9 +2615,9 @@ win.front;
                                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                                     if(sl.value > 0) { ~ambienceOnOffBtn.value_(1); ~ambienceLastMix = sl.value; } { ~ambienceOnOffBtn.value_(0); };
                                 },
-                                3, { // PREDLY (s)
-                                    var pd = sl.value.linlin(0,1,0,0.5);
-                                    ~ambienceValues[i].string = (pd.round(0.01).asString ++ "s");
+                                3, { // PREDLY (ms)
+                                    var pd = sl.value.linlin(0,1,0,0.25);
+                                    ~ambienceValues[i].string = ((pd * 1000).round(1).asString ++ "ms");
                                     ~synth.set(\preDelay, pd);
                                 },
                                 4, { // SIZE macro (R-TIME)
@@ -2649,7 +2649,7 @@ win.front;
                                 0, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
                                 1, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,30).round(0.1).asString ++ " ms"); },
                                 2, { ~ambienceValues[i].string = valPct.asString ++ "%"; },
-                                3, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0,0.5).round(0.01).asString ++ "s"); },
+                                3, { ~ambienceValues[i].string = ((sl.value.linlin(0,1,0,0.25) * 1000).round(1).asString ++ " ms"); },
                                 4, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.5,2.5).round(0.01).asString ++ "s"); },
                                 5, { ~ambienceValues[i].string = (sl.value.linlin(0,1,0.1,2.0).round(0.01).asString); },
                                 6, { updateTargetReadout.(if(sl.value < 0.25, 0.0, if(sl.value > 0.75, 1.0, 0.5))); }
