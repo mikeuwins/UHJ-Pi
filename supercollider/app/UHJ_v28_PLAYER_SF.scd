@@ -1295,7 +1295,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
         if(~layoutOverlay.notNil) {
             ~layoutOverlay.children.do({ |child|
                 if(child.class == StaticText and: { child.string.beginsWith("LAYOUT -") }) {
-                    child.string_("LAYOUT - " ++ decoderName);
+                    child.string_(decoderName);
                 };
             });
             ~layoutOverlay.children.do({ |child|
@@ -4467,7 +4467,7 @@ AppClock.sched(0.1, {
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
             StaticText(~layoutOverlay, Rect(10, 5, 300, 22))
-                .string_("LAYOUT - " ++ (["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"][~dmenu.value ? 0]))
+                .string_((["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "OCTAGON"][~dmenu.value ? 0]))
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
