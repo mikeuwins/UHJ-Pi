@@ -477,7 +477,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     success = (unixCmdGetStdOut(command).contains("SUCCESS")) or: File.exists(outputPath);
     success;
 };
-
 ~findArtworkForTrack = { |currentTrackPath, albumPath|
     // Find artwork with priority: track -> album -> folder -> default
     var artworkPath, tempPath, firstFlacPath, folderArtwork, result;
@@ -946,7 +945,6 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     
     folders;
 };
-
 // Function to build current album path
 ~buildAlbumPath = {
     var artistName, albumName, albumPath, isUSB;
@@ -1303,11 +1301,26 @@ StaticText(mainView, Rect(346, 10, 154, 28))
             });
         };
         // --- Audio engine reinitialization logic (must be last) ---
-        if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)))) {
+        if((configKeyD != (~prevConfigKeyD ? configKeyD)) or: ((inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs))) or: (configKeyE != (~prevConfigKeyE ? configKeyE)) or: (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId)) or: (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId))) {
             // Save current synth parameters before reinitializing
             ~saveSynthParams.value();
             ~initAudioEngine.value();
             ~prevConfigKeyD = configKeyD;
+            ~prevInputs = inputs;
+            ~prevOutputs = outputs;
+            ~prevConfigKeyE = configKeyE;
+            ~prevBinauralIRCAMId = ~binauralIRCAMId;
+            ~prevBinauralCIPICId = ~binauralCIPICId;
+        };
+
+        if(~layoutOverlay.notNil and: { ~layoutBtn.notNil } and: { ~layoutBtn.value == 1 }) {
+            AppClock.sched(0.0, {
+                if(~layoutBtn.notNil) {
+                    ~layoutBtn.valueAction_(0);
+                    ~layoutBtn.valueAction_(1);
+                };
+                nil;
+            });
         };
     },
     initVal: 0,
@@ -1317,31 +1330,26 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     layout: \horz,
     gap: 0@0
 );
-
 // Style the menus to match the GUI prototype
 ~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
-
 ~dmenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~dmenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
-
 // --- Track previous channel counts for safe decoder switching ---
 ~prevInputs = inputs;
 ~prevOutputs = outputs;
-// --- Track previous decoder and encoder key for always-reload logic ---
 ~prevConfigKeyD = configKeyD;
 ~prevConfigKeyE = configKeyE;
-
+~prevBinauralIRCAMId = ~binauralIRCAMId;
+~prevBinauralCIPICId = ~binauralCIPICId;
 // --- Input Source Detection for Mouse vs Headtracker ---
 // Track whether the last input was from mouse or headtracker
 // This allows automatic behavior adjustment for intuitive mouse control
 ~lastInputSource = \headtracker;  // Default to headtracker
 ~mouseActive = false;  // Track if mouse is currently being used
-
 // --- Pseudo-Surround Encoder ---
 // Use ATK's built-in stereo encoder if available, otherwise create custom one
 // This provides a clean foundation for convolution-based spatialization
-
 // Audio engine initialization function (from MainApp2)
 ~initAudioEngine = {
     var encoder, decoder, trans, ambient, roton;
@@ -1351,7 +1359,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var dimVals, dimWidth, dimWidthHPF, dimTrim;
     var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState;
     // Always reload kernels and restart synth on decoder or encoder change
-    needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
+    needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE)) or: (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId)) or: (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId));
     tryBoot = {
         if(s.serverBooting, {
             ("Server busy (booting), retrying audio engine init...").postln;
@@ -1385,8 +1393,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                     // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
                     decoderDict = Dictionary.newFrom([
-                        \binaural, FoaDecoderKernel.newListen(1053),
-                        \binaurac, FoaDecoderKernel.newCIPIC(12),
+                        \binaural, FoaDecoderKernel.newListen(~binauralIRCAMId),
+                        \binaurac, FoaDecoderKernel.newCIPIC(~binauralCIPICId),
                         \quadsquare, FoaDecoderMatrix.newQuad(pi/4, k: 'dual'),
                         \quadnarrow, FoaDecoderMatrix.newQuad(pi/6, k: 'dual'),
                         \quadwide, FoaDecoderMatrix.newQuad(pi/3, k: 'dual'),
@@ -1698,8 +1706,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                         // Define decoder kernels (matching MainApp2 exactly, excluding unused \none)
                         decoderDict = Dictionary.newFrom([
-                            \binaural, FoaDecoderKernel.newListen(1053),
-                            \binaurac, FoaDecoderKernel.newCIPIC(12),
+                            \binaural, FoaDecoderKernel.newListen(~binauralIRCAMId),
+                            \binaurac, FoaDecoderKernel.newCIPIC(~binauralCIPICId),
                             \quadsquare, FoaDecoderMatrix.newQuad(pi/4, k: 'dual'),
                             \quadnarrow, FoaDecoderMatrix.newQuad(pi/6, k: 'dual'),
                             \quadwide, FoaDecoderMatrix.newQuad(pi/3, k: 'dual'),
@@ -1911,6 +1919,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     ~prevOutputs = outputs;
     ~prevConfigKeyD = configKeyD;
     ~prevConfigKeyE = configKeyE;
+    ~prevBinauralIRCAMId = ~binauralIRCAMId;
+    ~prevBinauralCIPICId = ~binauralCIPICId;
 };
 
 // --- Custom Meter Function ---
@@ -2147,7 +2157,6 @@ Tdef( 'tryOpenHID' , {
 } );
 );
 Tdef( 'tryOpenHID' ).play;
-
 // HID.debug = true;
 
 // Map HID usages to GUI knobs (always active, no gating)
@@ -2610,7 +2619,6 @@ win.front;
         // Refresh artwork when album path changes
         if(~updatePlayerControls.notNil, { ~updatePlayerControls.value; });
     });
-
 // Create Artist and Album menus after window is visible
 ~artistMenu = PopUpMenu(mainView, Rect(28, 86, 140, 35))
     .items_( ~getATKFolderOptions.value )
@@ -2815,7 +2823,22 @@ AppClock.sched(0.1, {
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil; 
+                ~layoutDiagramView = nil;
+                ~layoutTitleText = nil;
+                ~stereoLeftHit = nil; 
+                ~stereoRightHit = nil;
+                ~binauralLeftHit = nil;
+                ~binauralRightHit = nil;
+                ~binauralIrcamProfileLabel = nil;
+                ~binauralIrcamSelectBtn = nil;
+                if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+                ~binauralCipicProfileLabel = nil;
+                ~binauralCipicSelectBtn = nil;
+                if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
@@ -3539,7 +3562,6 @@ AppClock.sched(0.1, {
         ~synth.set(\lOn, leftState, \rOn, rightState);
     };
 };
-
 // --- AmbiVerbSC Preset Recall Function ---
 ~recallAmbiVerbSCPreset = { |presetName|
     var presetData, roomName, baseRT;
@@ -3595,7 +3617,22 @@ AppClock.sched(0.1, {
                 ~saveEqState.value();
                 ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
             };
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil; 
+                ~layoutDiagramView = nil;
+                ~layoutTitleText = nil;
+                ~stereoLeftHit = nil; 
+                ~stereoRightHit = nil;
+                ~binauralLeftHit = nil;
+                ~binauralRightHit = nil;
+                ~binauralIrcamProfileLabel = nil;
+                ~binauralIrcamSelectBtn = nil;
+                if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+                ~binauralCipicProfileLabel = nil;
+                ~binauralCipicSelectBtn = nil;
+                if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
                 ~saveMaplinState.value();
@@ -3830,7 +3867,22 @@ AppClock.sched(0.1, {
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil; 
+                ~layoutDiagramView = nil;
+                ~layoutTitleText = nil;
+                ~stereoLeftHit = nil; 
+                ~stereoRightHit = nil;
+                ~binauralLeftHit = nil;
+                ~binauralRightHit = nil;
+                ~binauralIrcamProfileLabel = nil;
+                ~binauralIrcamSelectBtn = nil;
+                if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+                ~binauralCipicProfileLabel = nil;
+                ~binauralCipicSelectBtn = nil;
+                if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
@@ -3998,8 +4050,6 @@ AppClock.sched(0.1, {
                     });
                 })
                 .value_(1); // Start in pause state (cyan icon on black background)
-
-
             ~playerStopBtn = Button(~playerOverlay, Rect(220, 136, 80, 35))
                 .states_([["", Color.cyan, Color.black]])
                 .font_(Font("Helvetica", 16).boldVariant)
@@ -4024,7 +4074,6 @@ AppClock.sched(0.1, {
                         if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
                     });
                 });
-
             ~playerLoopBtn = Button(~playerOverlay, Rect(220, 184, 80, 35))
                 .states_([["⟲", Color.cyan, Color.black], ["⟲", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 20).boldVariant)
@@ -4185,7 +4234,22 @@ AppClock.sched(0.1, {
             // Remove other overlays and reset their buttons
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil; 
+                ~layoutDiagramView = nil;
+                ~layoutTitleText = nil;
+                ~stereoLeftHit = nil; 
+                ~stereoRightHit = nil;
+                ~binauralLeftHit = nil;
+                ~binauralRightHit = nil;
+                ~binauralIrcamProfileLabel = nil;
+                ~binauralIrcamSelectBtn = nil;
+                if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+                ~binauralCipicProfileLabel = nil;
+                ~binauralCipicSelectBtn = nil;
+                if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            };
             if(~dimensionOverlay.notNil) { ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); };
             if(~playerOverlay.notNil) { 
                 // Save button states before removing overlay
@@ -4254,6 +4318,10 @@ AppClock.sched(0.1, {
             if(~binauralIrcamProfileLabel.notNil) { try { ~binauralIrcamProfileLabel.remove; }; ~binauralIrcamProfileLabel = nil; };
             if(~binauralIrcamSelectBtn.notNil) { try { ~binauralIrcamSelectBtn.remove; }; ~binauralIrcamSelectBtn = nil; };
             if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+            if(~binauralCipicProfileLabel.notNil) { try { ~binauralCipicProfileLabel.remove; }; ~binauralCipicProfileLabel = nil; };
+            if(~binauralCipicSelectBtn.notNil) { try { ~binauralCipicSelectBtn.remove; }; ~binauralCipicSelectBtn = nil; };
+            if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
             // Add the title as StaticText at the top, centered
@@ -4597,6 +4665,7 @@ AppClock.sched(0.1, {
                               [ (~binauralIRCAMPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ]])
                     .font_(Font("LCD 5x7 Segment Monospace", 11))
                     .focusColor_(Color.clear)
+                    .canFocus_(false)
                     .action_({
                         var layoutBounds, winWidth, winHeight, mainViewBounds, winBounds, winX, winY, cols, rows, spacing, buttonW, totalUsedW, totalUsedH, extraW, extraH, startX, startY, chooserView;
 
@@ -4697,6 +4766,101 @@ AppClock.sched(0.1, {
                 var leftEarY_c = centerY_c + 25 + 25 - moveUp_c;
                 var rightEarX_c = centerX_c + earCupOffset_c - (earCupWidth_c / 2);
                 var rightEarY_c = centerY_c + 25 + 25 - moveUp_c;
+                var labelWidth_c, dropdownWidth_c, totalWidth_c, groupStartX_c, labelX_c, dropdownX_c, buttonH_c, gridRows_c, gridSpacing_c, yPos_c;
+
+                if(~binauralCIPICIds.isNil) {
+                    ~binauralCIPICIds = [3, 8, 9, 10, 11, 12, 15, 17, 18, 19, 20, 21, 27, 28, 33, 40, 44, 48, 50, 51, 58, 59, 60, 61, 65, 119, 124, 126, 127, 131, 133, 134, 135, 137, 147, 148, 152, 153, 154, 155, 156, 158, 162, 163, 165];
+                };
+                ~binauralCIPICPendingId = ~binauralCIPICId;
+
+                gridRows_c = 8;
+                gridSpacing_c = 3;
+                buttonH_c = ((layoutBounds_c.height - 3 - (9 * gridSpacing_c)) / gridRows_c).floor;
+                labelWidth_c = 90;
+                dropdownWidth_c = 80;
+                totalWidth_c = labelWidth_c + dropdownWidth_c;
+                groupStartX_c = (320 - totalWidth_c) / 2;
+                labelX_c = groupStartX_c;
+                dropdownX_c = groupStartX_c + labelWidth_c;
+                yPos_c = 240 - 7;
+
+                ~binauralCipicProfileLabel = StaticText(~layoutOverlay, Rect(labelX_c, yPos_c, labelWidth_c, buttonH_c))
+                    .string_("PROFILE")
+                    .stringColor_(Color.cyan)
+                    .font_(Font("LCD 5x7 Segment Monospace", 13))
+                    .align_(\left)
+                    .background_(Color.clear);
+                ~binauralCipicProfileLabel.front;
+
+                ~binauralCipicSelectBtn = Button(~layoutOverlay, Rect(dropdownX_c, yPos_c, dropdownWidth_c, buttonH_c))
+                    .states_([[ (~binauralCIPICPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                              [ (~binauralCIPICPendingId.asString.padLeft(4, "0")), Color.cyan, Color.black ]])
+                    .font_(Font("LCD 5x7 Segment Monospace", 11))
+                    .focusColor_(Color.clear)
+                    .canFocus_(false)
+                    .action_({
+                        var layoutBounds_c, winWidth_c, winHeight_c, mainViewBounds_c, winBounds_c, winX_c, winY_c, cols_c, rows_c, spacing_c, buttonW_c, totalUsedW_c, totalUsedH_c, extraW_c, extraH_c, startX_c, startY_c, chooserView_c;
+
+                        if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+
+                        layoutBounds_c = ~layoutOverlay.bounds;
+                        winWidth_c = layoutBounds_c.width - 3;
+                        winHeight_c = layoutBounds_c.height - 3;
+                        mainViewBounds_c = mainView.bounds;
+                        winBounds_c = win.bounds;
+                        winX_c = winBounds_c.left + mainViewBounds_c.left + layoutBounds_c.left + 2;
+                        winY_c = winBounds_c.top + mainViewBounds_c.top + layoutBounds_c.top - 8;
+                        cols_c = 6; rows_c = 8; spacing_c = 3;
+                        buttonW_c = ((winWidth_c - (7 * spacing_c)) / cols_c).floor;
+                        buttonH_c = ((winHeight_c - (9 * spacing_c)) / rows_c).floor;
+                        totalUsedW_c = (cols_c * buttonW_c) + ((cols_c - 1) * spacing_c);
+                        totalUsedH_c = (rows_c * buttonH_c) + ((rows_c - 1) * spacing_c);
+                        extraW_c = (winWidth_c - totalUsedW_c) / 2;
+                        extraH_c = (winHeight_c - totalUsedH_c) / 2;
+                        startX_c = extraW_c.floor;
+                        startY_c = extraH_c.floor;
+
+                        ~binauralCipicChooserWin = Window.new("CIPIC IDs", Rect(winX_c, winY_c, winWidth_c, winHeight_c), border: false)
+                            .alwaysOnTop_(true);
+                        chooserView_c = CompositeView(~binauralCipicChooserWin, ~binauralCipicChooserWin.view.bounds)
+                            .background_(Color.black);
+
+                        ~binauralCIPICIds.do({ |id, i|
+                            var r = (i / cols_c).floor;
+                            var c = i % cols_c;
+                            if(r < rows_c) {
+                                var x = startX_c + (c * (buttonW_c + spacing_c));
+                                var y = startY_c + (r * (buttonH_c + spacing_c));
+                                var isLoaded = (id == ~binauralCIPICId);
+                                Button(chooserView_c, Rect(x, y, buttonW_c, buttonH_c))
+                                    .states_([[id.asString.padLeft(4, "0"), Color.cyan, Color.black],
+                                              [id.asString.padLeft(4, "0"), Color.black, Color.cyan]])
+                                    .value_(if(isLoaded, 1, 0))
+                                    .font_(Font("LCD 5x7 Segment Monospace", 11))
+                                    .focusColor_(Color.clear)
+                                    .canFocus_(false)
+                                    .action_({
+                                        ~binauralCIPICId = id;
+                                        ~binauralCIPICPendingId = id;
+                                        if(~binauralCipicSelectBtn.notNil) {
+                                            ~binauralCipicSelectBtn.states_([[ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ],
+                                                                              [ (id.asString.padLeft(4, "0")), Color.cyan, Color.black ]]);
+                                        };
+                                        if(~binauralCipicChooserWin.notNil) {
+                                            ~binauralCipicChooserWin.close;
+                                            ~binauralCipicChooserWin = nil;
+                                        };
+                                        ~saveSynthParams.value();
+                                        ~initAudioEngine.value();
+                                    });
+                            };
+                        });
+
+                        if(~binauralCipicChooserWin.notNil) {
+                            ~binauralCipicChooserWin.front;
+                        };
+                    });
+                ~binauralCipicSelectBtn.front;
 
                 if(~binauralLeftHit.notNil) { try { ~binauralLeftHit.remove; }; ~binauralLeftHit = nil; };
                 if(~binauralRightHit.notNil) { try { ~binauralRightHit.remove; }; ~binauralRightHit = nil; };
@@ -4725,13 +4889,19 @@ AppClock.sched(0.1, {
             if(~layoutOverlay.notNil) { 
                 ~layoutOverlay.remove; 
                 ~layoutOverlay = nil; 
+                ~layoutDiagramView = nil;
+                ~layoutTitleText = nil;
+                ~stereoLeftHit = nil; 
+                ~stereoRightHit = nil;
+                ~binauralLeftHit = nil;
+                ~binauralRightHit = nil;
+                ~binauralIrcamProfileLabel = nil;
+                ~binauralIrcamSelectBtn = nil;
+                if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+                ~binauralCipicProfileLabel = nil;
+                ~binauralCipicSelectBtn = nil;
+                if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
             };
-            ~layoutDiagramView = nil;
-            ~layoutTitleText = nil;
-            ~stereoLeftHit = nil; 
-            ~stereoRightHit = nil;
-            ~binauralLeftHit = nil;
-            ~binauralRightHit = nil;
         }
     });
 // --- DIMENSION / MAPLIN OVERLAY BUTTON ---
@@ -4753,7 +4923,22 @@ AppClock.sched(0.1, {
                 ~saveAmbienceState.value();
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
-            if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
+            if(~layoutOverlay.notNil) { 
+                ~layoutOverlay.remove; 
+                ~layoutOverlay = nil;
+                ~layoutDiagramView = nil;
+                ~layoutTitleText = nil;
+                ~stereoLeftHit = nil; 
+                ~stereoRightHit = nil;
+                ~binauralLeftHit = nil;
+                ~binauralRightHit = nil;
+                ~binauralIrcamProfileLabel = nil;
+                ~binauralIrcamSelectBtn = nil;
+                if(~binauralIrcamChooserWin.notNil) { try { ~binauralIrcamChooserWin.close; }; ~binauralIrcamChooserWin = nil; };
+                ~binauralCipicProfileLabel = nil;
+                ~binauralCipicSelectBtn = nil;
+                if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            };
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
