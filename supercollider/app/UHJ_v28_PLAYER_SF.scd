@@ -196,7 +196,7 @@ thisProcess.platform.name.postln;
 ]);
 
 // --- Dimension processing state preservation variables ---
-~dimensionActive = 0;  // Default OFF (1 = active, 0 = bypass)
+~dimensionActive = 1;  // Default ON (1 = active, 0 = bypass)
 ~dimensionState = Dictionary.newFrom([
     \sliderValues, [0.0, 0.5, 0.5],  // width, widthHPF (normalized), outputTrim (normalized 0-1)
     \presetIndex, 0   // Default preset index
