@@ -633,9 +633,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
         }, { name });
     });
 };
-
 // Thin cyan border first, then file list above it (to keep list clickable)
-
 // Up/Down buttons flanking the file list vertically
 // Up button: full width of file picker, positioned higher due to single menu
 ~trackUpBtn = Button(mainView, Rect(28, 169, 140, 29))
@@ -1181,7 +1179,6 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     
     decoderItems;
 };
-
 // Decoder menu (Output format selection) - dynamically built
 ~dmenu = EZPopUpMenu.new(
     mainView,
@@ -1352,7 +1349,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var tryBoot;
     var needReboot;
     var dimVals, dimWidth, dimWidthHPF, dimTrim;
-    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix;
+    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE));
     tryBoot = {
@@ -1364,6 +1361,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                 s.options.memSize = 65536;
                 s.options.numOutputBusChannels = outputs;
                 s.options.numInputBusChannels = inputs;
+                s.options.device = "UHJ"; // Use UHJ aggregate device on macOS during development
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
@@ -1419,7 +1417,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70|
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
@@ -1501,6 +1499,12 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
+                        if(outputs == 2, {
+                            out = [
+                                out[0] * lOn,
+                                out[1] * rOn
+                            ];
+                        });
                         if(outputs == 4, {
                             // --- Q-PANNER LOGIC (Balance2) ---
                             // out[0]=LF, out[1]=FR, out[2]=RL, out[3]=RR
@@ -1585,6 +1589,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     dimWidth = (dimVals[0] ? 0.0) * 0.70;
                     dimWidthHPF = (dimVals[1] ? 0.5).linlin(0, 1, 80, 400);
                     dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
+                    leftOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
+                    rightOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
                     zsAmount = (ambienceVals[0] ? 0.0) * 100;
                     zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
                     zsTrim = (zsynthVals[2] ? 0.5).linlin(0, 1, -12, 12);
@@ -1609,7 +1615,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \zsynthHeightSource, zsSource,
                         \zsynthAmbienceSize, zsSize,
                         \zsynthAmbienceDampening, zsDamp,
-                        \zsynthAmbienceMix, zsMix
+                        \zsynthAmbienceMix, zsMix,
+                        \lOn, leftOnState,
+                        \rOn, rightOnState
                     ]);
                     // Load first track from file list (if available) but don't start playing
                     { 
@@ -1663,6 +1671,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.options.memSize = 65536;
                     s.options.numOutputBusChannels = outputs;
                     s.options.numInputBusChannels = inputs;
+                    s.options.device = "UHJ"; // Use UHJ aggregate device on macOS during development
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
@@ -1712,7 +1721,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, lOn = 1, rOn = 1|
                             var out, src, trans, encode, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                             // Audio source from SFPlayer bus - variable channels based on encoder
                             src = In.ar(~playerBus.index, inputs);
@@ -1727,9 +1736,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 eqChannel = BPeakEQ.ar(eqChannel, 160, 1, eq2);     // Band 2
                                 eqChannel = BPeakEQ.ar(eqChannel, 400, 1, eq3);     // Band 3
                                 eqChannel = BPeakEQ.ar(eqChannel, 1000, 1, eq4);    // Band 4
-                                eqChannel = BPeakEQ.ar(eqChannel, 2500, 1, eq5);    // Band 5
-                                eqChannel = BPeakEQ.ar(eqChannel, 6400, 1, eq6);    // Band 6
-                                eqChannel = BPeakEQ.ar(eqChannel, 12000, 1, eq7);   // Band 7
+                                eqChannel = BPeakEQ.ar(eqChannel, 2500, 1, eq5);     // Band 5
+                                eqChannel = BPeakEQ.ar(eqChannel, 6400, 1, eq6);     // Band 6
+                                eqChannel = BPeakEQ.ar(eqChannel, 12000, 1, eq7);    // Band 7
                                 eqChannel;
                             };
                             
@@ -1770,6 +1779,12 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
+                            if(outputs == 2, {
+                                out = [
+                                    out[0] * lOn,
+                                    out[1] * rOn
+                                ];
+                            });
                             if(outputs == 4, {
                                 // --- Q-PANNER LOGIC (Balance2) ---
                                 // out[0]=LF, out[1]=FR, out[2]=RL, out[3]=RR
@@ -1850,6 +1865,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         dimWidth = (dimVals[0] ? 0.0) * 0.70;
                         dimWidthHPF = (dimVals[1] ? 0.5).linlin(0, 1, 80, 400);
                         dimTrim = (dimVals[2] ? 0.5).linlin(0, 1, -6, 6);
+                        leftOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
+                        rightOnState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
 
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -1860,7 +1877,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             \dimensionWidth, dimWidth,
                             \dimensionWidthHPF, dimWidthHPF,
                             \dimensionOutputTrim, dimTrim,
-                            \dimensionActive, ~dimensionActive ? 0]);
+                            \dimensionActive, ~dimensionActive ? 0,
+                            \lOn, leftOnState,
+                            \rOn, rightOnState]);
                         
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
@@ -2190,7 +2209,6 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
-
 // --- BLUETOOTH PAIR BUTTON ---
 ~pairingInProgress = false;  // Flag to prevent multiple clicks
 ~headtrackPairBtn = Button(mainView, Rect(742, 142, 40, 20))
@@ -2783,8 +2801,6 @@ AppClock.sched(0.1, {
     
     nil; // Don't repeat
 });
-
-
 // --- Overlay Buttons (EQ, AMBIENCE, LAYOUT) below meter area ---
 ~eqBtn = Button(mainView, Rect(220, 410, 96, 35))
     .states_([ ["EQ", Color.cyan, Color.black], ["EQ", Color.black, Color.cyan] ])
@@ -3413,7 +3429,6 @@ AppClock.sched(0.1, {
         };
     };
 };
-
 // --- Synth Parameter State Management (for encoder/decoder changes) ---
 ~saveSynthParams = {
     var currentEqValues, currentAmbienceValues;
@@ -3516,6 +3531,12 @@ AppClock.sched(0.1, {
             \dimensionActive, ~dimensionActive ? 0
         );
         ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 0)).postln;
+    };
+    if(~synth.notNil) {
+        var leftState, rightState;
+        leftState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
+        rightState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
+        ~synth.set(\lOn, leftState, \rOn, rightState);
     };
 };
 
@@ -3792,7 +3813,6 @@ AppClock.sched(0.1, {
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
         }
     });
-
 // PLAYER button - aligned with left edge of picker windows
 ~playerBtn = Button(mainView, Rect(28, 410, 96, 35))
     .states_([["PLAYER", Color.cyan, Color.black], ["PLAYER", Color.black, Color.cyan]])
@@ -4190,11 +4210,11 @@ AppClock.sched(0.1, {
             };
         }
     });
-
 ~layoutBtn = Button(mainView, Rect(508, 410, 100, 35))
     .states_([["LAYOUT", Color.cyan, Color.black], ["LAYOUT", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
+    .canFocus_(false)
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
         if(btn.value == 1) {
@@ -4649,7 +4669,7 @@ AppClock.sched(0.1, {
                     .mouseDownAction_({ |view, x, y, mod, button, count|
                         var newState = 1 - (~binauralState[\lOn] ? 1);
                         ~binauralState[\lOn] = newState;
-                        if(~synth.notNil) { ~synth.set(\binauralLeftOn, newState); };
+                        if(~synth.notNil) { ~synth.set(\lOn, newState); };
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~binauralLeftHit.front;
@@ -4659,7 +4679,7 @@ AppClock.sched(0.1, {
                     .mouseDownAction_({ |view, x, y, mod, button, count|
                         var newState = 1 - (~binauralState[\rOn] ? 1);
                         ~binauralState[\rOn] = newState;
-                        if(~synth.notNil) { ~synth.set(\binauralRightOn, newState); };
+                        if(~synth.notNil) { ~synth.set(\rOn, newState); };
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~binauralRightHit.front;
@@ -4686,7 +4706,7 @@ AppClock.sched(0.1, {
                     .mouseDownAction_({ |view, x, y, mod, button, count|
                         var newState = 1 - (~binauralState[\lOn] ? 1);
                         ~binauralState[\lOn] = newState;
-                        if(~synth.notNil) { ~synth.set(\binauralLeftOn, newState); };
+                        if(~synth.notNil) { ~synth.set(\lOn, newState); };
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~binauralLeftHit.front;
@@ -4696,7 +4716,7 @@ AppClock.sched(0.1, {
                     .mouseDownAction_({ |view, x, y, mod, button, count|
                         var newState = 1 - (~binauralState[\rOn] ? 1);
                         ~binauralState[\rOn] = newState;
-                        if(~synth.notNil) { ~synth.set(\binauralRightOn, newState); };
+                        if(~synth.notNil) { ~synth.set(\rOn, newState); };
                         if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
                     });
                 ~binauralRightHit.front;
@@ -4714,12 +4734,12 @@ AppClock.sched(0.1, {
             ~binauralRightHit = nil;
         }
     });
-
 // --- DIMENSION / MAPLIN OVERLAY BUTTON ---
 ~dimensionBtn = Button(mainView, Rect(316, 410, 96, 35))
     .states_([["DIMENSION", Color.cyan, Color.black], ["DIMENSION", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
     .focusColor_(Color.clear)
+    .canFocus_(false)
     .action_({ |btn|
         var dimKnobSize, dimKnobY, dimLabelY, dimValueY;
         var maplinKnobSize, maplinKnobY, maplinLabelY, maplinValueY, maplinSavedVals;
