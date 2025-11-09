@@ -11,21 +11,25 @@ var win, mainView,
     voltmp, cond, sndbuf, synth, inputs, outputs, configKeyD, configKeyE,
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
-~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~maplinOverlay = nil;
-~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~maplinBtn = nil;
+~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~dimensionOverlay = nil;
+~layoutTitleText = nil;
+~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~dimensionBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
 // --- Maplin overlay variables ---
 ~maplinSurroundKnob = nil; ~maplinEffectKnob = nil; ~maplinDelayKnob = nil; ~maplinActiveBtn = nil;
 ~maplinSurroundValue = nil; ~maplinEffectValue = nil; ~maplinDelayValue = nil;
+// --- Dimension overlay variables ---
+~dimensionWidthKnob = nil; ~dimensionWidthHPFKnob = nil; ~dimensionTrimKnob = nil;
+~dimensionWidthValue = nil; ~dimensionWidthHPFValue = nil; ~dimensionTrimValue = nil;
+~dimensionPresetMenu = nil; ~dimensionPresetNames = nil; ~dimensionPresetDict = nil;
+~dimensionRowOverlay = nil; ~maplinRowOverlay = nil;
 // --- Headtracker overlays ---
 ~knobOverlay = nil; ~htBtnOverlay = nil; ~htResetOverlay = nil; ~htPairOverlay = nil;                                                                                                                                                                                                                                                                                                                
 // --- Headtracker pairing button reference ---
 ~headtrackPairBtn = nil;
 // --- Headtracker MAC address (detected at startup) ---
 ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
-// --- Maplin button overlay --- grep hid, i get uhid 4
-~maplinBtnOverlay = nil;
 // --- Power button state ---
 ~powerBtnPressed = false;
 // --- Player button state storage ---
@@ -906,8 +910,8 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                 usbEntries.do { |entry|
                     folders = folders.add(entry.folderName.asString.toUpper);
                 };
+            });
         });
-    });
     
     folders;
 };
@@ -1068,36 +1072,39 @@ StaticText(mainView, Rect(346, 10, 154, 28))
             ("Updated maplinMode to: " ++ if(configKeyE == \maplin, 1, 0)).postln;
         };
         
-        // Show/hide SM-333 button overlay based on encoder selection
-        if(~maplinBtn.notNil) {
             if(configKeyE == \maplin) {
-                // Remove overlay to enable button
-                ("Enabling SM-333 button for MAPLIN mode").postln;
-                if(~maplinBtnOverlay.notNil) {
-                    ~maplinBtnOverlay.remove;
-                    ~maplinBtnOverlay = nil;
-                    ("SM-333 button overlay removed").postln;
-                };
-            } {
-                // Close maplin overlay if it's open when switching away from maplin encoder
-                ("Disabling SM-333 button for non-MAPLIN mode").postln;
-                if(~maplinOverlay.notNil) {
-                    ~saveMaplinState.value();
-                    ~maplinOverlay.remove;
-                    ~maplinOverlay = nil;
-                    ~maplinBtn.value_(0);
-                };
-                // Add overlay to dim button (only if not already present)
-                if(~maplinBtnOverlay.isNil) {
-                    ~maplinBtnOverlay = View(mainView, Rect(316, 410, 96, 35))
-                        .background_(Color.black.alpha_(0.7))
-                        .alpha_(1.0)
-                        .front;
-                    ("SM-333 button overlay added").postln;
-                };
+            ~maplinState[\active] = 1;
+            ~dimensionActive = 1;
+            ~setMaplinActive.(true);
+            if(~maplinActiveBtn.notNil) {
+                ~maplinActiveBtn.value_(0);
+            };
+            if(~synth.notNil) {
+                ~synth.set(
+                    \maplinSurround, ~maplinState[\surround] ? 0.8,
+                    \maplinEffect, ~maplinState[\effect] ? 0.8,
+                    \maplinDelay, ~maplinState[\delay] ? 0.4,
+                    \maplinActive, 1
+                );
+                ("Maplin parameters sent to synth: surround=" ++ (~maplinState[\surround] ? 0.8) ++ ", effect=" ++ (~maplinState[\effect] ? 0.8) ++ ", delay=" ++ (~maplinState[\delay] ? 0.4) ++ ", active=1").postln;
+            };
+        } {
+            if(~synth.notNil) {
+                ~synth.set(\dimensionActive, ~dimensionActive ? 1);
             };
         };
+        
         ("Selected encoder: " ++ menu.item).postln;
+
+        ~updateDimensionOverlayVisibility.value();
+        
+        if(configKeyE == \maplin and: { ~dimensionOverlay.notNil and: { ~maplinSurroundKnob.notNil } }) {
+            ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+            ~maplinEffectKnob.action.value(~maplinEffectKnob);
+            ~maplinDelayKnob.action.value(~maplinDelayKnob);
+            ("Maplin knobs updated for Maplin encoder").postln;
+        };
+
         // Save current synth parameters before reinitializing
         ~saveSynthParams.value();
         // Always call audio engine init; it will reload only if needed
@@ -2766,9 +2773,10 @@ AppClock.sched(0.1, {
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
-            if(~maplinOverlay.notNil) { 
+            if(~dimensionOverlay.notNil) { 
+                ~saveDimensionState.value();
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
-                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+                ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); 
             };
             if(~playerOverlay.notNil) { 
                 // Save button states before removing overlay
@@ -2779,7 +2787,7 @@ AppClock.sched(0.1, {
             // Set other buttons to 0 (radio group)
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
-            ~maplinBtn.value_(0);
+            ~dimensionBtn.value_(0);
             ~metersBtn.value_(0);
             ~playerBtn.value_(0);
             
@@ -3190,30 +3198,117 @@ AppClock.sched(0.1, {
     };
 };
 
+// --- Dimension State Management Functions ---
+~saveDimensionState = {
+    if(~dimensionWidthKnob.notNil) {
+        ~dimensionState[\sliderValues] = [
+            ~dimensionWidthKnob.value,
+            ~dimensionWidthHPFKnob.value,
+            ~dimensionTrimKnob.value
+        ];
+        ("Saved dimension state: " ++ ~dimensionState[\sliderValues]).postln;
+    };
+    if(~dimensionPresetMenu.notNil) {
+        ~dimensionState[\presetIndex] = ~dimensionPresetMenu.value;
+        ("Saved dimension preset index: " ++ ~dimensionState[\presetIndex]).postln;
+    };
+};
+
+~restoreDimensionState = {
+    if(~dimensionWidthKnob.notNil and: { ~dimensionState[\sliderValues].notNil }) {
+        var savedVals = ~dimensionState[\sliderValues];
+        ("Restoring dimension state: " ++ savedVals).postln;
+        if(savedVals.size >= 3) {
+            ~dimensionWidthKnob.value_(savedVals[0] ? 0.0);
+            ~dimensionWidthHPFKnob.value_(savedVals[1] ? 0.5);
+            ~dimensionTrimKnob.value_(savedVals[2] ? 0.5);
+            ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+            ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+            ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+        } {
+            if(savedVals.size >= 2) {
+                ~dimensionWidthKnob.value_(savedVals[0] ? 0.0);
+                ~dimensionWidthHPFKnob.value_(0.5);
+                ~dimensionTrimKnob.value_(savedVals[1] ? 0.5);
+                ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+                ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+                ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+            } {
+                if(savedVals.size >= 4) {
+                    ~dimensionWidthKnob.value_(savedVals[0] ? 0.0);
+                    ~dimensionWidthHPFKnob.value_(0.5);
+                    ~dimensionTrimKnob.value_(savedVals[3] ? 0.5);
+                    ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+                    ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+                    ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+                };
+            };
+        };
+    };
+    if(~dimensionPresetMenu.notNil and: { ~dimensionState[\presetIndex].notNil }) {
+        ("Restoring dimension preset index: " ++ ~dimensionState[\presetIndex]).postln;
+        ~dimensionPresetMenu.value_(~dimensionState[\presetIndex]);
+    };
+};
+
 // --- MAPLIN SM-333 CONTROL FUNCTIONS ---
 ~setMaplinSurround = { |level=0.8|
-    if(~synth.notNil) { ~synth.set(\maplinSurround, level); };
     ~maplinState[\surround] = level;
+    if(~synth.notNil and: { configKeyE == \maplin }) { 
+        ~synth.set(\maplinSurround, level);
     ("Maplin surround level: " ++ (level * 100).round(1) ++ "%").postln;
+    } {
+        if(configKeyE != \maplin) {
+            ("Maplin surround level: " ++ (level * 100).round(1) ++ "% (Maplin encoder not selected)").postln;
+        } {
+            ("Maplin surround level: " ++ (level * 100).round(1) ++ "% (synth not ready)").postln;
+        };
+    };
 };
 
 ~setMaplinEffect = { |level=0.8|
-    if(~synth.notNil) { ~synth.set(\maplinEffect, level); };
     ~maplinState[\effect] = level;
+    if(~synth.notNil and: { configKeyE == \maplin }) { 
+        ~synth.set(\maplinEffect, level);
     ("Maplin effect level: " ++ (level * 100).round(1) ++ "%").postln;
+    } {
+        if(configKeyE != \maplin) {
+            ("Maplin effect level: " ++ (level * 100).round(1) ++ "% (Maplin encoder not selected)").postln;
+        } {
+            ("Maplin effect level: " ++ (level * 100).round(1) ++ "% (synth not ready)").postln;
+        };
+    };
 };
 
 ~setMaplinDelay = { |time=0.4|
     var delayMs = time.linlin(0, 1, 5, 50);
-    if(~synth.notNil) { ~synth.set(\maplinDelay, time); };
     ~maplinState[\delay] = time;
+    if(~synth.notNil and: { configKeyE == \maplin }) { 
+        ~synth.set(\maplinDelay, time);
     ("Maplin delay time: " ++ delayMs.round(1) ++ "ms").postln;
+    } {
+        if(configKeyE != \maplin) {
+            ("Maplin delay time: " ++ delayMs.round(1) ++ "ms (Maplin encoder not selected)").postln;
+        } {
+            ("Maplin delay time: " ++ delayMs.round(1) ++ "ms (synth not ready)").postln;
+        };
+    };
 };
 
 ~setMaplinActive = { |active=true|
-    if(~synth.notNil) { ~synth.set(\maplinActive, if(active, 1, 0)); };
-    ~maplinState[\active] = if(active, 1, 0);
-    ("Maplin processing: " ++ if(active, "ACTIVE", "BYPASSED")).postln;
+    var activeVal = if(active, 1, 0);
+    ~maplinState[\active] = activeVal;
+    ~dimensionActive = activeVal;
+    
+    if(~synth.notNil) {
+        if(configKeyE == \maplin) {
+            ~synth.set(\maplinActive, activeVal);
+        };
+        ~synth.set(\dimensionActive, activeVal);
+        ("Maplin & Dimension: " ++ if(active, "ACTIVE", "BYPASSED")).postln;
+    } {
+        ("Maplin & Dimension: " ++ if(active, "ACTIVE", "BYPASSED") ++ " (synth not ready)").postln;
+    };
 };
 
 // --- MAPLIN PRESET FUNCTIONS ---
@@ -3237,7 +3332,12 @@ AppClock.sched(0.1, {
         ~maplinState[\surround] = ~maplinSurroundKnob.value;
         ~maplinState[\effect] = ~maplinEffectKnob.value;
         ~maplinState[\delay] = ~maplinDelayKnob.value;
-        ("Saved Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay]).postln;
+        if(~maplinActiveBtn.notNil) {
+            var activeVal = if(~maplinActiveBtn.value == 0, 1, 0);
+            ~maplinState[\active] = activeVal;
+            ~dimensionActive = activeVal;
+        };
+        ("Saved Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay] ++ ", active=" ++ ~maplinState[\active]).postln;
     };
 };
 
@@ -3247,17 +3347,40 @@ AppClock.sched(0.1, {
         ~maplinEffectKnob.value_(~maplinState[\effect] ? 0.8);
         ~maplinDelayKnob.value_(~maplinState[\delay] ? 0.4);
         
-        // Update value displays
+        if(~maplinActiveBtn.notNil) {
+            ~maplinActiveBtn.value_(if((~dimensionActive ? 1) == 1, 0, 1));
+        };
+        
         ~maplinSurroundValue.string_((~maplinState[\surround] * 100).round(1).asString ++ "%");
         ~maplinEffectValue.string_((~maplinState[\effect] * 100).round(1).asString ++ "%");
         ~maplinDelayValue.string_((~maplinState[\delay].linlin(0, 1, 5, 50).round(1).asString ++ " ms"));
         
-        // Trigger actions to update synth
         if(~maplinSurroundKnob.action.notNil) { ~maplinSurroundKnob.action.value(~maplinSurroundKnob); };
         if(~maplinEffectKnob.action.notNil) { ~maplinEffectKnob.action.value(~maplinEffectKnob); };
         if(~maplinDelayKnob.action.notNil) { ~maplinDelayKnob.action.value(~maplinDelayKnob); };
+        if(~maplinActiveBtn.notNil) { ~maplinActiveBtn.action.value(~maplinActiveBtn); };
         
-        ("Restored Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay]).postln;
+        ("Restored Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay] ++ ", active=" ++ ~maplinState[\active]).postln;
+    };
+};
+
+// --- Dimension overlay visibility helper ---
+~updateDimensionOverlayVisibility = {
+    if(~dimensionOverlay.notNil) {
+        if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
+        if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
+        
+        if(configKeyE == \maplin) {
+            ~dimensionRowOverlay = View(~dimensionOverlay, Rect(2, 28, 316, 110))
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
+        } {
+            ~maplinRowOverlay = View(~dimensionOverlay, Rect(2, 118, 316, 103))
+                .background_(Color.black.alpha_(0.7))
+                .alpha_(1.0)
+                .front;
+        };
     };
 };
 
@@ -3431,9 +3554,10 @@ AppClock.sched(0.1, {
                 ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
-            if(~maplinOverlay.notNil) { 
+            if(~dimensionOverlay.notNil) { 
+                ~saveDimensionState.value();
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
-                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+                ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); 
             };
             if(~playerOverlay.notNil) { 
                 // Save button states before removing overlay
@@ -3444,7 +3568,7 @@ AppClock.sched(0.1, {
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~layoutBtn.value_(0);
-            ~maplinBtn.value_(0);
+            ~dimensionBtn.value_(0);
             ~metersBtn.value_(0);
             ~playerBtn.value_(0);
             
@@ -3622,15 +3746,16 @@ AppClock.sched(0.1, {
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
-            if(~maplinOverlay.notNil) { 
+            if(~dimensionOverlay.notNil) { 
+                ~saveDimensionState.value();
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
-                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+                ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); 
             };
             // Set other buttons to 0 (radio group) - only if they exist
             if(~eqBtn.notNil, { ~eqBtn.value_(0); });
             if(~ambienceBtn.notNil, { ~ambienceBtn.value_(0); });
             if(~layoutBtn.notNil, { ~layoutBtn.value_(0); });
-            if(~maplinBtn.notNil, { ~maplinBtn.value_(0); });
+            if(~dimensionBtn.notNil, { ~dimensionBtn.value_(0); });
             if(~metersBtn.notNil, { ~metersBtn.value_(0); });
             
             // Remove meters overlay when player is active
@@ -3714,9 +3839,9 @@ AppClock.sched(0.1, {
                                         Rect(0, 0, fallbackImage.width, fallbackImage.height),
                                         0
                                     );
-                                }, {
-                                    Pen.color = Color.cyan;
-                                    Pen.stringAtPoint("NO ART", Point(85, 100));
+                        }, {
+                            Pen.color = Color.cyan;
+                            Pen.stringAtPoint("NO ART", Point(85, 100));
                                 });
                             } { |error|
                                 Pen.color = Color.cyan;
@@ -3976,7 +4101,7 @@ AppClock.sched(0.1, {
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
-            if(~maplinOverlay.notNil) { ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); };
+            if(~dimensionOverlay.notNil) { ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); };
             if(~playerOverlay.notNil) { 
                 // Save button states before removing overlay
                 if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
@@ -4017,14 +4142,15 @@ AppClock.sched(0.1, {
                 ~saveAmbienceState.value(); // Save state before removing ambience overlay
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
-            if(~maplinOverlay.notNil) { 
+            if(~dimensionOverlay.notNil) { 
+                ~saveDimensionState.value();
                 ~saveMaplinState.value(); // Save state before removing maplin overlay
-                ~maplinOverlay.remove; ~maplinOverlay = nil; ~maplinBtn.value_(0); 
+                ~dimensionOverlay.remove; ~dimensionOverlay = nil; ~dimensionBtn.value_(0); 
             };
             // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
-            ~maplinBtn.value_(0);
+            ~dimensionBtn.value_(0);
             ~metersBtn.value_(0);
             ~playerBtn.value_(0);
             
@@ -4108,7 +4234,7 @@ AppClock.sched(0.1, {
                                 Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
                                 Pen.stringAtPoint("1", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
                             }, {
-                                Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                            Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
                                 Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
                                 Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
                                 Pen.stringAtPoint("1", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
@@ -4126,7 +4252,7 @@ AppClock.sched(0.1, {
                                 Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
                                 Pen.stringAtPoint("2", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
                             }, {
-                                Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
+                            Pen.color = Color.black; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.fill;
                                 Pen.color = Color.cyan; Pen.width = 2; Pen.addRect(Rect(0, 0, speakerWidth, speakerHeight)); Pen.stroke;
                                 Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, speakerWidth - 1, speakerHeight - 1), 2, 2); Pen.stroke;
                                 Pen.stringAtPoint("2", Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
@@ -4524,198 +4650,260 @@ AppClock.sched(0.1, {
         }
     });
 
-// --- MAPLIN SM-333 OVERLAY BUTTON ---
-~maplinBtn = Button(mainView, Rect(316, 410, 96, 35))
-    .states_([["SM-333", Color.cyan, Color.black], ["SM-333", Color.black, Color.cyan]])
+// --- DIMENSION / MAPLIN OVERLAY BUTTON ---
+~dimensionBtn = Button(mainView, Rect(316, 410, 96, 35))
+    .states_([["DIMENSION", Color.cyan, Color.black], ["DIMENSION", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 13))
+    .focusColor_(Color.clear)
     .action_({ |btn|
+        var dimKnobSize, dimKnobY, dimLabelY, dimValueY;
+        var maplinKnobSize, maplinKnobY, maplinLabelY, maplinValueY, maplinSavedVals;
+        var savedVals;
         if(btn.value == 1) {
-            // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { 
-                ~saveEqState.value(); // Save state before removing EQ overlay
+                ~saveEqState.value();
                 ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); 
             };
             if(~ambienceOverlay.notNil) { 
-                ~saveAmbienceState.value(); // Save state before removing ambience overlay
+                ~saveAmbienceState.value();
                 ~ambienceOverlay.remove; ~ambienceOverlay = nil; ~ambienceBtn.value_(0); 
             };
             if(~layoutOverlay.notNil) { ~layoutOverlay.remove; ~layoutOverlay = nil; ~layoutBtn.value_(0); };
-            // Set other buttons to 0 (radio group)
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
-            ~metersBtn.value_(0);
-            ~playerBtn.value_(0);
             
-            // Remove meters overlay when SM-333 is active
             if(~metersOverlay.notNil) { 
                 ~metersOverlay.remove; ~metersOverlay = nil; 
             };
 
-            // Create Maplin overlay
-            ~maplinOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
+            ~dimensionOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
 
-            // Border
-            UserView(~maplinOverlay, Rect(0, 0, 320, 275))
+            UserView(~dimensionOverlay, Rect(0, 0, 320, 275))
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.white;
+                    Pen.color = Color.cyan;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
 
-            // Title
-            StaticText(~maplinOverlay, Rect(10, 5, 200, 22))
-                .string_("MAPLIN SM-333")
-                .align_(\left)
+            dimKnobSize = 60;
+            dimKnobY = 32; dimLabelY = 10; dimValueY = 97;
+            
+            savedVals = ~dimensionState[\sliderValues] ? [0.0, 0.5, 0.5];
+            
+            StaticText(~dimensionOverlay, Rect(35, dimLabelY, dimKnobSize, 16))
+                .string_("WIDTH")
+                .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13).boldVariant)
+                .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
 
-            // Labels above knobs
-            StaticText(~maplinOverlay, Rect(18, 80, 80, 20))
+            StaticText(~dimensionOverlay, Rect(130, dimLabelY, dimKnobSize, 16))
+                .string_("W HPF")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 11).boldVariant)
+                .background_(Color.clear);
+            
+            StaticText(~dimensionOverlay, Rect(225, dimLabelY, dimKnobSize, 16))
+                .string_("TRIM")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 11).boldVariant)
+                .background_(Color.clear);
+            
+            ~dimensionWidthKnob = Knob(~dimensionOverlay, Rect(35, dimKnobY, dimKnobSize, dimKnobSize))
+                .value_(savedVals[0])
+                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .action_({ |knob| 
+                    var val = knob.value * 0.70;
+                    ~dimensionWidthValue.string_(val.round(0.01).asString);
+                    ~dimensionState[\sliderValues][0] = knob.value;
+                    if(~synth.notNil) { ~synth.set(\dimensionWidth, val); };
+                });
+            
+            ~dimensionWidthHPFKnob = Knob(~dimensionOverlay, Rect(130, dimKnobY, dimKnobSize, dimKnobSize))
+                .value_(savedVals[1])
+                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .action_({ |knob| 
+                    var val = knob.value.linlin(0, 1, 80, 400);
+                    ~dimensionWidthHPFValue.string_(val.round(1).asString ++ "Hz");
+                    ~dimensionState[\sliderValues][1] = knob.value;
+                    if(~synth.notNil) { ~synth.set(\dimensionWidthHPF, val); };
+                });
+            ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(225, dimKnobY, dimKnobSize, dimKnobSize))
+                .value_(savedVals[2])
+                .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .action_({ |knob| 
+                    var val = knob.value.linlin(0, 1, -6, 6);
+                    var displayVal = if(val >= 0, "+" ++ val.round(0.1).asString, val.round(0.1).asString);
+                    ~dimensionTrimValue.string_(displayVal ++ "dB");
+                    ~dimensionState[\sliderValues][2] = knob.value;
+                    if(~synth.notNil) { ~synth.set(\dimensionOutputTrim, val); };
+                });
+            
+            ~dimensionWidthValue = StaticText(~dimensionOverlay, Rect(35, dimValueY - 3, dimKnobSize, 16))
+                .string_("0.00")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 11))
+                .background_(Color.clear);
+            
+            ~dimensionWidthHPFValue = StaticText(~dimensionOverlay, Rect(130, dimValueY - 3, dimKnobSize, 16))
+                .string_("180Hz")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 11))
+                .background_(Color.clear);
+            
+            ~dimensionTrimValue = StaticText(~dimensionOverlay, Rect(225, dimValueY - 3, dimKnobSize, 16))
+                .string_("0.0dB")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 11))
+                .background_(Color.clear);
+            
+            maplinKnobSize = 60; maplinKnobY = 139; maplinLabelY = 118; maplinValueY = 203;
+            maplinSavedVals = ~maplinState;
+            
+            StaticText(~dimensionOverlay, Rect(33, maplinLabelY, 64, 16))
                 .string_("SURROUND")
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13).boldVariant)
+                .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~maplinOverlay, Rect(120, 80, 80, 20))
+            StaticText(~dimensionOverlay, Rect(130, maplinLabelY, maplinKnobSize, 16))
                 .string_("EFFECT")
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13).boldVariant)
+                .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            StaticText(~maplinOverlay, Rect(222, 80, 80, 20))
+            StaticText(~dimensionOverlay, Rect(225, maplinLabelY, maplinKnobSize, 16))
                 .string_("DELAY")
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13).boldVariant)
+                .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.clear);
             
-            // Three control knobs
-            ~maplinSurroundKnob = Knob(~maplinOverlay, Rect(18, 110, 80, 80))
-                .value_(~maplinState[\surround] ? 0.8)
+            ~maplinSurroundKnob = Knob(~dimensionOverlay, Rect(35, maplinKnobY, maplinKnobSize, maplinKnobSize))
+                .value_(maplinSavedVals[\surround] ? 0.8)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
                     ~setMaplinSurround.(knob.value);
                     ~maplinSurroundValue.string_((knob.value * 100).round(1).asString ++ "%");
                 });
             
-            ~maplinEffectKnob = Knob(~maplinOverlay, Rect(120, 110, 80, 80))
-                .value_(~maplinState[\effect] ? 0.8)
+            ~maplinEffectKnob = Knob(~dimensionOverlay, Rect(130, maplinKnobY, maplinKnobSize, maplinKnobSize))
+                .value_(maplinSavedVals[\effect] ? 0.8)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
                     ~setMaplinEffect.(knob.value);
                     ~maplinEffectValue.string_((knob.value * 100).round(1).asString ++ "%");
                 });
             
-            ~maplinDelayKnob = Knob(~maplinOverlay, Rect(222, 110, 80, 80))
-                .value_(~maplinState[\delay] ? 0.4)
+            ~maplinDelayKnob = Knob(~dimensionOverlay, Rect(225, maplinKnobY, maplinKnobSize, maplinKnobSize))
+                .value_(maplinSavedVals[\delay] ? 0.4)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
                     ~setMaplinDelay.(knob.value);
                     ~maplinDelayValue.string_((knob.value.linlin(0, 1, 5, 50).round(1).asString ++ " ms"));
                 });
             
-            // Value displays below knobs
-            ~maplinSurroundValue = StaticText(~maplinOverlay, Rect(18, 200, 80, 18))
+            ~maplinSurroundValue = StaticText(~dimensionOverlay, Rect(35, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("80%")
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13))
+                .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
             
-            ~maplinEffectValue = StaticText(~maplinOverlay, Rect(120, 200, 80, 18))
+            ~maplinEffectValue = StaticText(~dimensionOverlay, Rect(130, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("80%")
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13))
+                .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
-            
-            ~maplinDelayValue = StaticText(~maplinOverlay, Rect(222, 200, 80, 18))
+            ~maplinDelayValue = StaticText(~dimensionOverlay, Rect(225, maplinValueY - 3, maplinKnobSize, 16))
                 .string_("25 ms")
                 .align_(\center)
                 .stringColor_(Color.cyan)
-                .font_(Font("Helvetica", 13))
+                .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
 
-            // On/Off button
-            ~maplinActiveBtn = Button(~maplinOverlay, Rect(18, 40, 80, 28))
+            ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+            ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+            ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+            ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+            ~maplinEffectKnob.action.value(~maplinEffectKnob);
+            ~maplinDelayKnob.action.value(~maplinDelayKnob);
+
+            ~maplinActiveBtn = Button(~dimensionOverlay, Rect(18, 230, 80, 28))
                 .states_([
                     ["ON", Color.black, Color.cyan],
-                    ["OFF", Color.cyan, Color.black]
+                    ["ON", Color.cyan, Color.black]
                 ])
                 .action_({ |button|
                     ~setMaplinActive.(button.value == 0);
                 })
                 .font_(Font("Helvetica", 11))
-                .value_(1); // Default to OFF (button state 1 = OFF)
+                .focusColor_(Color.clear)
+                .value_(if((maplinSavedVals[\active] ? 1) == 1, 0, 1));
 
-            // Preset buttons
-            Button(~maplinOverlay, Rect(120, 40, 80, 28))
-                .states_([["BALANCED", Color.cyan, Color.black]])
+            Button(~dimensionOverlay, Rect(222, 230, 80, 28))
+                .states_([["RESET", Color.cyan, Color.black]])
+                .font_(Font("Helvetica", 11))
+                .focusColor_(Color.clear)
                 .action_({
-                    ~maplinPresetBalanced.();
+                    ~dimensionWidthKnob.value_(0.0);
+                    ~dimensionWidthHPFKnob.value_(0.5);
+                    ~dimensionTrimKnob.value_(0.5);
+                    ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+                    ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+                    ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
                     ~maplinSurroundKnob.value_(0.8);
                     ~maplinEffectKnob.value_(0.8);
                     ~maplinDelayKnob.value_(0.4);
-                    ~maplinSurroundValue.string_("80%");
-                    ~maplinEffectValue.string_("80%");
-                    ~maplinDelayValue.string_("25 ms");
-                })
-                .font_(Font("Helvetica", 11))
-                .background_(Color.black);
-
-            Button(~maplinOverlay, Rect(222, 40, 80, 28))
-                .states_([["MAXIMUM", Color.cyan, Color.black]])
-                .action_({
-                    ~maplinPresetMax.();
-                    ~maplinSurroundKnob.value_(1.0);
-                    ~maplinEffectKnob.value_(1.0);
-                    ~maplinDelayKnob.value_(1.0);
-                    ~maplinSurroundValue.string_("100%");
-                    ~maplinEffectValue.string_("100%");
-                    ~maplinDelayValue.string_("50 ms");
-                })
-                .font_(Font("Helvetica", 11))
-                .background_(Color.black);
-
-            // Close button
-            Button(~maplinOverlay, Rect(222, 230, 80, 28))
-                .states_([["CLOSE", Color.cyan, Color.black]])
-                .font_(Font("Helvetica", 11))
-                .action_({
-                    ~saveMaplinState.value(); // Save state before closing
-                    ~maplinOverlay.remove;
-                    ~maplinOverlay = nil;
-                    ~maplinBtn.value_(0);
+                    if(~maplinActiveBtn.notNil) {
+                        ~maplinActiveBtn.value_(0);
+                        ~dimensionActive = 1;
+                    };
+                    ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+                    ~maplinEffectKnob.action.value(~maplinEffectKnob);
+                    ~maplinDelayKnob.action.value(~maplinDelayKnob);
+                    if(~maplinActiveBtn.notNil) {
+                        ~maplinActiveBtn.action.value(~maplinActiveBtn);
+                    };
                 });
 
-            ~maplinOverlay.front;
-            ~maplinBtn.value_(1);
+            ~dimensionOverlay.front;
+            ~dimensionBtn.value_(1);
             
-            // Restore saved state after overlay is created
+            ~restoreDimensionState.value();
             ~restoreMaplinState.value();
+            ~updateDimensionOverlayVisibility.value();
+            
+            if(configKeyE == \maplin and: { ~maplinSurroundKnob.notNil }) {
+                ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+                ~maplinEffectKnob.action.value(~maplinEffectKnob);
+                ~maplinDelayKnob.action.value(~maplinDelayKnob);
+            };
 
         } {
-            if(~maplinOverlay.notNil) {
-                ~maplinOverlay.remove;
-                ~maplinOverlay = nil;
+            if(~dimensionOverlay.notNil) {
+                ~saveDimensionState.value();
+                ~saveMaplinState.value();
+                if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
+                if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
+                ~dimensionOverlay.remove;
+                ~dimensionOverlay = nil;
+                ~dimensionBtn.value_(0);
             };
         }
     });
 
-// Set initial SM-333 button state based on current encoder
-if(configKeyE != \maplin) {
-    // Add overlay to dim button if not in maplin mode
-    ~maplinBtnOverlay = View(mainView, Rect(316, 410, 96, 35))
-        .background_(Color.black.alpha_(0.7))
-        .alpha_(1.0)
-        .front;
-};
 
 // --- OUTPUT FADER (GRAPHICAL ONLY, GUIPrototype style) ---
 StaticText(mainView, Rect(544, 40, 24, 24))
