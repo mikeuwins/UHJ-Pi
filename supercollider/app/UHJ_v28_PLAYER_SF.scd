@@ -1427,8 +1427,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
-                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1486,15 +1486,22 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             ambienceMix: zsynthAmbienceMix
                         );
                         
-                        // Ambience processing
-                        ambient = AmbiVerbSC.ar(zsynth,
+                        // Ambience processing with routing target
+                        rtAr = reverbTarget + DC.ar(0);
+                        zeroA = DC.ar(0);
+                        wetSrcW = Select.ar(rtAr, [zsynth[0], zsynth[0], zeroA]);
+                        wetSrcX = Select.ar(rtAr, [zsynth[1], zsynth[1], zeroA]);
+                        wetSrcY = Select.ar(rtAr, [zsynth[2], zsynth[2], zeroA]);
+                        wetSrcZ = Select.ar(rtAr, [zeroA,      zsynth[3], zsynth[3]]);
+                        wetSrc = [wetSrcW, wetSrcX, wetSrcY, wetSrcZ];
+                        wetOnly = AmbiVerbSC.ar(wetSrc,
                             mix: ambience,
                             preDelay: preDelay,
                             crossoverFreq: 3000,
                             lowRT: lowRT,
                             highRT: highRT,
                             dispersion: dispersion,
-                            size: \Brahmssaal, // Use a room that definitely exists in AmbiVerbSC
+                            size: \Brahmssaal,
                             modWidth: modWidth,
                             modRate: modRate,
                             coupRate: 0.5,
@@ -1504,7 +1511,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             orientation: 'flu',
                             maxPreDelay: 10,
                             feedbackSpread: 1
-                        );
+                        ) - wetSrc;
+                        wetOnly = [wetOnly[0], wetOnly[1], wetOnly[2], wetOnly[3] * (zsynthHeightSource > 0)];
+                        ambient = zsynth + wetOnly;
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         // Decode using selected decoder
@@ -1647,6 +1656,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \zsynthAmbienceSize, zsSize,
                         \zsynthAmbienceDampening, zsDamp,
                         \zsynthAmbienceMix, zsMix,
+                        \reverbTarget, if(~reverbTarget == \lower, 0, if(~reverbTarget == \height, 2, 1)),
                         \lOn, leftOnState,
                         \rOn, rightOnState,
                         \flOn, flState,
