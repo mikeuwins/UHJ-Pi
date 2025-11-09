@@ -3699,7 +3699,7 @@ AppClock.sched(0.1, {
         if(~ambienceSliders.notNil) {
             // Index mapping: 2=Reverb, 3=RDelay, 4=RSize, 5=Spread
             ~ambienceSliders[2].value_(presetData[\mix].linlin(0, 1, 0, 1)); // Reverb mix
-            ~ambienceSliders[3].value_(presetData[\preDelay].linlin(0, 0.5, 0, 1)); // RDelay
+            ~ambienceSliders[3].value_((presetData[\preDelay] ? 0.0).clip(0, 0.25).linlin(0, 0.25, 0, 1)); // RDelay (clip 0-250ms)
             baseRT = (((presetData[\lowRT] / 0.7) + (presetData[\highRT] / 1.3)) * 0.5).clip(0.5, 2.5);
             ~ambienceSliders[4].value_(baseRT.linlin(0, 1, 0, 1)); // RSize macro
             ~ambienceSliders[5].value_(presetData[\dispersion].linlin(0.1, 2, 0, 1)); // Spread
@@ -3822,7 +3822,7 @@ AppClock.sched(0.1, {
             });
 
             sliderLabels = ["Height", "HDelay", "Reverb", "RDelay", "RSize", "Spread", "Target"];
-            params = ~ambienceState[\sliderValues] ? [0.0, 0.2, 0.0, 0.2, 0.0, 0.0, 0.0];
+            params = ~ambienceState[\sliderValues] ? [0.3, 0.0, 0.0, 0.2, 0.0, 0.0, 0.0];
             ~ambienceLastMix = ~ambienceState[\lastMix] ? 0.5;
             ~ambienceSliders = List[];
             ~ambienceValues = List[];
@@ -3877,8 +3877,8 @@ AppClock.sched(0.1, {
                                     };
                                 },
                                 3, {
-                                    var pd = sl.value.linlin(0,1,0,0.5);
-                                    ~ambienceValues[i].string = (pd.round(0.01).asString ++ "s");
+                                    var pd = sl.value.linlin(0,1,0,0.25);
+                                    ~ambienceValues[i].string = ((pd * 1000).round(1).asString ++ "ms");
                                     ~synth.set(\preDelay, pd);
                                 },
                                 4, {
