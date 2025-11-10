@@ -3001,6 +3001,10 @@ AppClock.sched(0.1, {
     .canFocus_(false)
     .action_({ |btn|
         var freqs, eqWidth, sliderWidth, sliderHeight, startX, gap;
+        if(btn.value == 0) {
+            btn.value_(1);
+            btn.focus(nil);
+        };
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~ambienceOverlay.notNil) { 
@@ -3928,6 +3932,10 @@ AppClock.sched(0.1, {
     .canFocus_(false)
     .action_({ |btn|
         var params, sliderLabels, sliderWidth, sliderHeight, startX, gap, x, slider, valDisp;
+        if(btn.value == 0) {
+            btn.value_(1);
+            btn.focus(nil);
+        };
         if(btn.value == 1) {
             if(~eqOverlay.notNil) { 
                 ~saveEqState.value();
@@ -3982,7 +3990,7 @@ AppClock.sched(0.1, {
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.cyan;
+                    Pen.color = Color.white;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
@@ -4201,6 +4209,10 @@ AppClock.sched(0.1, {
     .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |btn|
+        if(btn.value == 0) {
+            btn.value_(1);
+            btn.focus(nil);
+        };
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { 
@@ -4570,6 +4582,10 @@ AppClock.sched(0.1, {
     .focusColor_(Color.clear)
     .canFocus_(false)
     .action_({ |btn|
+        if(btn.value == 0) {
+            btn.value_(1);
+            btn.focus(nil);
+        };
         if(btn.value == 1) {
             // Remove other overlays and reset their buttons
             if(~eqOverlay.notNil) { ~eqOverlay.remove; ~eqOverlay = nil; ~eqBtn.value_(0); };
@@ -4621,6 +4637,10 @@ AppClock.sched(0.1, {
     .canFocus_(false)
     .action_({ |btn|
         var currentDecoder, decoderNames, decoderName;
+        if(btn.value == 0) {
+            btn.value_(1);
+            btn.focus(nil);
+        };
         if(btn.value == 1) {
             // --- RADIO BUTTON BEHAVIOR: Only one overlay/button active at a time ---
             if(~eqOverlay.notNil) { 
@@ -6479,6 +6499,11 @@ AppClock.sched(0.1, {
         var dimKnobSize, dimKnobY, dimLabelY, dimValueY;
         var maplinKnobSize, maplinKnobY, maplinLabelY, maplinValueY, maplinSavedVals;
         var savedVals;
+        if(btn.value == 0) {
+            btn.value_(1);
+            btn.focus(nil);
+            ^nil;
+        };
         if(btn.value == 1) {
             if(~eqOverlay.notNil) { 
                 ~saveEqState.value();
@@ -6527,7 +6552,7 @@ AppClock.sched(0.1, {
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.cyan;
+                    Pen.color = Color.white;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
