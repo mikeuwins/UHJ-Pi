@@ -1359,7 +1359,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
     var tryBoot;
     var needReboot;
     var dimVals, dimWidth, dimWidthHPF, dimTrim;
-    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState, flState, frState, rlState, rrState, centerState, subState, tflState, tfrState, centerGainVal, subGainVal, heightGainVal, subLpfVal, topHpfVal;
+    var ambienceVals, zsynthVals, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, leftOnState, rightOnState, flState, frState, rlState, rrState, centerState, subState, tflState, tfrState, centerGainVal, subGainVal, heightGainVal, subLpfVal, topHpfVal, s1State, s2State, s3State, s4State, s5State, s6State, s7State, s8State;
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs)) or: (outputs != (~prevOutputs ? outputs)) or: (configKeyD != (~prevConfigKeyD ? configKeyD)) or: (configKeyE != (~prevConfigKeyE ? configKeyE)) or: (~binauralIRCAMId != (~prevBinauralIRCAMId ? ~binauralIRCAMId)) or: (~binauralCIPICId != (~prevBinauralCIPICId ? ~binauralCIPICId));
     tryBoot = {
@@ -1427,7 +1427,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
@@ -1579,14 +1579,14 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 // ATK 8.0 decoder: Anti-clockwise from front left out[0]
                                 // Map to diagram: Clockwise from front left starting at Speaker 1
                                 out = [
-                                    out[0], // Speaker 1: Front Left (FL)
-                                    out[7], // Speaker 2: Front Left Center (FLC)
-                                    out[6], // Speaker 3: Center (C)
-                                    out[5], // Speaker 4: Front Right Center (FRC)
-                                    out[4], // Speaker 5: Front Right (FR)
-                                    out[3], // Speaker 6: Rear Right Center (RRC)
-                                    out[2], // Speaker 7: Rear Right (RR)
-                                    out[1]  // Speaker 8: Rear Left Center (RLC)
+                                    out[0] * s1On, // Speaker 1: Front Left (FL)
+                                    out[7] * s2On, // Speaker 2: Front Left Center (FLC)
+                                    out[6] * s3On, // Speaker 3: Center (C)
+                                    out[5] * s4On, // Speaker 4: Front Right Center (FRC)
+                                    out[4] * s5On, // Speaker 5: Front Right (FR)
+                                    out[3] * s6On, // Speaker 6: Rear Right Center (RRC)
+                                    out[2] * s7On, // Speaker 7: Rear Right (RR)
+                                    out[1] * s8On  // Speaker 8: Rear Left Center (RLC)
                                 ];
                             });
                         });
@@ -1640,6 +1640,17 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         rlState = ~dolbyState[\rlOn] ? 1;
                         rrState = ~dolbyState[\rrOn] ? 1;
                     });
+                    s1State = 1; s2State = 1; s3State = 1; s4State = 1; s5State = 1; s6State = 1; s7State = 1; s8State = 1;
+                    if(configKeyD == \octagon, {
+                        s1State = ~octagonState[\s1On] ? 1;
+                        s2State = ~octagonState[\s2On] ? 1;
+                        s3State = ~octagonState[\s3On] ? 1;
+                        s4State = ~octagonState[\s4On] ? 1;
+                        s5State = ~octagonState[\s5On] ? 1;
+                        s6State = ~octagonState[\s6On] ? 1;
+                        s7State = ~octagonState[\s7On] ? 1;
+                        s8State = ~octagonState[\s8On] ? 1;
+                    });
                     zsAmount = (ambienceVals[0] ? 0.0) * 100;
                     zsDelay = (ambienceVals[1] ? 0.2).linlin(0, 1, 0, 30);
                     zsTrim = (zsynthVals[2] ? 0.5).linlin(0, 1, -12, 12);
@@ -1689,7 +1700,15 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \subGain, subGainVal,
                         \heightGain, heightGainVal,
                         \subLPF, subLpfVal,
-                        \topHPF, topHpfVal
+                        \topHPF, topHpfVal,
+                        \s1On, s1State,
+                        \s2On, s2State,
+                        \s3On, s3State,
+                        \s4On, s4State,
+                        \s5On, s5State,
+                        \s6On, s6State,
+                        \s7On, s7State,
+                        \s8On, s8State
                     ]);
                     // Load first track from file list (if available) but don't start playing
                     { 
@@ -1792,7 +1811,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, centerChan, subChan, heightTFL, heightTFR, lowpass;
                             // Audio source from SFPlayer bus - variable channels based on encoder
                             src = In.ar(~playerBus.index, inputs);
@@ -1910,14 +1929,14 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                     // ATK 8.0 decoder: Anti-clockwise from front left out[0]
                                     // Map to diagram: Clockwise from front left starting at Speaker 1
                                     out = [
-                                        out[0], // Speaker 1: Front Left (FL)
-                                        out[7], // Speaker 2: Front Left Center (FLC)
-                                        out[6], // Speaker 3: Center (C)
-                                        out[5], // Speaker 4: Front Right Center (FRC)
-                                        out[4], // Speaker 5: Front Right (FR)
-                                        out[3], // Speaker 6: Rear Right Center (RRC)
-                                        out[2], // Speaker 7: Rear Right (RR)
-                                        out[1]  // Speaker 8: Rear Left Center (RLC)
+                                        out[0] * s1On, // Speaker 1: Front Left (FL)
+                                        out[7] * s2On, // Speaker 2: Front Left Center (FLC)
+                                        out[6] * s3On, // Speaker 3: Center (C)
+                                        out[5] * s4On, // Speaker 4: Front Right Center (FRC)
+                                        out[4] * s5On, // Speaker 5: Front Right (FR)
+                                        out[3] * s6On, // Speaker 6: Rear Right Center (RRC)
+                                        out[2] * s7On, // Speaker 7: Rear Right (RR)
+                                        out[1] * s8On  // Speaker 8: Rear Left Center (RLC)
                                     ];
                                 });
                             });
@@ -1986,6 +2005,17 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                 heightGainVal = ~dolbyState[\heightGain] ? 0.0;
                 subLpfVal = ~dolbyState[\subLPF] ? 120;
                 topHpfVal = ~dolbyState[\topHPF] ? 180;
+                s1State = 1; s2State = 1; s3State = 1; s4State = 1; s5State = 1; s6State = 1; s7State = 1; s8State = 1;
+                if(configKeyD == \octagon, {
+                    s1State = ~octagonState[\s1On] ? 1;
+                    s2State = ~octagonState[\s2On] ? 1;
+                    s3State = ~octagonState[\s3On] ? 1;
+                    s4State = ~octagonState[\s4On] ? 1;
+                    s5State = ~octagonState[\s5On] ? 1;
+                    s6State = ~octagonState[\s6On] ? 1;
+                    s7State = ~octagonState[\s7On] ? 1;
+                    s8State = ~octagonState[\s8On] ? 1;
+                });
 
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -2018,7 +2048,15 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     \subGain, subGainVal,
                     \heightGain, heightGainVal,
                     \subLPF, subLpfVal,
-                    \topHPF, topHpfVal]);
+                    \topHPF, topHpfVal,
+                    \s1On, s1State,
+                    \s2On, s2State,
+                    \s3On, s3State,
+                    \s4On, s4State,
+                    \s5On, s5State,
+                    \s6On, s6State,
+                    \s7On, s7State,
+                    \s8On, s8State]);
                         
                         // Restore saved parameters to new synth
                         ~restoreSynthParams.value();
@@ -2968,6 +3006,38 @@ AppClock.sched(0.1, {
                 ~binauralCipicProfileLabel = nil;
                 ~binauralCipicSelectBtn = nil;
                 if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+                ~octagonS1Hit = nil;
+                ~octagonS2Hit = nil;
+                ~octagonS3Hit = nil;
+                ~octagonS4Hit = nil;
+                ~octagonS5Hit = nil;
+                ~octagonS6Hit = nil;
+                ~octagonS7Hit = nil;
+                ~octagonS8Hit = nil;
+                ~octagonS1Hit = nil;
+                ~octagonS2Hit = nil;
+                ~octagonS3Hit = nil;
+                ~octagonS4Hit = nil;
+                ~octagonS5Hit = nil;
+                ~octagonS6Hit = nil;
+                ~octagonS7Hit = nil;
+                ~octagonS8Hit = nil;
+        ~octagonS1Hit = nil;
+        ~octagonS2Hit = nil;
+        ~octagonS3Hit = nil;
+        ~octagonS4Hit = nil;
+        ~octagonS5Hit = nil;
+        ~octagonS6Hit = nil;
+        ~octagonS7Hit = nil;
+        ~octagonS8Hit = nil;
+                ~octagonS1Hit = nil;
+                ~octagonS2Hit = nil;
+                ~octagonS3Hit = nil;
+                ~octagonS4Hit = nil;
+                ~octagonS5Hit = nil;
+                ~octagonS6Hit = nil;
+                ~octagonS7Hit = nil;
+                ~octagonS8Hit = nil;
                 ~quadSquareFLHit = nil;
                 ~quadSquareFRHit = nil;
                 ~quadSquareRLHit = nil;
@@ -3714,7 +3784,7 @@ AppClock.sched(0.1, {
         ("Restored Dimension params: width=" ++ width ++ ", hpf=" ++ widthHPF ++ ", trim=" ++ trim ++ ", active=" ++ (~dimensionActive ? 1)).postln;
     };
     if(~synth.notNil) {
-        var leftState, rightState, flGate, frGate, rlGate, rrGate;
+        var leftState, rightState, flGate, frGate, rlGate, rrGate, centerGate, subGate, tflGate, tfrGate, s1Gate, s2Gate, s3Gate, s4Gate, s5Gate, s6Gate, s7Gate, s8Gate;
         leftState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\lOn] ? 1 }, { ~stereoState[\lOn] ? 1 });
         rightState = if((configKeyD == \binaural) or: { configKeyD == \binaurac }, { ~binauralState[\rOn] ? 1 }, { ~stereoState[\rOn] ? 1 });
         flGate = 1; frGate = 1; rlGate = 1; rrGate = 1;
@@ -3738,6 +3808,28 @@ AppClock.sched(0.1, {
                 });
             });
         });
+        centerGate = 1; subGate = 1; tflGate = 1; tfrGate = 1;
+        s1Gate = 1; s2Gate = 1; s3Gate = 1; s4Gate = 1; s5Gate = 1; s6Gate = 1; s7Gate = 1; s8Gate = 1;
+        if((configKeyD == \fivezero) or: { configKeyD == \fiveonetwo }) {
+            flGate = ~dolbyState[\flOn] ? 1;
+            frGate = ~dolbyState[\frOn] ? 1;
+            rlGate = ~dolbyState[\rlOn] ? 1;
+            rrGate = ~dolbyState[\rrOn] ? 1;
+            centerGate = ~dolbyState[\centerOn] ? 1;
+            subGate = ~dolbyState[\subOn] ? 1;
+            tflGate = ~dolbyState[\tflOn] ? 1;
+            tfrGate = ~dolbyState[\tfrOn] ? 1;
+        };
+        if(configKeyD == \octagon) {
+            s1Gate = ~octagonState[\s1On] ? 1;
+            s2Gate = ~octagonState[\s2On] ? 1;
+            s3Gate = ~octagonState[\s3On] ? 1;
+            s4Gate = ~octagonState[\s4On] ? 1;
+            s5Gate = ~octagonState[\s5On] ? 1;
+            s6Gate = ~octagonState[\s6On] ? 1;
+            s7Gate = ~octagonState[\s7On] ? 1;
+            s8Gate = ~octagonState[\s8On] ? 1;
+        };
         ~synth.set(\lOn, leftState, \rOn, rightState, \flOn, flGate, \frOn, frGate, \rlOn, rlGate, \rrOn, rrGate);
         if((configKeyD == \fivezero) or: { configKeyD == \fiveonetwo }) {
             ~synth.set(
@@ -3755,6 +3847,18 @@ AppClock.sched(0.1, {
                     \topHPF, ~dolbyState[\topHPF] ? 180
                 );
             });
+        };
+        if(configKeyD == \octagon) {
+            ~synth.set(
+                \s1On, s1Gate,
+                \s2On, s2Gate,
+                \s3On, s3Gate,
+                \s4On, s4Gate,
+                \s5On, s5Gate,
+                \s6On, s6Gate,
+                \s7On, s7Gate,
+                \s8On, s8Gate
+            );
         };
     };
 };
@@ -3828,6 +3932,14 @@ AppClock.sched(0.1, {
                 ~binauralCipicProfileLabel = nil;
                 ~binauralCipicSelectBtn = nil;
                 if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+                ~octagonS1Hit = nil;
+                ~octagonS2Hit = nil;
+                ~octagonS3Hit = nil;
+                ~octagonS4Hit = nil;
+                ~octagonS5Hit = nil;
+                ~octagonS6Hit = nil;
+                ~octagonS7Hit = nil;
+                ~octagonS8Hit = nil;
             };
             if(~dimensionOverlay.notNil) { 
                 ~saveDimensionState.value();
@@ -4558,6 +4670,22 @@ AppClock.sched(0.1, {
             if(~binauralCipicProfileLabel.notNil) { try { ~binauralCipicProfileLabel.remove; }; ~binauralCipicProfileLabel = nil; };
             if(~binauralCipicSelectBtn.notNil) { try { ~binauralCipicSelectBtn.remove; }; ~binauralCipicSelectBtn = nil; };
             if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+            ~octagonS1Hit = nil;
+            ~octagonS2Hit = nil;
+            ~octagonS3Hit = nil;
+            ~octagonS4Hit = nil;
+            ~octagonS5Hit = nil;
+            ~octagonS6Hit = nil;
+            ~octagonS7Hit = nil;
+            ~octagonS8Hit = nil;
+            ~octagonS1Hit = nil;
+            ~octagonS2Hit = nil;
+            ~octagonS3Hit = nil;
+            ~octagonS4Hit = nil;
+            ~octagonS5Hit = nil;
+            ~octagonS6Hit = nil;
+            ~octagonS7Hit = nil;
+            ~octagonS8Hit = nil;
 
             ~layoutOverlay = View(mainView, Rect(180, 107, 320, 275))
                 .background_(Color.black); // Remove .alpha_(0.5) for full opacity
@@ -4901,16 +5029,26 @@ AppClock.sched(0.1, {
                             });
                             Pen.color = Color.cyan; Pen.addOval(Rect(centerX - radius, centerY - radius + 25, radius * 2, radius * 2)); Pen.stroke;
                             speakerPositions.do({ |pos, i|
-                                var speakerNum = ((i + 2) % 8) + 1; // Shift so speaker 1 is at front-left position (consumer standard)
+                                var speakerNum = ((i + 2) % 8) + 1; // Shift so speaker 1 is front-left
                                 var angle = startAngle + (i * angleStep);
                                 var rotationAngle = angle + (pi / 2);
+                                var key = ("s" ++ speakerNum.asString ++ "On").asSymbol;
+                                var isOn = ~octagonState[key] ? 1;
                                 Pen.push;
                                 Pen.translate(pos.x + 10, pos.y + 10);
                                 Pen.rotate(rotationAngle);
                                 Pen.translate(-10, -10);
+                                if(isOn == 1, {
+                                    Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.fill;
+                                    Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.stroke;
+                                    Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, 19, 19), 2, 2); Pen.stroke;
+                                    Pen.stringAtPoint(speakerNum.asString, Point(7, 4), Font("Helvetica", 13).boldVariant, Color.black);
+                                }, {
                                 Pen.color = Color.black; Pen.addRect(Rect(0, 0, 20, 20)); Pen.fill;
                                 Pen.color = Color.cyan; Pen.addRect(Rect(0, 0, 20, 20)); Pen.stroke;
-                                Pen.stringAtPoint(speakerNum.asString, Point(7, 1), Font("Helvetica", 13).boldVariant, Color.cyan);
+                                    Pen.width = 1; Pen.color = Color.grey(0.6); Pen.addRoundedRect(Rect(0.5, 0.5, 19, 19), 2, 2); Pen.stroke;
+                                    Pen.stringAtPoint(speakerNum.asString, Point(7, 4), Font("Helvetica", 13).boldVariant, Color.cyan);
+                                });
                                 Pen.pop;
                             });
                             Pen.stringAtPoint("[1] FL (-22.5°), Clockwise @ 45°", Point(centerX - 84, 32), Font("Helvetica", 13), Color.cyan);
@@ -5904,6 +6042,261 @@ AppClock.sched(0.1, {
                 });
             ~quadWideRRHit.front;
         });
+        if(~dmenu.value == 8, {
+            var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180;
+            var centerX_o = 160, centerY_o = 137.5;
+            var speaker1Index, speaker2Index, speaker3Index, speaker4Index, speaker5Index, speaker6Index, speaker7Index, speaker8Index;
+            var angle1, angle2, angle3, angle4, angle5, angle6, angle7, angle8;
+            var x1, y1, x2, y2, x3, y3, x4, y4, x5, y5, x6, y6, x7, y7, x8, y8;
+            if(~octagonS1Hit.notNil) { try { ~octagonS1Hit.remove; }; ~octagonS1Hit = nil; };
+            if(~octagonS2Hit.notNil) { try { ~octagonS2Hit.remove; }; ~octagonS2Hit = nil; };
+            if(~octagonS3Hit.notNil) { try { ~octagonS3Hit.remove; }; ~octagonS3Hit = nil; };
+            if(~octagonS4Hit.notNil) { try { ~octagonS4Hit.remove; }; ~octagonS4Hit = nil; };
+            if(~octagonS5Hit.notNil) { try { ~octagonS5Hit.remove; }; ~octagonS5Hit = nil; };
+            if(~octagonS6Hit.notNil) { try { ~octagonS6Hit.remove; }; ~octagonS6Hit = nil; };
+            if(~octagonS7Hit.notNil) { try { ~octagonS7Hit.remove; }; ~octagonS7Hit = nil; };
+            if(~octagonS8Hit.notNil) { try { ~octagonS8Hit.remove; }; ~octagonS8Hit = nil; };
+
+            speaker1Index = 6;
+            angle1 = startAngle + (speaker1Index * angleStep);
+            x1 = centerX_o + (radius * cos(angle1));
+            y1 = centerY_o + (radius * sin(angle1)) + 25;
+            ~octagonS1Hit = UserView(~layoutOverlay, Rect(x1 - 10, y1 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s1On] ? 1);
+                    ~octagonState[\s1On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s1On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS1Hit.front;
+
+            speaker2Index = 7;
+            angle2 = startAngle + (speaker2Index * angleStep);
+            x2 = centerX_o + (radius * cos(angle2));
+            y2 = centerY_o + (radius * sin(angle2)) + 25;
+            ~octagonS2Hit = UserView(~layoutOverlay, Rect(x2 - 10, y2 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s2On] ? 1);
+                    ~octagonState[\s2On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s2On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS2Hit.front;
+
+            speaker3Index = 0;
+            angle3 = startAngle + (speaker3Index * angleStep);
+            x3 = centerX_o + (radius * cos(angle3));
+            y3 = centerY_o + (radius * sin(angle3)) + 25;
+            ~octagonS3Hit = UserView(~layoutOverlay, Rect(x3 - 10, y3 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s3On] ? 1);
+                    ~octagonState[\s3On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s3On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS3Hit.front;
+
+            speaker4Index = 1;
+            angle4 = startAngle + (speaker4Index * angleStep);
+            x4 = centerX_o + (radius * cos(angle4));
+            y4 = centerY_o + (radius * sin(angle4)) + 25;
+            ~octagonS4Hit = UserView(~layoutOverlay, Rect(x4 - 10, y4 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s4On] ? 1);
+                    ~octagonState[\s4On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s4On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS4Hit.front;
+
+            speaker5Index = 2;
+            angle5 = startAngle + (speaker5Index * angleStep);
+            x5 = centerX_o + (radius * cos(angle5));
+            y5 = centerY_o + (radius * sin(angle5)) + 25;
+            ~octagonS5Hit = UserView(~layoutOverlay, Rect(x5 - 10, y5 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s5On] ? 1);
+                    ~octagonState[\s5On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s5On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS5Hit.front;
+
+            speaker6Index = 3;
+            angle6 = startAngle + (speaker6Index * angleStep);
+            x6 = centerX_o + (radius * cos(angle6));
+            y6 = centerY_o + (radius * sin(angle6)) + 25;
+            ~octagonS6Hit = UserView(~layoutOverlay, Rect(x6 - 10, y6 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s6On] ? 1);
+                    ~octagonState[\s6On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s6On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS6Hit.front;
+
+            speaker7Index = 4;
+            angle7 = startAngle + (speaker7Index * angleStep);
+            x7 = centerX_o + (radius * cos(angle7));
+            y7 = centerY_o + (radius * sin(angle7)) + 25;
+            ~octagonS7Hit = UserView(~layoutOverlay, Rect(x7 - 10, y7 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s7On] ? 1);
+                    ~octagonState[\s7On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s7On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS7Hit.front;
+
+            speaker8Index = 5;
+            angle8 = startAngle + (speaker8Index * angleStep);
+            x8 = centerX_o + (radius * cos(angle8));
+            y8 = centerY_o + (radius * sin(angle8)) + 25;
+            ~octagonS8Hit = UserView(~layoutOverlay, Rect(x8 - 10, y8 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s8On] ? 1);
+                    ~octagonState[\s8On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s8On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS8Hit.front;
+        });
+        if(~dmenu.value == 8, {
+            var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180;
+            var centerX_o = 160, centerY_o = 137.5;
+            var speaker1Index, speaker2Index, speaker3Index, speaker4Index, speaker5Index, speaker6Index, speaker7Index, speaker8Index;
+            var angle1, angle2, angle3, angle4, angle5, angle6, angle7, angle8;
+            var x1, y1, x2, y2, x3, y3, x4, y4, x5, y5, x6, y6, x7, y7, x8, y8;
+            // Remove any existing octagon hit targets
+            if(~octagonS1Hit.notNil) { try { ~octagonS1Hit.remove; }; ~octagonS1Hit = nil; };
+            if(~octagonS2Hit.notNil) { try { ~octagonS2Hit.remove; }; ~octagonS2Hit = nil; };
+            if(~octagonS3Hit.notNil) { try { ~octagonS3Hit.remove; }; ~octagonS3Hit = nil; };
+            if(~octagonS4Hit.notNil) { try { ~octagonS4Hit.remove; }; ~octagonS4Hit = nil; };
+            if(~octagonS5Hit.notNil) { try { ~octagonS5Hit.remove; }; ~octagonS5Hit = nil; };
+            if(~octagonS6Hit.notNil) { try { ~octagonS6Hit.remove; }; ~octagonS6Hit = nil; };
+            if(~octagonS7Hit.notNil) { try { ~octagonS7Hit.remove; }; ~octagonS7Hit = nil; };
+            if(~octagonS8Hit.notNil) { try { ~octagonS8Hit.remove; }; ~octagonS8Hit = nil; };
+
+            speaker1Index = 6;
+            angle1 = startAngle + (speaker1Index * angleStep);
+            x1 = centerX_o + (radius * cos(angle1));
+            y1 = centerY_o + (radius * sin(angle1)) + 25;
+            ~octagonS1Hit = UserView(~layoutOverlay, Rect(x1 - 10, y1 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s1On] ? 1);
+                    ~octagonState[\s1On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s1On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS1Hit.front;
+
+            speaker2Index = 7;
+            angle2 = startAngle + (speaker2Index * angleStep);
+            x2 = centerX_o + (radius * cos(angle2));
+            y2 = centerY_o + (radius * sin(angle2)) + 25;
+            ~octagonS2Hit = UserView(~layoutOverlay, Rect(x2 - 10, y2 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s2On] ? 1);
+                    ~octagonState[\s2On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s2On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS2Hit.front;
+
+            speaker3Index = 0;
+            angle3 = startAngle + (speaker3Index * angleStep);
+            x3 = centerX_o + (radius * cos(angle3));
+            y3 = centerY_o + (radius * sin(angle3)) + 25;
+            ~octagonS3Hit = UserView(~layoutOverlay, Rect(x3 - 10, y3 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s3On] ? 1);
+                    ~octagonState[\s3On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s3On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS3Hit.front;
+
+            speaker4Index = 1;
+            angle4 = startAngle + (speaker4Index * angleStep);
+            x4 = centerX_o + (radius * cos(angle4));
+            y4 = centerY_o + (radius * sin(angle4)) + 25;
+            ~octagonS4Hit = UserView(~layoutOverlay, Rect(x4 - 10, y4 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s4On] ? 1);
+                    ~octagonState[\s4On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s4On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS4Hit.front;
+
+            speaker5Index = 2;
+            angle5 = startAngle + (speaker5Index * angleStep);
+            x5 = centerX_o + (radius * cos(angle5));
+            y5 = centerY_o + (radius * sin(angle5)) + 25;
+            ~octagonS5Hit = UserView(~layoutOverlay, Rect(x5 - 10, y5 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s5On] ? 1);
+                    ~octagonState[\s5On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s5On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS5Hit.front;
+
+            speaker6Index = 3;
+            angle6 = startAngle + (speaker6Index * angleStep);
+            x6 = centerX_o + (radius * cos(angle6));
+            y6 = centerY_o + (radius * sin(angle6)) + 25;
+            ~octagonS6Hit = UserView(~layoutOverlay, Rect(x6 - 10, y6 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s6On] ? 1);
+                    ~octagonState[\s6On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s6On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS6Hit.front;
+
+            speaker7Index = 4;
+            angle7 = startAngle + (speaker7Index * angleStep);
+            x7 = centerX_o + (radius * cos(angle7));
+            y7 = centerY_o + (radius * sin(angle7)) + 25;
+            ~octagonS7Hit = UserView(~layoutOverlay, Rect(x7 - 10, y7 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s7On] ? 1);
+                    ~octagonState[\s7On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s7On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS7Hit.front;
+
+            speaker8Index = 5;
+            angle8 = startAngle + (speaker8Index * angleStep);
+            x8 = centerX_o + (radius * cos(angle8));
+            y8 = centerY_o + (radius * sin(angle8)) + 25;
+            ~octagonS8Hit = UserView(~layoutOverlay, Rect(x8 - 10, y8 - 10, 20, 20))
+                .background_(Color.clear)
+                .mouseDownAction_({ |view, x, y, mod, button, count|
+                    var newState = 1 - (~octagonState[\s8On] ? 1);
+                    ~octagonState[\s8On] = newState;
+                    if(~synth.notNil) { ~synth.set(\s8On, newState); };
+                    if(~layoutDiagramView.notNil) { ~layoutDiagramView.refresh; };
+                });
+            ~octagonS8Hit.front;
+        });
 
             if(~dmenu.value == 2) {
                 var layoutBounds_c = ~layoutOverlay.bounds;
@@ -5953,6 +6346,14 @@ AppClock.sched(0.1, {
                         var layoutBounds_c, winWidth_c, winHeight_c, mainViewBounds_c, winBounds_c, winX_c, winY_c, cols_c, rows_c, spacing_c, buttonW_c, totalUsedW_c, totalUsedH_c, extraW_c, extraH_c, startX_c, startY_c, chooserView_c;
 
                         if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
+                        ~octagonS1Hit = nil;
+                        ~octagonS2Hit = nil;
+                        ~octagonS3Hit = nil;
+                        ~octagonS4Hit = nil;
+                        ~octagonS5Hit = nil;
+                        ~octagonS6Hit = nil;
+                        ~octagonS7Hit = nil;
+                        ~octagonS8Hit = nil;
 
                         layoutBounds_c = ~layoutOverlay.bounds;
                         winWidth_c = layoutBounds_c.width - 3;
