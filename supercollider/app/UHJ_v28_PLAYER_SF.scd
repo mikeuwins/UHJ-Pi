@@ -358,7 +358,14 @@ win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).backgr
         };
     });
 
-~initText = StaticText(~initOverlay, Rect(0, 300, 800, 80))
+StaticText(~initOverlay, Rect(0, 292, 800, 30))
+    .string_("PLAYER v1.0")
+    .font_(Font("LCD 5x7 Segment Monospace", 20))
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .background_(Color.clear);
+
+~initText = StaticText(~initOverlay, Rect(0, 330, 800, 80))
     .string_("LOADING...")
     .font_(Font("LCD 5x7 Segment Monospace", 20))
     .align_(\center)
@@ -673,30 +680,7 @@ StaticText(mainView, Rect(38, 10, 120, 28))
                     var idx = view.value ? -1;
                     if(idx >= 0 and: { ~filePaths.notNil and: { idx < ~filePaths.size } }, {
                         var path = ~filePaths[idx];
-                        if(~sfp.notNil) {
-                            ~sfp.stop;
-                            ~sfp.load(path);
-                            // Reset all timer state
-                            ~playStartTime = 0;
-                            ~pausedTime = 0;
-                            ~isPlaying = false;
-                            // Reset slider position to beginning
-                            if(~playerPositionSlider.notNil, {
-                                ~playerPositionSlider.value_(0);
-                            });
-                            // Reset button states immediately
-                            if(~playerPlayBtn.notNil, { 
-                                ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
-                            });
-                            if(~playerLoopBtn.notNil, { 
-                                ~playerLoopBtn.value_(0); // Loop off
-                            });
-                            // Force immediate timer reset and refresh
-                            { 
-                                ~updateTimeDisplay.value; 
-                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
-                            }.defer(0.1);
-                        };
+                    ~resetTransportState.value(idx, path);
                     });
                 })
     );
@@ -831,6 +815,56 @@ StaticText(mainView, Rect(38, 10, 120, 28))
     ~updateTimeDisplay.value;
     0.1; // return 0.1 second for next scheduling (10 times per second)
 });
+
+~resetTransportState = { |targetIdx, targetPath|
+    var path, index, currentSelection;
+    
+    path = targetPath;
+    index = targetIdx;
+    
+    if(path.isNil) {
+        if(index.isNil) {
+            index = if(~fileList.notNil, { ~fileList.value ? 0 }, { 0 });
+        };
+        if(~filePaths.notNil and: { ~filePaths.size > 0 }) {
+            index = (index ? 0).clip(0, ~filePaths.size - 1);
+            path = ~filePaths[index];
+            if(~fileList.notNil) {
+                currentSelection = ~fileList.value ? -1;
+                if(currentSelection != index) {
+                    ~fileList.value_(index);
+                };
+            };
+        };
+    };
+    
+    if(~sfp.notNil) {
+        ~sfp.stop;
+        if(path.notNil) {
+            ~sfp.load(path);
+        };
+        ~sfp.loop = false;
+    };
+    
+    ~playStartTime = 0;
+    ~pausedTime = 0;
+    ~isPlaying = false;
+    
+    ~savedPlayerPlayState = 1;
+    ~savedPlayerLoopState = 0;
+    
+    if(~playerPlayBtn.notNil) { ~playerPlayBtn.value_(1); };
+    if(~playerLoopBtn.notNil) { ~playerLoopBtn.value_(0); };
+    if(~playerPositionSlider.notNil) { ~playerPositionSlider.value_(0); };
+    
+    if(~playerOverlay.notNil or: { ~playerTimeDisplay.notNil }) {
+        {
+            ~updateTimeDisplay.value;
+            if(~playerOverlay.notNil) { ~playerOverlay.refresh; };
+        }.defer(0.1);
+    };
+};
+
 // ~fileList.front; // ensure on top of border
 
 // Helper to locate mounted UHJ USB volume (case-insensitive, handles spaces)
@@ -1711,26 +1745,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         \s8On, s8State
                     ]);
                     // Load first track from file list (if available) but don't start playing
-                    { 
-                        if(~filePaths.notNil and: { ~filePaths.size > 0 }, {
-                            ~sfp.stop;
-                            ~sfp.load(~filePaths[0]); // already a string
-                            ~playStartTime = 0;
-                            ~pausedTime = 0;
-                            ~isPlaying = false;
-                            // Reset button states
-                            if(~playerPlayBtn.notNil, { 
-                                ~playerPlayBtn.value_(1); // Pause state (cyan icon on black background)
-                            });
-                            if(~playerLoopBtn.notNil, { 
-                                ~playerLoopBtn.value_(0); // Loop off
-                            });
-                            if(~fileList.notNil) { ~fileList.value_(0); }; // select first track in list
-                            { 
-                                if(~playerOverlay.notNil, { ~playerOverlay.refresh; });
-                            }.defer(0.1); // Refresh button display
-                        });
-                    }.defer(0.2);
+                    { ~resetTransportState.value; }.defer(0.2);
                     
                     // Restore saved parameters to new synth
                     ~restoreSynthParams.value();
@@ -1778,6 +1793,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             ~sfp = SFPlayer.new(~filePaths[0], outbus: ~playerBus.index, server: s, autoBootServer: false, autoSetSampleRate: false, autoSetOutputChannels: false);
                             ~sfp.loop = false;
                         });
+                        ~resetTransportState.value;
                         
                         // Define encoder kernels
                         encoderDict = Dictionary.newFrom([
@@ -4404,16 +4420,14 @@ AppClock.sched(0.1, {
                 });
             ~playerLoopBtn = Button(~playerOverlay, Rect(220, 184, 80, 35))
                 .states_([["⟲", Color.cyan, Color.black], ["⟲", Color.black, Color.cyan]])
-                .font_(Font("Helvetica", 20).boldVariant)
+                .font_(Font("Helvetica", 30).boldVariant)
                 .canFocus_(false)
                 .focusColor_(Color.clear)
                 .action_({ |btn|
                     if(~sfp.notNil, {
                         if(btn.value == 0, {
-                            // Loop off (cyan icon on black background)
                             ~sfp.loop = false;
                         }, {
-                            // Loop on (black icon on cyan background)
                             ~sfp.loop = true;
                         });
                     });
@@ -4530,7 +4544,6 @@ AppClock.sched(0.1, {
                     Pen.addRect(Rect(centerX - (iconSize * 0.5), centerY - (iconSize * 0.5), iconSize, iconSize));
                     Pen.fill;
                 });
-
             
             // Update player controls when track changes
             ~updatePlayerControls = {
@@ -6491,13 +6504,16 @@ AppClock.sched(0.1, {
                 ~binauralCipicSelectBtn = nil;
                 if(~binauralCipicChooserWin.notNil) { try { ~binauralCipicChooserWin.close; }; ~binauralCipicChooserWin = nil; };
             };
+            if(~metersOverlay.notNil) {
+                ~metersOverlay.remove; ~metersOverlay = nil; ~metersBtn.value_(0);
+            };
             ~eqBtn.value_(0);
             ~ambienceBtn.value_(0);
             ~layoutBtn.value_(0);
             if(~playerOverlay.notNil) { 
                 if(~playerPlayBtn.notNil, { ~savedPlayerPlayState = ~playerPlayBtn.value; });
                 if(~playerLoopBtn.notNil, { ~savedPlayerLoopState = ~playerLoopBtn.value; });
-                ~playerOverlay.remove; ~playerOverlay = nil; 
+                ~playerOverlay.remove; ~playerOverlay = nil;
             };
             ~playerBtn.value_(0);
             
