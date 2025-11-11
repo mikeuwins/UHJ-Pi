@@ -5032,7 +5032,8 @@ HIDdef.usage( \hidTumble, { |val|
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
         win.close;
-    })
-    .touchBeginAction_({ |view, x, y, pressure, id|
-        win.close;
     });
+
+~powerBtn.tryPerform(\touchBeginAction_, { |view, x, y, pressure, id|
+    win.close;
+});
