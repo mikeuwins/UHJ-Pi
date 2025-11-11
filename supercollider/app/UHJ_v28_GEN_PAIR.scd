@@ -17,13 +17,12 @@ var win, mainView,
 ~layoutTitleText = nil;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~dimensionBtn = nil;
 ~inputOverlay = nil;
-~decoderNames = [];
-~decoderMenuDefs = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
 ~eqPresetMenu = nil; ~eqPresetNames = nil; ~eqPresetDict = nil; ~eqSliders = nil; ~eqValues = nil;
 // --- Maplin overlay variables (for Maplin encoder only) ---
 ~maplinSurroundKnob = nil; ~maplinEffectKnob = nil; ~maplinDelayKnob = nil; ~maplinActiveBtn = nil;
 ~maplinSurroundValue = nil; ~maplinEffectValue = nil; ~maplinDelayValue = nil;
+
 // --- Dimension overlay semi-transparent covers (hide controls based on encoder) ---
 ~dimensionRowOverlay = nil;  // Covers Dimension row when MAPLIN encoder selected
 ~maplinRowOverlay = nil;     // Covers Maplin row when UHJ/SUPERSTEREO/PHJ selected
@@ -165,9 +164,9 @@ var win, mainView,
 // --- Initial values for input section ---
 isUpdating = false;
 linkFaders = true;
-lastInL = 127;
-lastInR = 127;
-minIn = 0;
+lastInL = 86;
+lastInR = 86;
+minIn = 60;
 maxIn = 127;
 lastFaderGroup = \none;
 
@@ -180,13 +179,20 @@ configKeyD = \stereo;   // Default decoder: Stereo
 inputs = 2;             // Default input channels
 outputs = 2;            // Default output channels
 
-// Detect available ALSA controls (Linux launch script exposes env vars)
+// Detect mixer controls exposed by launch script (Linux)
 hasInputGain = (Platform.case(\linux, { "HAS_INPUT_GAIN".getenv ? "0" }, { "0" }) == "1");
 hasInputMute = (Platform.case(\linux, { "HAS_INPUT_MUTE".getenv ? "0" }, { "0" }) == "1");
 inputCard = Platform.case(\linux, { "INPUT_CARD".getenv ? "0" }, { "0" });
 inputControl = Platform.case(\linux, { "INPUT_CONTROL".getenv ? "" }, { "" });
 
-// ALSA helper functions for generic devices
+// Initialise ALSA mixer to 100% on boot if input gain control is available
+if(hasInputGain and: { inputControl.notEmpty }) {
+    ("amixer -c " ++ inputCard ++ " sset '" ++ inputControl ++ "' 100%").unixCmdGetStdOut;
+    lastInL = 100;
+    lastInR = 100;
+};
+
+// ALSA control helpers for generic devices
 ~setInputLevel = { |level|
     if(hasInputGain and: { inputControl.notEmpty }) {
         var percentage = (level * 100).round.asInteger;
@@ -194,6 +200,8 @@ inputControl = Platform.case(\linux, { "INPUT_CONTROL".getenv ? "" }, { "" });
         cmd.unixCmdGetStdOut;
         lastInL = percentage;
         lastInR = percentage;
+    } {
+        "DEBUG: Not calling ALSA - hasInputGain: ".post; hasInputGain.postln; " inputControl: ".post; inputControl.postln;
     };
 };
 
@@ -329,8 +337,10 @@ StaticText(mainView, Rect(48, 10, 120, 28))
     .align_(\center)
     .font_(Font("LCD 5x7 Segment Monospace", 14))
     .stringColor_(Color.cyan);
+
 StaticText(mainView, Rect(70, 40, 24, 24)).string_("L").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
 StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
+
 // Input faders with MainApp2's smart linking logic
 ~leftSlider = Slider(mainView, Rect(70, 70, 24, 300))
     .orientation_(\vertical)
@@ -401,10 +411,13 @@ StaticText(mainView, Rect(120, 40, 24, 24)).string_("R").align_(\center).stringC
             };
         };
     });
+
 ~leftValue = StaticText(mainView, Rect(65, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
 ~rightValue = StaticText(mainView, Rect(115, 380, 34, 24)).string_("-19").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
+
 // Add "dB" label between the faders, vertically aligned with the values
 StaticText(mainView, Rect(95, 380, 24, 24)).string_("dB").align_(\center).stringColor_(Color.cyan).font_(Font("Helvetica", 13));
+
 // Visual tick marks between faders using proper drawn lines
 UserView(mainView, Rect(98, 70, 18, 300))
     .background_(Color.clear)
@@ -425,9 +438,8 @@ UserView(mainView, Rect(98, 70, 18, 300))
         });
     });
 
-// Mouse up action for CLI commands (MainApp2 functionality)
+// Mouse interactions (clear focus and reset tracking)
 mainView.mouseDownAction_({
-    // Clear focus from all buttons when clicking on main view
     mainView.focus(nil);
 });
 
@@ -437,35 +449,40 @@ mainView.mouseUpAction_({
     });
 });
 
-// USB input indicator for vinyl deck
+// USB source indicator (visual only)
 ~usbBtn = Button(mainView, Rect(18, 70, 40, 20))
     .states_([["USB", Color.black, Color.cyan]])
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
     .action_({ |btn|
-        // Visual indicator only
+        // Visual feedback only
     });
 
-// RESET and MUTE buttons (GEN variant)
+// RESET, MUTE, LINK buttons without phono-control CLI
 ~resetBtn = Button(mainView, Rect(18, 310, 40, 20))
     .states_([["RESET", Color.cyan, Color.black]])
     .font_(Font("Helvetica", 10))
     .focusColor_(Color.clear)
     .action_({
         AppClock.sched(0.1, {
-            var dbVal;
-            lastInL = 127;
-            lastInR = 127;
+            var dbValue;
+            lastInL = 127; // 0dB equivalent
+            lastInR = 127; // 0dB equivalent
             ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
             ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
-            dbVal = cliToDbMaster.(lastInL);
-            ~leftValue.string = formatDbValue.(dbVal);
-            ~rightValue.string = formatDbValue.(dbVal);
+            dbValue = cliToDbMaster.(lastInL);
+            ~leftValue.string = formatDbValue.(dbValue);
+            ~rightValue.string = formatDbValue.(dbValue);
+            if(hasInputGain) {
+                if(linkFaders) {
+                    ~setInputLevel.value(~leftSlider.value);
+                } {
+                    ~setInputLevelLeftOnly.value(~leftSlider.value);
+                    ~setInputLevelRightOnly.value(~rightSlider.value);
+                };
+            };
             ~usbBtn.value_(0);
             ~muteBtn.value_(0);
-            if(hasInputGain) {
-                ~setInputLevel.value(~leftSlider.value);
-            };
         });
     });
 
@@ -478,13 +495,17 @@ mainView.mouseUpAction_({
             if(hasInputMute or: { hasInputGain }) {
                 ~setInputMute.value(true);
             } {
-                if(~synth.notNil) { ~synth.set(\amp, 0); };
+                if(~synth.notNil) {
+                    ~synth.set(\amp, 0);
+                };
             };
         } {
             if(hasInputMute or: { hasInputGain }) {
                 ~setInputMute.value(false);
             } {
-                if(~synth.notNil) { ~synth.set(\amp, voltmp); };
+                if(~synth.notNil) {
+                    ~synth.set(\amp, voltmp);
+                };
             };
         };
     });
@@ -581,54 +602,26 @@ StaticText(mainView, Rect(345, 10, 140, 28))
     layout: \horz,
     gap: 0@0
 );
-~emenu.font_(Font("LCD 5x7 Segment Monospace", 11));
+~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
 ~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
 // Decoder menu (Output format selection)
-~detectOutputChannels = ~detectOutputChannels ? {
-    var count = 0;
-    if(Platform.name == \linux) {
-        count = "jack_lsp | grep 'system:playback' | wc -l".unixCmdGetStdOut.asInteger;
-    };
-    if(count <= 0) {
-        count = if(Server.default.notNil, { Server.default.options.numOutputBusChannels }, { 0 });
-    };
-    if(count <= 0) { count = 2; };
-    ("Detected " ++ count ++ " output channels").postln;
-    count;
-};
-
-~decoderMenuDefs = ~decoderMenuDefs ? [
-    (symbol: \STEREO, label: "STEREO", minOutputs: 2, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 2; configKeyD = \stereo; }),
-    (symbol: \BINAURAL_IRCAM, label: "BINAURAL IRCAM", minOutputs: 2, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 2; configKeyD = \binaural; }),
-    (symbol: \BINAURAL_CIPIC, label: "BINAURAL CIPIC", minOutputs: 2, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 2; configKeyD = \binaurac; }),
-    (symbol: \QUAD_SQUARE, label: "QUAD SQUARE", minOutputs: 4, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 4; configKeyD = \quadsquare; }),
-    (symbol: \QUAD_NARROW, label: "QUAD NARROW", minOutputs: 4, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 4; configKeyD = \quadnarrow; }),
-    (symbol: \QUAD_WIDE, label: "QUAD WIDE", minOutputs: 4, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 4; configKeyD = \quadwide; }),
-    (symbol: \DOLBY_51, label: "DOLBY 5.1", minOutputs: 6, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 6; configKeyD = \fivezero; }),
-    (symbol: \DOLBY_512, label: "DOLBY 5.1.2", minOutputs: 8, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 8; configKeyD = \fiveonetwo; }),
-    (symbol: \OCTAGON, label: "OCTAGON", minOutputs: 8, action: { inputs = (configKeyE == \phj).if({ 4 }, { 2 }); outputs = 8; configKeyD = \octagon; })
-];
-
-~buildDecoderMenu = {
-    var availableOutputs, menuDefs;
-    availableOutputs = ~detectOutputChannels.value;
-    menuDefs = ~decoderMenuDefs.select { |def| availableOutputs >= def[\minOutputs] };
-    if(menuDefs.isEmpty) {
-        menuDefs = ~decoderMenuDefs.copyRange(0, 2);
-    };
-    ~decoderNames = menuDefs.collect { |def| def[\label] };
-    menuDefs.collect { |def|
-        def[\symbol] -> { |menu| def[\action].value(menu); }
-    };
-};
-
 ~dmenu = EZPopUpMenu.new(
     mainView,
     Rect(343, 45, 157, 35),
     "",
-    ~buildDecoderMenu.value,
+    [
+        \STEREO -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \stereo; },
+        \BINAURAL ++ " IRCAM" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaural; },
+        \BINAURAL ++ " CIPIC" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaurac; },
+        \QUAD ++ " SQUARE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadsquare; },
+        \QUAD ++ " NARROW" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadnarrow; },
+        \QUAD ++" WIDE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadwide; },
+        \DOLBY ++" 5.1" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 6; configKeyD = \fivezero; },
+        \DOLBY ++" 5.1.2" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 8; configKeyD = \fiveonetwo; },
+        \OCTAGON -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 8; configKeyD = \octagon; }
+    ],
     globalAction: { |menu|
-        var idx, decoderName, htIsOff, isBinaural, isQuad, isDolbyStandard, isDolbyHeight, isDolby, isOctagon, shouldDim;
+        var idx, decoderNames, decoderName, htIsOff, isBinaural, shouldDim;
         // --- Reset headtracking and quad panner settings on decoder change ---
         if(~headtrackBtn.notNil) { ~headtrackBtn.value_(0); };
         if(~rotateKnob.notNil) { ~rotateKnob.valueAction_(0.5); };
@@ -639,20 +632,17 @@ StaticText(mainView, Rect(345, 10, 140, 28))
             ~xyPannerPos = Point(0.5, 0.5);
         };
         idx = menu.value;
-        decoderName = (~decoderNames[idx] ? "STEREO").asString;
+        decoderNames = ["STEREO", "BINAURAL IRCAM", "BINAURAL CIPIC", "QUAD SQUARE", "QUAD NARROW", "QUAD WIDE", "DOLBY 5.1", "DOLBY 5.1.2", "OCTAGON"];
+        decoderName = decoderNames[idx];
         htIsOff = (~headtrackBtn.notNil and: { ~headtrackBtn.value == 0 });
-        isBinaural = decoderName.find("BINAURAL") == 0;
-        isQuad = decoderName.find("QUAD") == 0;
-        isDolbyStandard = decoderName == "DOLBY 5.1";
-        isDolbyHeight = decoderName == "DOLBY 5.1.2";
-        isDolby = isDolbyStandard or: { isDolbyHeight };
-        isOctagon = decoderName == "OCTAGON";
-        shouldDim = isQuad or: { isDolby or: { isOctagon } };
+        isBinaural = (idx == 1) or: { idx == 2 };
+        shouldDim = (idx == 3 or: { idx == 4 } or: { idx == 5 } or: { idx == 6 } or: { idx == 7 } or: { idx == 8 });
 
         // Update Layout overlay title if visible
         if(~layoutOverlay.notNil and: { ~layoutTitleText.notNil }) {
             ~layoutTitleText.string = decoderName;
         };
+
         // --- Overlay/enable logic for headtracker controls ---
         if(~knobOverlay.notNil) { ~knobOverlay.remove; ~knobOverlay = nil; };
         if(~htBtnOverlay.notNil) { ~htBtnOverlay.remove; ~htBtnOverlay = nil; };
@@ -697,7 +687,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                 .alpha_(1.0)
                 .front;
             
-            if(isQuad) {
+            if((idx == 3) or: { idx == 4 } or: { idx == 5 }) {
                 // Quad modes: reset button visible for panner control
                 ~headtrackResetBtn.enabled_(true);
                 // Hide knobs and ON/OFF button
@@ -710,28 +700,26 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     .alpha_(1.0)
                     .front;
             } {
-                if(isDolby or: { isOctagon }) {
-                    // Dolby 5.1/5.1.2/Octagon modes: BOTH buttons hidden (no headtracking, no panner)
-                    ~headtrackResetBtn.enabled_(false);
-                    ~htResetOverlay = View(mainView, Rect(734, 102, 51, 20)) // Cover reset button, extended 3px right
-                        .background_(Color.black.alpha_(0.7))
-                        .alpha_(1.0)
-                        .front;
-                    // Hide knobs and ON/OFF button
-                    ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
-                        .background_(Color.black.alpha_(0.7))
-                        .alpha_(1.0)
-                        .front;
-                    ~htBtnOverlay = View(mainView, Rect(734, 60, 51, 42)) // Cover only ON/OFF button (y=60-102), extended 3px right
-                        .background_(Color.black.alpha_(0.7))
-                        .alpha_(1.0)
-                        .front;
-                };
+                // Dolby 5.1/5.1.2/Octagon modes: BOTH buttons hidden (no headtracking, no panner)
+                ~headtrackResetBtn.enabled_(false);
+                ~htResetOverlay = View(mainView, Rect(734, 102, 51, 20)) // Cover reset button, extended 3px right
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+                // Hide knobs and ON/OFF button
+                ~knobOverlay = View(mainView, Rect(594, 60, 147, 224)) // width was 145, now 147
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
+                ~htBtnOverlay = View(mainView, Rect(734, 60, 51, 42)) // Cover only ON/OFF button (y=60-102), extended 3px right
+                    .background_(Color.black.alpha_(0.7))
+                    .alpha_(1.0)
+                    .front;
             };
         };
         // ... existing code ...
         // --- Quad panner logic ---
-        if(isQuad) {
+        if((idx == 3) or: { idx == 4 } or: { idx == 5 }) {
             ~xyPanner.enabled_(true);
             if(~xyPannerOverlay.notNil) { ~xyPannerOverlay.remove; ~xyPannerOverlay = nil; };
         } {
@@ -742,45 +730,42 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                 .alpha_(1.0)
                 .front;
         };
+
         // --- Update synth with correct state when switching decoders (before recreating overlay) ---
         if(~synth.notNil) {
             var currentState;
-            if(isQuad, {
+            if((idx >= 3) and: { idx <= 5 }, {
                 // Quad layouts - use appropriate quad state
-                currentState = case
-                    { decoderName == \"QUAD SQUARE\" } { ~quadSquareState }
-                    { decoderName == \"QUAD NARROW\" } { ~quadNarrowState }
-                    { decoderName == \"QUAD WIDE\" } { ~quadWideState }
-                    { true } { nil };
-                if(currentState.notNil) {
-                    ~synth.set(
-                        \\flOn, currentState[\\flOn] ? 1,
-                        \\frOn, currentState[\\frOn] ? 1,
-                        \\rlOn, currentState[\\rlOn] ? 1,
-                        \\rrOn, currentState[\\rrOn] ? 1
-                    );
-                };
+                currentState = if(idx == 3, { ~quadSquareState }, {
+                    if(idx == 4, { ~quadNarrowState }, { ~quadWideState })
+                });
+                ~synth.set(
+                    \flOn, currentState[\flOn] ? 1,
+                    \frOn, currentState[\frOn] ? 1,
+                    \rlOn, currentState[\rlOn] ? 1,
+                    \rrOn, currentState[\rrOn] ? 1
+                );
             }, {
-                if(isDolby, {
+                if((idx == 6) or: { idx == 7 }, {
                     // Dolby layouts - use dolby state
                     ~synth.set(
-                        \\flOn, ~dolbyState[\\flOn] ? 1,
-                        \\frOn, ~dolbyState[\\frOn] ? 1,
-                        \\rlOn, ~dolbyState[\\rlOn] ? 1,
-                        \\rrOn, ~dolbyState[\\rrOn] ? 1
+                        \flOn, ~dolbyState[\flOn] ? 1,
+                        \frOn, ~dolbyState[\frOn] ? 1,
+                        \rlOn, ~dolbyState[\rlOn] ? 1,
+                        \rrOn, ~dolbyState[\rrOn] ? 1
                     );
                 }, {
-                    if(isOctagon, {
+                    if(idx == 8, {
                         // Octagon layout - use octagon state
                         ~synth.set(
-                            \\s1On, ~octagonState[\\s1On] ? 1,
-                            \\s2On, ~octagonState[\\s2On] ? 1,
-                            \\s3On, ~octagonState[\\s3On] ? 1,
-                            \\s4On, ~octagonState[\\s4On] ? 1,
-                            \\s5On, ~octagonState[\\s5On] ? 1,
-                            \\s6On, ~octagonState[\\s6On] ? 1,
-                            \\s7On, ~octagonState[\\s7On] ? 1,
-                            \\s8On, ~octagonState[\\s8On] ? 1
+                            \s1On, ~octagonState[\s1On] ? 1,
+                            \s2On, ~octagonState[\s2On] ? 1,
+                            \s3On, ~octagonState[\s3On] ? 1,
+                            \s4On, ~octagonState[\s4On] ? 1,
+                            \s5On, ~octagonState[\s5On] ? 1,
+                            \s6On, ~octagonState[\s6On] ? 1,
+                            \s7On, ~octagonState[\s7On] ? 1,
+                            \s8On, ~octagonState[\s8On] ? 1
                         );
                     });
                 });
@@ -815,6 +800,11 @@ StaticText(mainView, Rect(345, 10, 140, 28))
     layout: \horz,
     gap: 0@0
 );
+// Style the menus to match the GUI prototype
+~emenu.font = Font("LCD 5x7 Segment Monospace", 11);
+~emenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
+~dmenu.font = Font("LCD 5x7 Segment Monospace", 11);
+~dmenu.setColors(Color.black, Color.cyan, Color.black, Color.cyan);
 // --- Track previous channel counts for safe decoder switching ---
 ~prevInputs = inputs;
 ~prevOutputs = outputs;
@@ -888,6 +878,9 @@ StaticText(mainView, Rect(345, 10, 140, 28))
 
                     ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
+                    // Load test audio file (same as MainApp2)
+                    // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
+                    
                     // Load spatial impulse responses for pseudo-surround convolution
                     // These would be B-format impulse responses for realistic spatialization
                     ~spatialIRs = Array.fill(4, { |i|
@@ -902,6 +895,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
+                        // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
                         // Amplitude scaling
                         src = src * \amp.kr(0.dbamp); // 0dB default
                         // --- 7-band graphic EQ before ambisonic encode ---
@@ -1028,6 +1022,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                                 subChan * subOn // SUB (Speaker 6) - Subwoofer
                             ];
                         });
+                        
                         if(outputs == 8, {
                             if(configKeyD == \fiveonetwo, {
                                 // --- UHJ-PI 5.1.2 OUTPUT MAPPING ---
@@ -1221,6 +1216,9 @@ StaticText(mainView, Rect(345, 10, 140, 28))
 
                         ("Audio engine initialized with encoder: " ++ configKeyE ++ " and decoder: " ++ configKeyD).postln;
 
+                        // Load test audio file (same as MainApp2)
+                        // sndbuf = Buffer.read(s, Atk.userSoundsDir ++ "/uhj/Sodium_Sunrise_UHJ.wav");
+
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
@@ -1229,6 +1227,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                             var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
                             src = SoundIn.ar([0,1]);
+                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
                             // Amplitude scaling
                             src = src * \amp.kr(0.dbamp); // 0dB default
                             // --- 7-band graphic EQ before ambisonic encode ---
@@ -1238,7 +1237,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                             eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
                             eqed = BPeakEQ.ar(eqed, 1000, 1, eq4);    // Band 4
                             eqed = BPeakEQ.ar(eqed, 2500, 1, eq5);    // Band 5
-                            eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);     // Band 6
+                            eqed = BPeakEQ.ar(eqed, 6400, 1, eq6);    // Band 6
                             eqed = BPeakEQ.ar(eqed, 12000, 1, eq7);   // Band 7
                             
                             // Pre-processing for maplin encoder: stereo to quad via MaplinMatrix
@@ -1420,6 +1419,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         zsSize2 = zsynthVals2[4].linlin(0, 1, 0.1, 3.0);
                         zsDamp2 = zsynthVals2[5];
                         zsMix2 = zsynthVals2[6] * 100;
+                        
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
                             \maplinEffect, ~maplinState[\effect] ? 0.8,
@@ -1609,7 +1609,7 @@ StaticText(~meterContainer, Rect(8, 110, 24, 14)) // halfway up (approx)
     .stringColor_(Color.cyan)
     .string_("dB");
 
-// Initialize input defaults for generic USB deck
+// Initialize input defaults (respecting detected mixer state)
 lastInL = lastInL ? 127;
 lastInR = lastInR ? 127;
 ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
@@ -1619,14 +1619,10 @@ dbValue = cliToDbMaster.(lastInL);
 ~leftValue.string = formatDbValue.(dbValue);
 ~rightValue.string = formatDbValue.(dbValue);
 
-// Initialize USB indicator as active
 ~usbBtn.value_(0);
+~muteBtn.value_(0);
 
-// Set encoder/decoder menu defaults
-~emenu.value_(0); // UHJ encoder
-~dmenu.value_(0); // STEREO decoder
-
-// Dim the input controls if no software gain is available
+// Dim input controls if no software gain is available
 if(hasInputGain.not) {
     ~inputOverlay = View(mainView, Rect(65, 40, 84, 365))
         .background_(Color.black.alpha_(0.7))
@@ -1640,6 +1636,10 @@ if(hasInputGain.not) {
         .background_(Color.black)
         .font_(Font("Helvetica", 9));
 };
+
+// Set encoder/decoder menu defaults
+~emenu.value_(0); // UHJ encoder
+~dmenu.value_(0); // STEREO decoder
 
 // Start audio engine with initial configuration after a short delay
 {
@@ -1679,6 +1679,7 @@ if(hasInputGain.not) {
             .mouseUpAction_({ |view, x, y, mod, button, count|
                 ~mouseActive = false;
             });
+
         ~tiltKnob = Knob360(mainView, Rect(654, 142, 60, 60), 0.5, 0.0, 1.0)
             .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
             .enabled_(false)
@@ -1706,6 +1707,7 @@ if(hasInputGain.not) {
             .mouseUpAction_({ |view, x, y, mod, button, count|
                 ~mouseActive = false;
             });
+
         ~tumbleKnob = Knob360(mainView, Rect(654, 224, 60, 60), 0.5, 0.0, 1.0)
             .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
             .enabled_(false)
@@ -1775,10 +1777,12 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     });
 // Ensure button is above overlays
 ~headtrackPairBtn.front;
+
 // --- CONTROL LABELS ---
 StaticText(mainView, Rect(594, 80, 55, 20)).string_("ROTATE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
 StaticText(mainView, Rect(594, 162, 55, 20)).string_("TILT").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
 StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).stringColor_(Color.cyan).font_(Font("Helvetica", 11));
+
 // --- ON/OFF TOGGLE BUTTON ---
 ~headtrackBtn = Button(mainView, Rect(742, 62, 40, 20))
     .states_([["OFF", Color.cyan, Color.black], ["ON", Color.black, Color.cyan]])
@@ -1787,8 +1791,7 @@ StaticText(mainView, Rect(594, 244, 55, 20)).string_("TUMBLE").align_(\right).st
     .action_({ |btn|
         var on = btn.value == 1;
         var idx = ~dmenu.value;
-        var decoderName = (~decoderNames[idx] ? "STEREO").asString;
-        var isBinaural = decoderName.find("BINAURAL") == 0;
+        var isBinaural = (idx == 1) or: { idx == 2 };
         // Remove overlays if present
         if(~knobOverlay.notNil) { ~knobOverlay.remove; ~knobOverlay = nil; };
         if(~htResetOverlay.notNil) { ~htResetOverlay.remove; ~htResetOverlay = nil; };
@@ -2109,6 +2112,7 @@ win.front;
             nil;
         };
     };
+
     // Function to parse a single preset file using AmbiVerbSC's method
     parsePresetFile = { |filePath|
         var presetData, params;
@@ -2381,6 +2385,7 @@ win.front;
         ("Maplin & Dimension: " ++ if(active, "ACTIVE", "BYPASSED") ++ " (synth not ready)").postln;
     };
 };
+
 // --- MAPLIN PRESET FUNCTIONS ---
 ~maplinPresetBalanced = {
     ~setMaplinSurround.(0.8);
@@ -2395,6 +2400,7 @@ win.front;
     ~setMaplinDelay.(1.0);  // ~50ms
     "Maplin maximum preset applied".postln;
 };
+
 // --- MAPLIN STATE MANAGEMENT FUNCTIONS ---
 ~saveMaplinState = {
     if(~maplinSurroundKnob.notNil) {
@@ -2409,6 +2415,7 @@ win.front;
         ("Saved Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay] ++ ", active=" ++ ~maplinState[\active]).postln;
     };
 };
+
 ~restoreMaplinState = {
     if(~maplinSurroundKnob.notNil) {
         ~maplinSurroundKnob.value_(~maplinState[\surround] ? 0.8);
@@ -2434,6 +2441,7 @@ win.front;
         ("Restored Maplin GUI state: surround=" ++ ~maplinState[\surround] ++ ", effect=" ++ ~maplinState[\effect] ++ ", delay=" ++ ~maplinState[\delay] ++ ", active=" ++ ~maplinState[\active]).postln;
     };
 };
+
 // --- Dimension Overlay Encoder-Based Visibility Function ---
 ~updateDimensionOverlayVisibility = {
     // Only update if Dimension overlay is open
@@ -2767,6 +2775,7 @@ win.front;
             // --- Ensure ON/OFF button and Mix slider are visually independent on open ---
             if(~ambienceOnOffBtn.notNil) { ~ambienceOnOffBtn.value_(0); };
             if(~ambienceSliders.notNil and: { ~ambienceSliders[0].notNil }) { ~ambienceSliders[0].value = 0; };
+            
             // REVERB button (gates mix; label fixed "REVERB")
             ~ambienceOnOffBtn = Button(~ambienceOverlay, Rect(120, 230, 80, 28))
                 .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
@@ -3261,7 +3270,17 @@ win.front;
                 if((~dmenu.value == 6) || (~dmenu.value == 7), 150, 320), // Dolby: narrow width; others: full width
                 22   // height
             ))
-                .string_((~decoderNames[~dmenu.value ? 0]))
+                .string_(([
+                    "STEREO",
+                    "BINAURAL IRCAM",
+                    "BINAURAL CIPIC",
+                    "QUAD SQUARE",
+                    "QUAD NARROW",
+                    "QUAD WIDE",
+                    "DOLBY 5.1",
+                    "DOLBY 5.1.2",
+                    "OCTAGON"
+                ][~dmenu.value ? 0]))
                 .align_(\center)
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 13).boldVariant)
@@ -3359,6 +3378,7 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\centerOn, newState) };
                         btn.focus(nil);
                     });
+                
                 // Speaker 6: Subwoofer (SUB)
                 ~dolbySubSquareBtn = Button(~layoutOverlay, Rect(subwooferX, subwooferY, speakerSize, speakerSize))
                     .states_([
@@ -3374,6 +3394,7 @@ win.front;
                         if(~synth.notNil) { ~synth.set(\subOn, newState) };
                         btn.focus(nil);
                     });
+                
                 // Fader controls for CENTER (now middle slot after swapping with SUB)
                 StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, controlY, sliderWidth, 15))
                     .string_("C")
@@ -3395,11 +3416,13 @@ win.front;
                         };
                         if(~synth.notNil) { ~synth.set(\centerGain, gain) };
                     });
+                
                 ~dolbyCenterGainLabel = StaticText(~layoutOverlay, Rect(controlStartX + controlSpacing, 199, sliderWidth, 15))
                     .string_((~dolbyState[\centerGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
+                
                 // Fader controls for SUB (moved to rightmost slot)
                 StaticText(~layoutOverlay, Rect(controlStartX + (controlSpacing * 2), controlY, sliderWidth, 15))
                     .string_("SUB")
@@ -3448,6 +3471,7 @@ win.front;
                         };
                         if(~synth.notNil) { ~synth.set(\heightGain, gain) };
                     });
+
                 ~dolbyHeightGainLabel = StaticText(~layoutOverlay, Rect(controlStartX, 199, sliderWidth, 15))
                     .string_((~dolbyState[\heightGain] ? 0.0).round(0.1).asString ++ "dB")
                     .align_(\center)
@@ -3693,6 +3717,7 @@ win.front;
                     });
                 ~quadSquareRRHit.front;
             });
+
             if(~dmenu.value == 4, {
                 var rectHeight = 160, rectWidth = 110, diagramCenterX = 160;
                 var rectLeft = diagramCenterX - (rectWidth / 2), rectTop = 60, speakerSize = 18;
@@ -3746,6 +3771,7 @@ win.front;
                     });
                 ~quadNarrowRRHit.front;
             });
+
             // Binaural IRCAM (case 1) – HRTF selection menu and grid chooser
             if(~dmenu.value == 1, {
                 var chooserWin, chooserView, cols, rows, cellW, cellH, padding, winWidth, winHeight, winX, winY, layoutBounds, mainViewBounds, winBounds, gridRows, gridSpacing, gridHeight, buttonH, labelWidth, dropdownWidth, totalWidth, groupStartX, labelX, dropdownX, yPos, centerX, centerY, moveUp, earCupWidth, earCupHeight, earCupOffset, leftEarX, leftEarY, rightEarX, rightEarY;
@@ -4370,6 +4396,7 @@ win.front;
                     .align_(\center)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
+                
                 // dB scale labels (single set on the right, after TOP fader)
                 rightmostFaderX = controlStartX + (controlSpacing * 2) + sliderWidth;
                 StaticText(~layoutOverlay, Rect(rightmostFaderX + 4, controlY + 14, 20, 15))
@@ -4437,6 +4464,7 @@ win.front;
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
+
                 ~dolbyTopHpfSlider = Slider(~layoutOverlay, Rect((surroundLeftX + speakerSize) + 33, controlY + 18 + sliderHeight + 30, (((rightmostFaderX - 50) - (surroundLeftX + speakerSize)) - 9) - 2, 17))
                     .orientation_(\horizontal)
                     .knobColor_(Color.cyan)
@@ -4562,7 +4590,7 @@ win.front;
             // LF/HF Gain removed (only work with shelves, which are disabled)
             // Under-the-hood: shelvesMode, gerzonPresets, transitionFreq handled automatically
             // Layout: 320px overlay, 3 knobs @ 60px each, 10px gaps
-            // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60
+            // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
             dimKnobSize = 60; dimGap = 10;
             dimStartX = 60; // Centered: (320 - (3*60 + 2*10))/2 = 60
             dimKnobY = 32; dimLabelY = 10; dimValueY = 97; // moved down by 2px
@@ -4648,7 +4676,7 @@ win.front;
                 .background_(Color.clear);
             // Maplin SM-333 controls: 3 knobs (Surround, Effect, Delay) - Row 2
             // Layout: 320px overlay, 3 knobs @ 60px each, 10px gaps
-            // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60
+            // 3 × 60px = 180px, 2 × 10px = 20px, total = 200px, margin = (320-200)/2 = 60px
             // All moved up by 4px; row previously moved 20px; now shift down 2px for alignment
             maplinKnobSize = 60; maplinKnobY = 139; maplinLabelY = 118; maplinValueY = 203;
             maplinStartX = 60; maplinGap = 10;
@@ -4719,6 +4747,22 @@ win.front;
                 .stringColor_(Color.cyan)
                 .font_(Font("Helvetica", 11))
                 .background_(Color.clear);
+            ~maplinDelayValue = StaticText(~dimensionOverlay, Rect(225, maplinValueY - 3, maplinKnobSize, 16))
+                .string_("25 ms")
+                .align_(\center)
+                .stringColor_(Color.cyan)
+                .font_(Font("Helvetica", 11))
+                .background_(Color.clear);
+
+            // Initialize value displays
+            ~dimensionWidthKnob.action.value(~dimensionWidthKnob);
+            ~dimensionWidthHPFKnob.action.value(~dimensionWidthHPFKnob);
+            ~dimensionTrimKnob.action.value(~dimensionTrimKnob);
+            ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+            ~maplinEffectKnob.action.value(~maplinEffectKnob);
+            ~maplinDelayKnob.action.value(~maplinDelayKnob);
+
+            // Maplin & Dimension ON/OFF button (where RESET was) - controls both Maplin and Dimension
             ~maplinActiveBtn = Button(~dimensionOverlay, Rect(18, 230, 80, 28))
                 .states_([
                     ["ON", Color.black, Color.cyan],
@@ -4759,31 +4803,45 @@ win.front;
                         ~maplinActiveBtn.action.value(~maplinActiveBtn);
                     };
                 });
+
             // CLOSE button removed - pressing Dimension button again closes the overlay
             ~dimensionOverlay.front;
             ~dimensionBtn.value_(1);
+            
             // Restore saved state after overlay is created
             ~restoreDimensionState.value();
             ~restoreMaplinState.value(); // Restore Maplin state too
+            
             // Update visibility based on current encoder selection
             ~updateDimensionOverlayVisibility.value();
-         } {
-             if(~dimensionOverlay.notNil) {
-                 // Remove overlays
-                 if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
-                 if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
-                 ~dimensionOverlay.remove;
-                 ~dimensionOverlay = nil;
-                 ~dimensionBtn.value_(0);
-             };
-         }
-     });
+            
+            // If Maplin encoder is selected, ensure Maplin knobs send values to synth immediately
+            if(configKeyE == \maplin and: { ~maplinSurroundKnob.notNil }) {
+                // Trigger knob actions to send values to synth
+                ~maplinSurroundKnob.action.value(~maplinSurroundKnob);
+                ~maplinEffectKnob.action.value(~maplinEffectKnob);
+                ~maplinDelayKnob.action.value(~maplinDelayKnob);
+                
+            };
+
+        } {
+            if(~dimensionOverlay.notNil) {
+                // Remove overlays
+                if(~dimensionRowOverlay.notNil) { ~dimensionRowOverlay.remove; ~dimensionRowOverlay = nil; };
+                if(~maplinRowOverlay.notNil) { ~maplinRowOverlay.remove; ~maplinRowOverlay = nil; };
+                ~dimensionOverlay.remove;
+                ~dimensionOverlay = nil;
+                ~dimensionBtn.value_(0);
+            };
+        }
+    });
 // --- OUTPUT FADER (GRAPHICAL ONLY, GUIPrototype style) ---
 StaticText(mainView, Rect(544, 40, 24, 24))
     .string_("dB")
     .align_(\center)
     .stringColor_(Color.cyan)
     .font_(Font("Helvetica", 13));
+
 StaticText(mainView, Rect(520, 10, 72, 28))
     .string_("OUTPUT")
     .align_(\center)
