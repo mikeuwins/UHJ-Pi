@@ -419,44 +419,63 @@ else
 fi
 
 
-# CRITICAL: Move ATK classes from downloaded-quarks to Extensions (Quark system puts them in wrong location)
-echo "Moving ATK classes from downloaded-quarks to Extensions..."
-cd /home/$ACTUAL_USER/.local/share/SuperCollider
+CUSTOM_EXT_SRC="/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
+SC_EXT_DST="/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions"
+ATK_BASE="/home/$ACTUAL_USER/.local/share/ATK"
 
-# Move the clean, working classes to Extensions
-echo "Moving ATK dependencies to Extensions..."
-if [ -d "downloaded-quarks/MathLib" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/MathLib Extensions/
-    echo "Moved MathLib to Extensions"
-fi
-if [ -d "downloaded-quarks/MatrixArray" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/MatrixArray Extensions/
-    echo "Moved MatrixArray to Extensions"
-fi
-if [ -d "downloaded-quarks/SignalBox" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/SignalBox Extensions/
-    echo "Moved SignalBox to Extensions"
-fi
-if [ -d "downloaded-quarks/SphericalDesign" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/SphericalDesign Extensions/
-    echo "Moved SphericalDesign to Extensions"
-fi
-if [ -d "downloaded-quarks/atk-sc3" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/atk-sc3 Extensions/
-    echo "Moved atk-sc3 to Extensions"
-fi
-if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
-    sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
-    echo "Moved AmbiVerbSC to Extensions"
+echo "Installing custom SuperCollider extensions..."
+sudo -u $ACTUAL_USER mkdir -p "$SC_EXT_DST"
+sudo -u $ACTUAL_USER mkdir -p "$ATK_BASE"
+
+EXTENSION_DIRS=(
+    "ServerMeter2"
+    "Knob360"
+    "MaplinMatrix"
+    "MaplinSM333"
+    "FoaDimension"
+    "FoaZSynthesis"
+    "FoaVHAP"
+    "Foa512Matrix"
+    "PHJEncoder"
+    "SFPlayerMeter"
+)
+
+for ext_dir in "${EXTENSION_DIRS[@]}"; do
+    if [ -d "$CUSTOM_EXT_SRC/$ext_dir" ]; then
+        echo "Installing $ext_dir..."
+        rm -rf "$SC_EXT_DST/$ext_dir"
+        cp -r "$CUSTOM_EXT_SRC/$ext_dir" "$SC_EXT_DST/"
+    else
+        echo "WARNING: Extension directory $ext_dir not found, skipping"
+    fi
+done
+
+for ext_file in "ATK.sc" "FoaMatrix.sc"; do
+    if [ -f "$CUSTOM_EXT_SRC/$ext_file" ]; then
+        echo "Installing $ext_file..."
+        cp "$CUSTOM_EXT_SRC/$ext_file" "$SC_EXT_DST/"
+    fi
+done
+
+FOA_KERNEL_SRC="$CUSTOM_EXT_SRC/kernels/FOA"
+FOA_KERNEL_DST="$ATK_BASE/kernels/FOA"
+if [ -d "$FOA_KERNEL_SRC" ]; then
+    echo "Deploying custom FOA kernels..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_KERNEL_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_KERNEL_SRC\"/* \"$FOA_KERNEL_DST/\""
 fi
 
-# Set proper ownership for Extensions
-echo "Setting proper ownership for Extensions..."
-sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
+FOA_MATRIX_SRC="$CUSTOM_EXT_SRC/matrices/FOA"
+FOA_MATRIX_DST="$ATK_BASE/matrices/FOA"
+if [ -d "$FOA_MATRIX_SRC" ]; then
+    echo "Deploying custom FOA matrices..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_MATRIX_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_MATRIX_SRC\"/* \"$FOA_MATRIX_DST/\""
+fi
 
-# ATK classes are now properly located in Extensions
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$SC_EXT_DST"
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$ATK_BASE"
 
-# Return to ATK directory for custom sounds
 cd /home/$ACTUAL_USER/.local/share/ATK
 
 step_header "STEP 10/17: Installing Custom UHJ Test Sounds"
@@ -485,41 +504,11 @@ fi
 # AmbiVerbSC now installed via Quark system above
 
 step_header "STEP 11/17: Installing UHJ-Pi Application Files"
-echo "Installing custom user classes..."
-cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
-
-# Ensure SuperCollider Extensions directory exists
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-
-# Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
-echo "Installing custom extensions..."
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
-    echo "Installing ServerMeter2..."
-    cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "ServerMeter2 installation completed"
-else
-    echo "ServerMeter2 already exists, skipping"
-fi
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
-    echo "Installing Knob360..."
-    cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "Knob360 installation completed"
-else
-    echo "Knob360 already exists, skipping"
-fi
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
-    echo "Installing MaplinMatrix..."
-    cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "MaplinMatrix installation completed"
-else
-    echo "MaplinMatrix already exists, skipping"
-fi
-
-# Set proper ownership
-chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+echo "Installing UHJ-Pi application files..."
+cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/app
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
+sudo -u $ACTUAL_USER cp *.scd /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/UHJ-Pi/
+echo "✓ UHJ-Pi application files installed"
 
 step_header "STEP 12/17: Configuring JACK Audio"
 echo "Installing zita-ajbridge..."

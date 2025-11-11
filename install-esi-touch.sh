@@ -465,42 +465,69 @@ fi
 # AmbiVerbSC now installed via Quark system above
 
 step_header "STEP 10/16: Installing UHJ-Pi Application Files"
-echo "Installing custom user classes..."
-cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
+echo "Installing custom SuperCollider resources..."
 
-# Ensure SuperCollider Extensions directory exists
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+CUSTOM_EXT_SRC="/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
+SC_EXT_DST="/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions"
+ATK_BASE="/home/$ACTUAL_USER/.local/share/ATK"
 
-# Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
-echo "Installing custom extensions..."
+# Ensure destination directories exist
+sudo -u $ACTUAL_USER mkdir -p "$SC_EXT_DST"
+sudo -u $ACTUAL_USER mkdir -p "$ATK_BASE"
 
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
-    echo "Installing ServerMeter2..."
-    cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "ServerMeter2 installation completed"
-else
-    echo "ServerMeter2 already exists, skipping"
+# Copy class and GUI extensions
+EXTENSION_DIRS=(
+    "ServerMeter2"
+    "Knob360"
+    "MaplinMatrix"
+    "MaplinSM333"
+    "FoaDimension"
+    "FoaZSynthesis"
+    "FoaVHAP"
+    "Foa512Matrix"
+    "PHJEncoder"
+    "SFPlayerMeter"
+)
+
+for ext_dir in "${EXTENSION_DIRS[@]}"; do
+    if [ -d "$CUSTOM_EXT_SRC/$ext_dir" ]; then
+        echo "Installing $ext_dir..."
+        rm -rf "$SC_EXT_DST/$ext_dir"
+        cp -r "$CUSTOM_EXT_SRC/$ext_dir" "$SC_EXT_DST/"
+    else
+        echo "WARNING: Extension directory $ext_dir not found, skipping"
+    fi
+done
+
+# Copy standalone class files
+for ext_file in "ATK.sc" "FoaMatrix.sc"; do
+    if [ -f "$CUSTOM_EXT_SRC/$ext_file" ]; then
+        echo "Installing $ext_file..."
+        cp "$CUSTOM_EXT_SRC/$ext_file" "$SC_EXT_DST/"
+    fi
+done
+
+# Install custom FOA kernels (including PHJ encoder/decoder kernels)
+FOA_KERNEL_SRC="$CUSTOM_EXT_SRC/kernels/FOA"
+FOA_KERNEL_DST="$ATK_BASE/kernels/FOA"
+if [ -d "$FOA_KERNEL_SRC" ]; then
+    echo "Installing custom FOA kernels..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_KERNEL_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_KERNEL_SRC\"/* \"$FOA_KERNEL_DST/\""
 fi
 
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
-    echo "Installing Knob360..."
-    cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "Knob360 installation completed"
-else
-    echo "Knob360 already exists, skipping"
+# Install custom FOA matrices (for updated decoder support)
+FOA_MATRIX_SRC="$CUSTOM_EXT_SRC/matrices/FOA"
+FOA_MATRIX_DST="$ATK_BASE/matrices/FOA"
+if [ -d "$FOA_MATRIX_SRC" ]; then
+    echo "Installing custom FOA matrices..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_MATRIX_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_MATRIX_SRC\"/* \"$FOA_MATRIX_DST/\""
 fi
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
-    echo "Installing MaplinMatrix..."
-    cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "MaplinMatrix installation completed"
-else
-    echo "MaplinMatrix already exists, skipping"
-fi
-
 
 # Set proper ownership
-chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
+chown -R $ACTUAL_USER:$ACTUAL_USER "$SC_EXT_DST"
+chown -R $ACTUAL_USER:$ACTUAL_USER "$ATK_BASE"
 
 step_header "STEP 11/16: Configuring JACK Audio"
 echo "Configuring JACK Audio for ESI devices..."
