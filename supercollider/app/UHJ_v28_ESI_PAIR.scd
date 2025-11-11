@@ -12,6 +12,7 @@ var win, mainView,
     dbValue, cliToDb, cliToDbMaster, formatDbValue;
 // --- Overlay GUI variables (must be declared at the top, per GUIPrototype) ---
 ~eqOverlay = nil; ~ambienceOverlay = nil; ~layoutOverlay = nil; ~dimensionOverlay = nil;
+~initOverlay = nil; ~initLogo = nil; ~initText = nil;
 ~layoutTitleText = nil;
 ~eqBtn = nil; ~ambienceBtn = nil; ~layoutBtn = nil; ~dimensionBtn = nil;
 // --- EQ overlay variables (from GUIPrototype) ---
@@ -227,6 +228,48 @@ if(Platform.name == \osx, {
     });
 });
 "UHJ-Pi: Centered on %x% screen".format(Window.screenBounds.width, Window.screenBounds.height).postln;
+
+// Splash overlay shown while the server boots
+~initOverlay = View(win, Rect(0, 0, 800, 480))
+    .background_(Color.black.alpha_(0.8))
+    .alpha_(1.0)
+    .front;
+
+~initLogo = UserView(~initOverlay, Rect(200, 80, 400, 200))
+    .background_(Color.clear)
+    .drawFunc_({ |view|
+        try {
+            var image = Image.open("assets/UHJ-Pi-180.png");
+            if(image.notNil) {
+                var maxSize = min(view.bounds.width, view.bounds.height);
+                var xOffset = (view.bounds.width - maxSize) / 2;
+                var yOffset = (view.bounds.height - maxSize) / 2;
+                image.drawInRect(
+                    Rect(xOffset, yOffset, maxSize, maxSize),
+                    Rect(0, 0, image.width, image.height),
+                    2
+                );
+            };
+        } { |error|
+            Pen.color = Color.cyan;
+            Pen.font = Font("Helvetica", 24);
+            Pen.stringAtPoint("UHJ-Pi", Point(140, 80));
+        };
+    });
+
+StaticText(~initOverlay, Rect(0, 292, 800, 30))
+    .string_("ESI v1.0")
+    .font_(Font("LCD 5x7 Segment Monospace", 20))
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .background_(Color.clear);
+
+~initText = StaticText(~initOverlay, Rect(0, 330, 800, 80))
+    .string_("LOADING...")
+    .font_(Font("LCD 5x7 Segment Monospace", 20))
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .background_(Color.clear);
 
 mainView = CompositeView(win, Rect(0, 0, 800, 480)).background_(Color.black);
 
@@ -1094,6 +1137,12 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     }.defer(0.1);
 
                     ("Audio synthesis started with level meter").postln;
+                    if(~initOverlay.notNil) {
+                        ~initOverlay.remove;
+                        ~initOverlay = nil;
+                        ~initLogo = nil;
+                        ~initText = nil;
+                    };
                 });
             }, {
                 if(needReboot, {
@@ -1426,6 +1475,12 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         }.defer(0.1);
 
                         ("Audio synthesis started with level meter").postln;
+                    if(~initOverlay.notNil) {
+                        ~initOverlay.remove;
+                        ~initOverlay = nil;
+                        ~initLogo = nil;
+                        ~initText = nil;
+                    };
                     });
                 });
             });
@@ -1449,7 +1504,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
     .background_(Color.clear)
     .drawFunc_({ |v|
         Pen.width = 0.5;
-        Pen.color = Color.cyan;
+        Pen.color = Color.white;
         Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
         Pen.stroke;
     });
@@ -1778,7 +1833,7 @@ win.front;
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.cyan;
+                    Pen.color = Color.white;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
@@ -2523,7 +2578,7 @@ win.front;
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.cyan;
+                    Pen.color = Color.white;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
@@ -2805,9 +2860,9 @@ win.front;
                     var centerY = bounds.height / 2;
                     var currentDecoderValue = ~dmenu.value;
                     
-                    // Draw cyan border FIRST (like v27)
+                    // Draw white border FIRST (like v27 but desaturated)
                     Pen.width = 0.5;
-                    Pen.color = Color.cyan;
+                    Pen.color = Color.white;
                     Pen.addRect(Rect(0.25, 0.25, bounds.width - 0.5, bounds.height - 0.5));
                     Pen.stroke;
                     Pen.width = 2;
@@ -4482,7 +4537,7 @@ win.front;
                 .background_(Color.clear)
                 .drawFunc_({ |v|
                     Pen.width = 0.5;
-                    Pen.color = Color.cyan;
+                    Pen.color = Color.white;
                     Pen.addRect(Rect(0.25, 0.25, v.bounds.width - 0.5, v.bounds.height - 0.5));
                     Pen.stroke;
                 });
