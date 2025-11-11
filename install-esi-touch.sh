@@ -480,12 +480,8 @@ EXTENSION_DIRS=(
     "ServerMeter2"
     "Knob360"
     "MaplinMatrix"
-    "MaplinSM333"
     "FoaDimension"
     "FoaZSynthesis"
-    "FoaVHAP"
-    "Foa512Matrix"
-    "PHJEncoder"
     "SFPlayerMeter"
 )
 
@@ -502,8 +498,9 @@ done
 # Copy standalone class files
 for ext_file in "ATK.sc" "FoaMatrix.sc"; do
     if [ -f "$CUSTOM_EXT_SRC/$ext_file" ]; then
-        echo "Installing $ext_file..."
-        cp "$CUSTOM_EXT_SRC/$ext_file" "$SC_EXT_DST/"
+        echo "Patching $ext_file in atk-sc3..."
+        sudo -u $ACTUAL_USER mkdir -p "$SC_EXT_DST/atk-sc3/Classes"
+        cp "$CUSTOM_EXT_SRC/$ext_file" "$SC_EXT_DST/atk-sc3/Classes/$ext_file"
     fi
 done
 
