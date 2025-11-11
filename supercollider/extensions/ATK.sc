@@ -1054,17 +1054,17 @@ AtkKernelConv {
 			out = [w, x, y, z];
 		}, {
 			// Standard kernel convolution for all other encoders (UHJ, Super, Spread, Diffuse)
-			out = Mix.new(
-				(kernel.shape[0]).collect({ |i|
-					(kernel.shape[1]).collect({ |j|
-						Convolution2.ar(
-							in[i],
-							kernel[i][j],
-							framesize: kernel[i][j].numFrames
-						)
-					})
+		out = Mix.new(
+			(kernel.shape[0]).collect({ |i|
+				(kernel.shape[1]).collect({ |j|
+					Convolution2.ar(
+						in[i],
+						kernel[i][j],
+						framesize: kernel[i][j].numFrames
+					)
 				})
-			);
+			})
+		);
 		});
 
 		^out.madd(mul, add)

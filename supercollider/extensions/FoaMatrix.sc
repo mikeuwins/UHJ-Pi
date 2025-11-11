@@ -563,11 +563,8 @@ FoaDecoderMatrix : FoaMatrix {
 		^super.new('5_0').loadFromLib(irregKind);
 	}
 
-	*new5_2 { |mode = \equal, heightElevation = 45, outputLayout = \uhjpi|
-		// Use loadFromLib like new5_0 - loads from .yml files
-		// Note: heightElevation parameter is currently ignored when loading from YAML
-		// The YAML files have fixed 45° elevation for height channels
-		^super.new('5_0_2').loadFromLib(mode);
+	*new5_0_2 { |irregKind = \equal|
+		^super.new('5_0_2').loadFromLib(irregKind);
 	}
 
 	*newBtoA { |orientation = \flu, weight = \dec|
@@ -1826,10 +1823,6 @@ FoaDecoderKernel {
 		^super.newCopyArgs(\uhj, 0).initKernel(kernelSize, server, sampleRate, score);
 	}
 
-	*newPHJ { |kernelSize = 512, server = (Server.default), sampleRate, score|
-		^super.newCopyArgs(\phj, 0).initKernel(kernelSize, server, sampleRate, score);
-	}
-
 	initPath {
 		var kernelLibPath;
 		var decodersPath;
@@ -1871,23 +1864,16 @@ FoaDecoderKernel {
 		kernelInfo = [];
 
 		// constants
-		// PHJ decoder outputs 4 channels (L,R,T,Q), not stereo
-		chans = if(this.kind == \phj, 4, 2);  // stereo kernel for UHJ/HRIR, 4-channel for PHJ
+		chans = 2;			// stereo kernel
 
 		// init dirChannels (output channel (speaker) directions) and kernel sr
-		// PHJ decoder outputs 4 channels (L,R,T,Q), not stereo
 		if(this.kind == \uhj, {
 			dirChannels = [pi/6, (pi/6).neg];
 			sampleRateStr = "None"
 		}, {
-			if(this.kind == \phj, {
-				dirChannels = [inf, inf, inf, inf];  // 4-channel output (L,R,T,Q)
-				sampleRateStr = "None"
-			}, {
-				dirChannels = [5/9 * pi, 5/9 * pi.neg];
-				if(sampleRateStr.isNil, {
-					sampleRateStr = server.sampleRate.asInteger.asString
-				})
+			dirChannels = [5/9 * pi, 5/9 * pi.neg];
+			if(sampleRateStr.isNil, {
+				sampleRateStr = server.sampleRate.asInteger.asString
 			})
 		});
 
@@ -1978,7 +1964,25 @@ FoaDecoderKernel {
 					).throw
 				}, {
 					// Else... everything is fine! Load kernel.
-					kernel = (subjectPath.files).collect({ |kernelPath|
+					// For PHJ, sort files to ensure correct order
+					// Encoder: L, R, T, Q (not alphabetical L, Q, R, T)
+					// Decoder: W, X, Y, Z (already alphabetical, but explicit is safer)
+					var kernelFiles = subjectPath.files;
+					if(this.kind == \phj, {
+						var encoderOrder = ["UHJ_L.wav", "UHJ_R.wav", "UHJ_T.wav", "UHJ_Q.wav"];
+						var decoderOrder = ["UHJ_W.wav", "UHJ_X.wav", "UHJ_Y.wav", "UHJ_Z.wav"];
+						var order;
+						// Check which files exist to determine encoder vs decoder
+						if(kernelFiles.any({ |f| f.fileName == encoderOrder[0] }), {
+							order = encoderOrder;
+						}, {
+							order = decoderOrder;
+						});
+						kernelFiles = order.collect({ |name|
+							kernelFiles.detect({ |f| f.fileName == name })
+						}).select(_.notNil);
+					});
+					kernel = kernelFiles.collect({ |kernelPath|
 						chans.collect({ |chan|
 							Buffer.readChannel(server, kernelPath.fullPath, channels: [chan],
 								action: { |buf|
@@ -2097,6 +2101,10 @@ FoaEncoderKernel {
 		^super.newCopyArgs(\uhj, 0).initKernel(kernelSize, server, sampleRate, score);
 	}
 
+	*newPHJ { |kernelSize = nil, server = (Server.default), sampleRate, score|
+		^super.newCopyArgs(\phj, 0).initKernel(kernelSize, server, sampleRate, score);
+	}
+
 	*newSuper { |kernelSize = nil, server = (Server.default), sampleRate, score|
 		^super.newCopyArgs(\super, 0).initKernel(kernelSize, server, sampleRate, score);
 	}
@@ -2107,10 +2115,6 @@ FoaEncoderKernel {
 
 	*newDiffuse { |subjectID = 0003, kernelSize = 2048, server = (Server.default), sampleRate, score|
 		^super.newCopyArgs(\diffuse, subjectID).initKernel(kernelSize, server, sampleRate, score);
-	}
-
-	*newPHJ { |kernelSize = nil, server = (Server.default), sampleRate, score|
-		^super.newCopyArgs(\phj, 0).initKernel(kernelSize, server, sampleRate, score);
 	}
 
 	// Encoding via Isophonics Room Impulse Response Data Set, not yet implemented.
@@ -2289,7 +2293,25 @@ FoaEncoderKernel {
 					).throw
 				}, {
 					// Else... everything is fine! Load kernel.
-					kernel = (subjectPath.files).collect({ |kernelPath|
+					// For PHJ, sort files to ensure correct order
+					// Encoder: L, R, T, Q (not alphabetical L, Q, R, T)
+					// Decoder: W, X, Y, Z (already alphabetical, but explicit is safer)
+					var kernelFiles = subjectPath.files;
+					if(this.kind == \phj, {
+						var encoderOrder = ["UHJ_L.wav", "UHJ_R.wav", "UHJ_T.wav", "UHJ_Q.wav"];
+						var decoderOrder = ["UHJ_W.wav", "UHJ_X.wav", "UHJ_Y.wav", "UHJ_Z.wav"];
+						var order;
+						// Check which files exist to determine encoder vs decoder
+						if(kernelFiles.any({ |f| f.fileName == encoderOrder[0] }), {
+							order = encoderOrder;
+						}, {
+							order = decoderOrder;
+						});
+						kernelFiles = order.collect({ |name|
+							kernelFiles.detect({ |f| f.fileName == name })
+						}).select(_.notNil);
+					});
+					kernel = kernelFiles.collect({ |kernelPath|
 						chans.collect({ |chan|
 							Buffer.readChannel(server, kernelPath.fullPath, channels: [chan],
 								action: { |buf|
