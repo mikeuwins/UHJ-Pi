@@ -162,8 +162,8 @@ var win, mainView,
 // --- Initial values for input section ---
 isUpdating = false;
 linkFaders = true;
-lastInL = 86;
-lastInR = 86;
+lastInL = 106; // 0dB (unity gain)
+lastInR = 106; // 0dB (unity gain)
 minIn = 60;
 maxIn = 127;
 lastFaderGroup = \none;
@@ -174,7 +174,7 @@ voltmp = 1.0; // 0dB = 1.0 amplitude
 // Encoder/Decoder configuration defaults
 configKeyE = \uhj;      // Default encoder: UHJ
 configKeyD = \stereo;   // Default decoder: Stereo
-inputs = 2;             // Default input channels
+inputs = 4;             // Always expose four inputs (UCA + UFO)
 outputs = 2;            // Default output channels
 
 // Honest dB conversion - work with the hardware resolution we actually have
@@ -210,8 +210,19 @@ formatDbValue = { |dbValue|
 };
 
 ~setInputMode = { |mode|
-    ~currentInputMode = mode;
-    ("[Input] Selected mode: " ++ mode).postln;
+    var resolvedMode;
+    resolvedMode = mode;
+    if((resolvedMode == \phono) and: { inputs < 4 }) {
+        ("[Input] PHONO unavailable with current encoder (requires 4 inputs)").postln;
+        resolvedMode = \line;
+        if(~lineBtn.notNil) { ~lineBtn.value_(1); };
+        if(~phonoBtn.notNil) { ~phonoBtn.value_(0); };
+    };
+    ~currentInputMode = resolvedMode;
+    ("[Input] Selected mode: " ++ resolvedMode).postln;
+    if(~synth.notNil) {
+        ~synth.set(\inputMode, if(resolvedMode == \phono, 1, 0));
+    };
     ~updateVisualMute.value();
 };
 
@@ -449,8 +460,8 @@ mainView.mouseUpAction_({
         // Reset GUI to match defaults
         AppClock.sched(0.1, {
             // Reset fader values
-            lastInL = 112; // 0dB equivalent
-            lastInR = 112; // 0dB equivalent
+            lastInL = 106; // 0dB (unity)
+            lastInR = 106; // 0dB (unity)
             ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
             ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
             // Display in dB using logarithmic scaling
@@ -461,6 +472,7 @@ mainView.mouseUpAction_({
             if(~synth.notNil) {
                 ~synth.set(\inputGainL, 1.0);
                 ~synth.set(\inputGainR, 1.0);
+                ~synth.set(\mute, 0);
             };
 
             // Reset button states to defaults
@@ -480,6 +492,7 @@ mainView.mouseUpAction_({
     .action_({ |btn|
         ~visualMuteActive = (btn.value == 1);
         ~updateVisualMute.value();
+        if(~synth.notNil) { ~synth.set(\mute, btn.value); };
     });
 
 ~linkBtn = Button(mainView, Rect(18, 350, 40, 20))
@@ -545,6 +558,11 @@ StaticText(mainView, Rect(345, 10, 140, 28))
         // Dimension button is now always visible (not encoder-dependent)
         // Dimension controls work with Ambisonic material, so available for all encoders
         ("Selected encoder: " ++ menu.item).postln;
+
+        inputs = 4; // Always expose all four inputs so LINE/PHONO remain available
+        if((inputs < 4) and: { ~currentInputMode == \phono }) {
+            ~setInputMode.(\line);
+        };
         
         // Update Dimension overlay visibility based on encoder selection
         ~updateDimensionOverlayVisibility.value();
@@ -578,15 +596,18 @@ StaticText(mainView, Rect(345, 10, 140, 28))
     Rect(343, 45, 157, 35),
     "",
     [
-        \STEREO -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \stereo; },
-        \BINAURAL ++ " IRCAM" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaural; },
-        \BINAURAL ++ " CIPIC" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaurac; },
-        \QUAD ++ " SQUARE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadsquare; },
-        \QUAD ++ " NARROW" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadnarrow; },
-        \QUAD ++" WIDE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadwide; }
+        \STEREO -> { |a| inputs = 4; outputs = 2; configKeyD = \stereo; },
+        \BINAURAL ++ " IRCAM" -> { |a| inputs = 4; outputs = 2; configKeyD = \binaural; },
+        \BINAURAL ++ " CIPIC" -> { |a| inputs = 4; outputs = 2; configKeyD = \binaurac; },
+        \QUAD ++ " SQUARE" -> { |a| inputs = 4; outputs = 4; configKeyD = \quadsquare; },
+        \QUAD ++ " NARROW" -> { |a| inputs = 4; outputs = 4; configKeyD = \quadnarrow; },
+        \QUAD ++" WIDE" -> { |a| inputs = 4; outputs = 4; configKeyD = \quadwide; }
     ],
     globalAction: { |menu|
         var idx, decoderNames, decoderName, htIsOff, isBinaural, shouldDim;
+        if((inputs < 4) and: { ~currentInputMode == \phono }) {
+            ~setInputMode.(\line);
+        };
         // --- Reset headtracking and quad panner settings on decoder change ---
         if(~headtrackBtn.notNil) { ~headtrackBtn.value_(0); };
         if(~rotateKnob.notNil) { ~rotateKnob.valueAction_(0.5); };
@@ -789,7 +810,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                 s.boot;
                 cond = Condition.new;
                 s.waitForBoot({
-                    var dimVals, zsynthVals, dimWidth, dimWidthHPF, dimTrim, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix;
+                    var dimVals, zsynthVals, dimWidth, dimWidthHPF, dimTrim, zsAmount, zsDelay, zsTrim, zsSource, zsSize, zsDamp, zsMix, gainL, gainR, inputModeValue, muteValue;
                     
                     // Set audio card volume after server boot
                     ("amixer -c HD set PCM 80%").unixCmd;
@@ -835,14 +856,30 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1, lOn = 1, rOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                        var lineInputs, phonoInputs, ucaPair, ufoPair, primaryPair, phjInputs;
+                        var muteGate, gainL, gainR, ampCtl;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
-                        src = SoundIn.ar([0,1]);
-                        // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
-                        // Amplitude scaling
-                        src = src * \amp.kr(0.dbamp); // 0dB default
+                        src = SoundIn.ar([0, 1, 2, 3]);
+                        lineInputs = src.copyRange(0, 1);
+                        phonoInputs = src.copyRange(2, 3);
+                        gainL = \inputGainL.kr(1.0);
+                        gainR = \inputGainR.kr(1.0);
+                        ampCtl = \amp.kr(0.dbamp);
+                        muteGate = 1 - \mute.kr(0).clip(0, 1);
+                        ucaPair = [
+                            lineInputs[0] * gainL * ampCtl * muteGate,
+                            lineInputs[1] * gainR * ampCtl * muteGate
+                        ];
+                        ufoPair = [
+                            phonoInputs[0] * gainL * ampCtl * muteGate,
+                            phonoInputs[1] * gainR * ampCtl * muteGate
+                        ];
+                        primaryPair = Select.ar(\inputMode.kr(0).clip(0, 1), [ucaPair, ufoPair]);
+                        phjInputs = ucaPair ++ ufoPair;
+
                         // --- 7-band graphic EQ before ambisonic encode ---
-                        eqed = src;
+                        eqed = if(configKeyE == \phj, { phjInputs }, { primaryPair });
                         eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
                         eqed = BPeakEQ.ar(eqed, 160, 1, eq2);     // Band 2
                         eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
@@ -861,7 +898,9 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         );
                         
                         // Select input for encoding: quad (if maplin) or stereo (others)
-                        encodeInput = Select.ar(maplinMode, [eqed, maplinQuad]);
+                        encodeInput = if(configKeyE == \maplin, {
+                            Select.ar(maplinMode, [eqed, maplinQuad])
+                        }, { eqed });
                         
                         // Encode to ambisonic using selected encoder
                         encode = FoaEncode.ar(encodeInput, encoder);
@@ -1029,8 +1068,17 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     zsSize = zsynthVals[4].linlin(0, 1, 0.1, 3.0);
                     zsDamp = zsynthVals[5];
                     zsMix = zsynthVals[6] * 100;
+
+                    gainL = cliToDbMaster.(lastInL).dbamp;
+                    gainR = cliToDbMaster.(lastInR).dbamp;
+                    inputModeValue = if(~currentInputMode == \phono, 1, 0);
+                    muteValue = if(~visualMuteActive, 1, 0);
                     
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
+                        \inputMode, inputModeValue,
+                        \inputGainL, gainL,
+                        \inputGainR, gainR,
+                        \mute, muteValue,
                         \maplinSurround, ~maplinState[\surround] ? 0.8, 
                         \maplinEffect, ~maplinState[\effect] ? 0.8,
                         \maplinDelay, ~maplinState[\delay] ? 0.4, 
@@ -1101,18 +1149,8 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     // Create level meter after synth is started
                     {
                         ~meter.remove; // Remove any existing meter
-                        ~meter = ServerMeter2View.new(s, ~meterContainer, 0@0, inputs, outputs);
-                        // --- Permanent row of 8 numbers below the meters, aligned with meter bars ---
-                        ~meterNumbers = Array.fill(8, { |i|
-                            var labelWidth = 24;
-                            var x = 96 + ((i + 0.5) * (180 / 8)) - (labelWidth / 2); // x=95+1, move 1px right
-                            StaticText(~meterContainer, Rect(x, 206, labelWidth, 16)) // y=206 (move up 4px)
-                                .background_(Color.black)
-                                .font_(Font("Helvetica", 9).boldVariant)
-                                .align_(\center)
-                                .stringColor_(Color.cyan)
-                                .string_((i+1).asString);
-                        });
+                        ~meter = ServerMeter2View.new(s, ~meterContainer, 0@10, 4, 4);
+                        ~updateVisualMute.value();
                     }.defer(0.1);
 
                     ("Audio synthesis started with level meter").postln;
@@ -1133,7 +1171,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                     s.reboot;
                     cond = Condition.new;
                     s.waitForBoot({
-                var dimVals2, zsynthVals2, dimWidth2, dimWidthHPF2, dimTrim2, zsAmount2, zsDelay2, zsTrim2, zsSource2, zsSize2, zsDamp2, zsMix2;
+                var dimVals2, zsynthVals2, dimWidth2, dimWidthHPF2, dimTrim2, zsAmount2, zsDelay2, zsTrim2, zsSource2, zsSize2, zsDamp2, zsMix2, gainL2, gainR2, inputModeValue2, muteValue2;
                         // Set audio card volume after server reboot
                         ("amixer -c HD set PCM 80%").unixCmd;
                         
@@ -1172,14 +1210,30 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 180, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1, lOn = 1, rOn = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
+                            var lineInputs, phonoInputs, ucaPair, ufoPair, primaryPair, phjInputs;
+                            var muteGate, gainL, gainR, ampCtl;
                             var wetSrcW2, wetSrcX2, wetSrcY2, wetSrcZ2, wetSrc2, wetOnly2, rtAr2, zeroA2;
                             // Audio source - live input from hardware
-                            src = SoundIn.ar([0,1]);
-                            // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
-                            // Amplitude scaling
-                            src = src * \amp.kr(0.dbamp); // 0dB default
+                            src = SoundIn.ar([0, 1, 2, 3]);
+                            lineInputs = src.copyRange(0, 1);
+                            phonoInputs = src.copyRange(2, 3);
+                            gainL = \inputGainL.kr(1.0);
+                            gainR = \inputGainR.kr(1.0);
+                            ampCtl = \amp.kr(0.dbamp);
+                            muteGate = 1 - \mute.kr(0).clip(0, 1);
+                            ucaPair = [
+                                lineInputs[0] * gainL * ampCtl * muteGate,
+                                lineInputs[1] * gainR * ampCtl * muteGate
+                            ];
+                            ufoPair = [
+                                phonoInputs[0] * gainL * ampCtl * muteGate,
+                                phonoInputs[1] * gainR * ampCtl * muteGate
+                            ];
+                            primaryPair = Select.ar(\inputMode.kr(0).clip(0, 1), [ucaPair, ufoPair]);
+                            phjInputs = ucaPair ++ ufoPair;
+
                             // --- 7-band graphic EQ before ambisonic encode ---
-                            eqed = src;
+                            eqed = if(configKeyE == \phj, { phjInputs }, { primaryPair });
                             eqed = BPeakEQ.ar(eqed, 63, 1, eq1);      // Band 1
                             eqed = BPeakEQ.ar(eqed, 160, 1, eq2);     // Band 2
                             eqed = BPeakEQ.ar(eqed, 400, 1, eq3);     // Band 3
@@ -1197,8 +1251,10 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                                 active: maplinActive
                             );
                             
-                            // Select input for encoding: quad (if maplin) or stereo (others)
-                            encodeInput = Select.ar(maplinMode, [eqed, maplinQuad]);
+                            // Select input for encoding: quad (if maplin) or direct feeds (others)
+                            encodeInput = if(configKeyE == \maplin, {
+                                Select.ar(maplinMode, [eqed, maplinQuad])
+                            }, { eqed });
                             
                             // Encode to ambisonic using selected encoder
                             encode = FoaEncode.ar(encodeInput, encoder);
@@ -1367,8 +1423,17 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         zsSize2 = zsynthVals2[4].linlin(0, 1, 0.1, 3.0);
                         zsDamp2 = zsynthVals2[5];
                         zsMix2 = zsynthVals2[6] * 100;
+
+                        gainL2 = cliToDbMaster.(lastInL).dbamp;
+                        gainR2 = cliToDbMaster.(lastInR).dbamp;
+                        inputModeValue2 = if(~currentInputMode == \phono, 1, 0);
+                        muteValue2 = if(~visualMuteActive, 1, 0);
                         
                         ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
+                            \inputMode, inputModeValue2,
+                            \inputGainL, gainL2,
+                            \inputGainR, gainR2,
+                            \mute, muteValue2,
                             \maplinSurround, ~maplinState[\surround] ? 0.8, 
                             \maplinEffect, ~maplinState[\effect] ? 0.8,
                             \maplinDelay, ~maplinState[\delay] ? 0.4, 
@@ -1439,18 +1504,8 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         // Create level meter after synth is started
                         {
                             ~meter.remove; // Remove any existing meter
-                            ~meter = ServerMeter2View.new(s, ~meterContainer, 0@0, inputs, outputs);
-                            // --- Permanent row of 8 numbers below the meters, aligned with meter bars ---
-                            ~meterNumbers = Array.fill(8, { |i|
-                                var labelWidth = 24;
-                                var x = 96 + ((i + 0.5) * (180 / 8)) - (labelWidth / 2); // x=95+1, move 1px right
-                                StaticText(~meterContainer, Rect(x, 206, labelWidth, 16)) // y=206 (move up 4px)
-                                    .background_(Color.black)
-                                    .font_(Font("Helvetica", 9).boldVariant)
-                                    .align_(\center)
-                                    .stringColor_(Color.cyan)
-                                    .string_((i+1).asString);
-                            });
+                            ~meter = ServerMeter2View.new(s, ~meterContainer, 0@10, 4, 4);
+                            ~updateVisualMute.value();
                         }.defer(0.1);
 
                         ("Audio synthesis started with level meter").postln;
@@ -1495,71 +1550,107 @@ StaticText(~meterView, Rect(0, 5, 320, 30)).background_(Color.clear)
     .stringColor_(Color.cyan)
     .font_(Font("Helvetica", 14).boldVariant);
 
-// Initialize meter display area
-~meterContainer = View(~meterView, Rect(10, 35, 300, 230)).background_(Color.black); // x=10, width=300
+// Initialize meter display area with device-specific labelling
+~meterContainer = View(~meterView, Rect(40, 35, 270, 230)).background_(Color.black);
 
-// --- Permanent OUTPUT label above the output numbers, always centered ---
-StaticText(~meterContainer, Rect(97, 5, 180, 16)) // x=99-2, width=180, y=5
-    .background_(Color.clear)
-    .font_(Font("Helvetica", 10).boldVariant)
-    .align_(\center)
-    .stringColor_(Color.cyan)
-    .string_("OUTPUT");
-// --- Permanent row of 8 numbers below the meters, aligned with meter bars ---
-~meterNumbers = Array.fill(8, { |i|
-    var labelWidth = 24;
-    var x = 96 + ((i + 0.5) * (180 / 8)) - (labelWidth / 2); // x=95+1, move 1px right
-    StaticText(~meterContainer, Rect(x, 206, labelWidth, 16))
-        .background_(Color.clear)
-        .font_(Font("Helvetica", 9).boldVariant)
-        .align_(\center)
-        .stringColor_(Color.cyan)
-        .string_((i+1).asString);
-});
-
-// --- Permanent INPUT label above the input numbers, always left-aligned ---
-StaticText(~meterContainer, Rect(34, 5, 80, 16)) // x=32+2, width=80, y=5
+// Headings
+StaticText(~meterContainer, Rect(59, -2, 80, 16))
     .background_(Color.clear)
     .font_(Font("Helvetica", 10).boldVariant)
     .align_(\left)
     .stringColor_(Color.cyan)
     .string_("INPUT");
-// --- Permanent input channel numbers below the input meters ---
-~inputNumbers = Array.fill(2, { |i| // Always show 2 input channels for now
+
+StaticText(~meterContainer, Rect(96, -2, 180, 16))
+    .background_(Color.clear)
+    .font_(Font("Helvetica", 10).boldVariant)
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .string_("OUTPUT");
+
+// Device labels (UCA / UFO)
+StaticText(~meterContainer, Rect(10, 15, 80, 16))
+    .background_(Color.clear)
+    .font_(Font("Helvetica", 10).boldVariant)
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .string_("UCA");
+
+StaticText(~meterContainer, Rect(55, 15, 80, 16))
+    .background_(Color.clear)
+    .font_(Font("Helvetica", 10).boldVariant)
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .string_("UFO");
+
+StaticText(~meterContainer, Rect(125, 15, 80, 16))
+    .background_(Color.clear)
+    .font_(Font("Helvetica", 10).boldVariant)
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .string_("UCA");
+
+StaticText(~meterContainer, Rect(167, 15, 80, 16))
+    .background_(Color.clear)
+    .font_(Font("Helvetica", 10).boldVariant)
+    .align_(\center)
+    .stringColor_(Color.cyan)
+    .string_("UFO");
+
+// Input channel labels (L / R per device)
+Array.fill(4, { |i|
     var labelWidth = 24;
-    var spacing = 44;
-    var x = 29 + ((i + 0.5) * (spacing / 2)) - (labelWidth / 2); // x=27+2
-    StaticText(~meterContainer, Rect(x, 206, labelWidth, 16))
+    var meterWidth = 20;
+    var gapWidth = 2.5;
+    var x = 30 + (i * (meterWidth + gapWidth)) + (meterWidth / 2) - (labelWidth / 2);
+    StaticText(~meterContainer, Rect(x, 216, labelWidth, 16))
         .background_(Color.clear)
         .font_(Font("Helvetica", 9).boldVariant)
         .align_(\center)
         .stringColor_(Color.cyan)
-        .string_((i+1).asString);
+        .string_(["L", "R", "L", "R"][i]);
 });
-// --- Permanent vertical dB scale numbers (0 and -∞) ---
-StaticText(~meterContainer, Rect(8, 25, 24, 12)) // x=6+2, y=18+7 (top)
+
+// Output channel labels (L / R for UCA and UFO feeds)
+Array.fill(4, { |i|
+    var labelWidth = 24;
+    var meterWidth = 20;
+    var gapWidth = 2.5;
+    var outputStartX = 30 + (4 * (meterWidth + gapWidth)) + 10;
+    var x = outputStartX + (i * (meterWidth + gapWidth)) + (meterWidth / 2) - (labelWidth / 2) + (meterWidth / 2) + 2;
+    StaticText(~meterContainer, Rect(x, 216, labelWidth, 16))
+        .background_(Color.black)
+        .font_(Font("Helvetica", 9).boldVariant)
+        .align_(\center)
+        .stringColor_(Color.cyan)
+        .string_(["L", "R", "L", "R"][i]);
+});
+
+// dB scale markers
+StaticText(~meterContainer, Rect(8, 35, 24, 12))
     .background_(Color.clear)
     .font_(Font("Helvetica", 10).boldVariant)
     .align_(\center)
     .stringColor_(Color.cyan)
     .string_("0");
-StaticText(~meterContainer, Rect(8, 195, 24, 12)) // x=6+2, y=188+7 (bottom)
+
+StaticText(~meterContainer, Rect(8, 210, 24, 12))
     .background_(Color.clear)
     .font_(Font("Helvetica", 10).boldVariant)
     .align_(\center)
     .stringColor_(Color.cyan)
     .string_("-60");
-// --- dB label halfway up the meter ---
-StaticText(~meterContainer, Rect(8, 110, 24, 14)) // halfway up (approx)
+
+StaticText(~meterContainer, Rect(8, 120, 24, 14))
     .background_(Color.clear)
     .font_(Font("Helvetica", 10).boldVariant)
     .align_(\center)
     .stringColor_(Color.cyan)
     .string_("dB");
 
-// Initialize input defaults (from MainApp2)
-lastInL = 112; // Default from phono-control -d (0dB equivalent)
-lastInR = 112; // Default from phono-control -d (0dB equivalent)
+// Initialize input defaults (unity gain)
+lastInL = 106; // 0dB (unity gain)
+lastInR = 106; // 0dB (unity gain)
 ~leftSlider.value = (lastInL - minIn) / (maxIn - minIn);
 ~rightSlider.value = (lastInR - minIn) / (maxIn - minIn);
 // Display initial dB values using logarithmic scaling
