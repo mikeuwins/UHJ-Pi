@@ -235,6 +235,55 @@ if(hasInputGain and: { inputControl.notEmpty }) {
     };
 };
 
+// Detect how many hardware outputs are available (JACK on Linux, fallback to server defaults elsewhere)
+~detectOutputChannels = {
+    var count = 0;
+    if(Platform.name == \linux) {
+        count = "jack_lsp | grep 'system:playback' | wc -l".unixCmdGetStdOut.asInteger;
+    };
+    if(count <= 0) {
+        count = Server.default.options.numOutputBusChannels ? 0;
+    };
+    if(count <= 0) { count = 2; };
+    ("Detected " ++ count ++ " output channels").postln;
+    count;
+};
+
+~detectedOutputs = ~detectOutputChannels.value;
+
+~buildDecoderMenu = {
+    var items = [];
+    // Always available (2-channel)
+    items = items ++ [
+        \STEREO -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \stereo; },
+        \BINAURAL ++ " IRCAM" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaural; },
+        \BINAURAL ++ " CIPIC" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaurac; }
+    ];
+
+    if(~detectedOutputs >= 4) {
+        items = items ++ [
+            \QUAD ++ " SQUARE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadsquare; },
+            \QUAD ++ " NARROW" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadnarrow; },
+            \QUAD ++" WIDE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadwide; }
+        ];
+    };
+
+    if(~detectedOutputs >= 6) {
+        items = items ++ [
+            \DOLBY ++" 5.1" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 6; configKeyD = \fivezero; }
+        ];
+    };
+
+    if(~detectedOutputs >= 8) {
+        items = items ++ [
+            \DOLBY ++" 5.1.2" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 8; configKeyD = \fiveonetwo; },
+            \OCTAGON -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 8; configKeyD = \octagon; }
+        ];
+    };
+
+    items;
+};
+
 // Honest dB conversion - work with the hardware resolution we actually have
 cliToDb = { |cliValue|
     var dbValue;
@@ -609,17 +658,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
     mainView,
     Rect(343, 45, 157, 35),
     "",
-    [
-        \STEREO -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \stereo; },
-        \BINAURAL ++ " IRCAM" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaural; },
-        \BINAURAL ++ " CIPIC" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 2; configKeyD = \binaurac; },
-        \QUAD ++ " SQUARE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadsquare; },
-        \QUAD ++ " NARROW" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadnarrow; },
-        \QUAD ++" WIDE" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 4; configKeyD = \quadwide; },
-        \DOLBY ++" 5.1" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 6; configKeyD = \fivezero; },
-        \DOLBY ++" 5.1.2" -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 8; configKeyD = \fiveonetwo; },
-        \OCTAGON -> { |a| inputs = if(configKeyE == \phj, 4, 2); outputs = 8; configKeyD = \octagon; }
-    ],
+    ~buildDecoderMenu.value,
     globalAction: { |menu|
         var idx, decoderNames, decoderName, htIsOff, isBinaural, shouldDim;
         // --- Reset headtracking and quad panner settings on decoder change ---
@@ -830,6 +869,10 @@ StaticText(mainView, Rect(345, 10, 140, 28))
     var decoderDict, encoderDict;
     var tryBoot;
     var needReboot;
+    var serverOutputs;
+
+    ~detectedOutputs = ~detectOutputChannels.value;
+    serverOutputs = (~detectedOutputs ? outputs).max(outputs);
     // Always reload kernels and restart synth on decoder or encoder change
     needReboot = (inputs != (~prevInputs ? inputs))
         || (outputs != (~prevOutputs ? outputs))
@@ -844,7 +887,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
         }, {
             if(s.serverRunning.not, {
                 s.options.memSize = 65536;
-                s.options.numOutputBusChannels = outputs;
+                s.options.numOutputBusChannels = serverOutputs;
                 s.options.numInputBusChannels = inputs;
                 s.boot;
                 cond = Condition.new;
@@ -1183,7 +1226,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
             }, {
                 if(needReboot, {
                     s.options.memSize = 65536;
-                    s.options.numOutputBusChannels = outputs;
+                    s.options.numOutputBusChannels = serverOutputs;
                     s.options.numInputBusChannels = inputs;
                     s.reboot;
                     cond = Condition.new;
