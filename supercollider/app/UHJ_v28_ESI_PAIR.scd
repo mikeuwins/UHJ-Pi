@@ -4583,6 +4583,7 @@ win.front;
             ~dimensionWidthKnob = Knob(~dimensionOverlay, Rect(35, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[0]) // Already normalized 0-1 (where 1.0 = 0.70 width)
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .canFocus_(false)
                 .action_({ |knob| 
                     var val = knob.value * 0.70; // Convert normalized 0-1 to actual width 0.0-0.70
                     ~dimensionWidthValue.string_(val.round(0.01).asString);
@@ -4594,9 +4595,10 @@ win.front;
             ~dimensionWidthHPFKnob = Knob(~dimensionOverlay, Rect(130, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[1]) // Already normalized 0-1
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .canFocus_(false)
                 .action_({ |knob| 
                     var val = knob.value.linlin(0, 1, 80, 400); // Convert normalized 0-1 to 80-400 Hz
-                    ~dimensionWidthHPFValue.string_(val.round(1).asString ++ "Hz");
+                    ~dimensionWidthHPFValue.string_(val.round.asInteger.asString ++ " Hz");
                     ~dimensionState[\sliderValues][1] = knob.value;
                     if(~synth.notNil) { ~synth.set(\dimensionWidthHPF, val); };
                 });
@@ -4604,10 +4606,11 @@ win.front;
             ~dimensionTrimKnob = Knob(~dimensionOverlay, Rect(225, dimKnobY, dimKnobSize, dimKnobSize))
                 .value_(savedVals[2]) // Already normalized 0-1
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
+                .canFocus_(false)
                 .action_({ |knob| 
                     var val = knob.value.linlin(0, 1, -6, 6);  // Reduced from -18/+18 to -6/+6 dB
                     var displayVal = if(val >= 0, "+" ++ val.round(0.1).asString, val.round(0.1).asString);
-                    ~dimensionTrimValue.string_(displayVal ++ "dB");
+                    ~dimensionTrimValue.string_(displayVal ++ " dB");
                     ~dimensionState[\sliderValues][2] = knob.value;
                     if(~synth.notNil) { ~synth.set(\dimensionOutputTrim, val); };
                 });
@@ -4671,7 +4674,7 @@ win.front;
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
                     ~setMaplinSurround.(knob.value);
-                    ~maplinSurroundValue.string_((knob.value * 100).round(1).asString ++ "%");
+                    ~maplinSurroundValue.string_(((knob.value * 100).round.asInteger).asString ++ "%");
                 });
             
             // Maplin Effect knob - Position: 130 (center)
@@ -4680,7 +4683,7 @@ win.front;
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
                     ~setMaplinEffect.(knob.value);
-                    ~maplinEffectValue.string_((knob.value * 100).round(1).asString ++ "%");
+                    ~maplinEffectValue.string_(((knob.value * 100).round.asInteger).asString ++ "%");
                 });
             
             // Maplin Delay knob - Position: 225
@@ -4689,7 +4692,7 @@ win.front;
                 .color_([Color.cyan(1, 0.1), Color.cyan(0.5), Color.cyan, Color.cyan])
                 .action_({ |knob| 
                     ~setMaplinDelay.(knob.value);
-                    ~maplinDelayValue.string_((knob.value.linlin(0, 1, 5, 50).round(1).asString ++ " ms"));
+                    ~maplinDelayValue.string_((knob.value.linlin(0, 1, 5, 50).round.asInteger.asString ++ " ms"));
                 });
             
             // Maplin value displays below knobs - Positions adjusted: 35, 110, 225
