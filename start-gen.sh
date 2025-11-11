@@ -338,6 +338,7 @@ export INPUT_PAIR
 
 # Launch SuperCollider application
 echo "Starting application..."
-exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v23_GEN_PAIR.scd"
+cd "$HOME/UHJ-Pi"
+exec sclang supercollider/app/UHJ_v28_GEN_PAIR.scd
 
 

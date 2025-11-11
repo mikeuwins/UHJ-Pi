@@ -122,4 +122,5 @@ echo "✓ ESI devices detected and ready"
 echo "🎵 Starting SuperCollider application..."
 
 # Launch SuperCollider with ESI application
-exec sclang "$HOME/UHJ-Pi/supercollider/app/UHJ_v28_ESI_PAIR.scd"
+cd "$HOME/UHJ-Pi"
+exec sclang supercollider/app/UHJ_v28_ESI_PAIR.scd

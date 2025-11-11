@@ -226,4 +226,5 @@ echo "Audio setup complete!"
 
 # Start the SuperCollider app
 echo "Starting SuperCollider app..."
-exec sclang /home/$USER/UHJ-Pi/supercollider/app/UHJ_v23_BEH_PAIR.scd > /home/$USER/post_output.log 2>&1
+cd "$HOME/UHJ-Pi"
+exec sclang supercollider/app/UHJ_v28_BEH_PAIR.scd > "$HOME/post_output.log" 2>&1
