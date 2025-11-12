@@ -389,6 +389,7 @@ EXTENSION_DIRS=(
     "FoaDimension"
     "FoaZSynthesis"
     "SFPlayerMeter"
+    "SFPlayerClass"
 )
 
 for ext_dir in "${EXTENSION_DIRS[@]}"; do

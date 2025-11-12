@@ -476,6 +476,7 @@ sudo -u $ACTUAL_USER mkdir -p "$SC_EXT_DST"
 sudo -u $ACTUAL_USER mkdir -p "$ATK_BASE"
 
 # Copy class and GUI extensions
+# Install class and GUI extensions
 EXTENSION_DIRS=(
     "ServerMeter2"
     "Knob360"
@@ -483,6 +484,7 @@ EXTENSION_DIRS=(
     "FoaDimension"
     "FoaZSynthesis"
     "SFPlayerMeter"
+    "SFPlayerClass"
 )
 
 for ext_dir in "${EXTENSION_DIRS[@]}"; do
