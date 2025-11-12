@@ -547,7 +547,9 @@ sleep 2
 # Launch SuperCollider and capture any errors
 echo ""
 echo "Launching SuperCollider..."
-if ! sclang supercollider/app/UHJ_v28_PLAYER_SF.scd; then
+LOG_FILE="$HOME/.local/share/SuperCollider/Logs/player-start-$(date +%Y%m%d-%H%M%S).log"
+mkdir -p "$(dirname "$LOG_FILE")"
+if ! sclang supercollider/app/UHJ_v28_PLAYER_SF.scd | tee "$LOG_FILE"; then
     clear
     echo "=== APPLICATION LAUNCH FAILED ==="
     echo ""
