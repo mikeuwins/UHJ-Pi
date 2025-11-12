@@ -372,10 +372,12 @@ if [ -d "wslib" ]; then
     sudo -u $ACTUAL_USER rm -rf wslib
     echo "Removed entire wslib directory (conflict-prone)"
 fi
+# STEP 13: Install Custom UHJ Test Sounds
+# Custom UHJ test sounds will be installed after ATK sounds (step 10)
 
-
-
-# Install custom SuperCollider extensions and kernels
+# STEP 14: Install custom user classes
+step_header "STEP 8/17: Installing Custom User Classes"
+echo "Installing custom user classes..."
 CUSTOM_EXT_SRC="/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
 SC_EXT_DST="/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions"
 ATK_BASE="/home/$ACTUAL_USER/.local/share/ATK"
@@ -430,49 +432,7 @@ fi
 
 sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$SC_EXT_DST"
 sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$ATK_BASE"
-
 cd /home/$ACTUAL_USER/.local/share/ATK
-
-# STEP 13: Install Custom UHJ Test Sounds
-# Custom UHJ test sounds will be installed after ATK sounds (step 10)
-
-# STEP 14: Install custom user classes
-step_header "STEP 8/17: Installing Custom User Classes"
-echo "Installing custom user classes..."
-cd /home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions
-
-# Ensure SuperCollider Extensions directory exists
-sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-
-# Copy custom extensions to SuperCollider Extensions directory (only if they don't exist)
-echo "Installing custom extensions..."
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/ServerMeter2" ]; then
-    echo "Installing ServerMeter2..."
-    cp -r ServerMeter2 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "ServerMeter2 installation completed"
-else
-    echo "ServerMeter2 already exists, skipping"
-fi
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/Knob360" ]; then
-    echo "Installing Knob360..."
-    cp -r Knob360 /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "Knob360 installation completed"
-else
-    echo "Knob360 already exists, skipping"
-fi
-
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/MaplinMatrix" ]; then
-    echo "Installing MaplinMatrix..."
-    cp -r MaplinMatrix /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "MaplinMatrix installation completed"
-else
-    echo "MaplinMatrix already exists, skipping"
-fi
-
-# Set proper ownership
-chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
 
 # STEP 10: Install ATK kernels and matrices
 step_header "STEP 9/17: Installing ATK Kernels and Matrices"
@@ -701,6 +661,13 @@ fi
 # STEP 23: Install launcher script
 step_header "STEP 17/17: Installing Launcher Script"
 echo "Installing launcher script..."
+
+echo "Installing USB mounting script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/mount-usb.sh /usr/local/bin/mount-usb
+chmod +x /usr/local/bin/mount-usb
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/mount-usb
+echo "✓ USB mounting script installed to /usr/local/bin/mount-usb"
+
 cp /home/$ACTUAL_USER/UHJ-Pi/start-gen.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start

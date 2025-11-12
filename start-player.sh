@@ -547,7 +547,7 @@ sleep 2
 # Launch SuperCollider and capture any errors
 echo ""
 echo "Launching SuperCollider..."
-if ! sclang supercollider/app/UHJ_v26_PLAYER_SF.scd; then
+if ! sclang supercollider/app/UHJ_v28_PLAYER_SF.scd; then
     clear
     echo "=== APPLICATION LAUNCH FAILED ==="
     echo ""

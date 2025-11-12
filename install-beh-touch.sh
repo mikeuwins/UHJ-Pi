@@ -281,6 +281,61 @@ if [ ! -d "UHJ-Pi" ]; then
     fi
 fi
 
+CUSTOM_EXT_SRC="/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
+SC_EXT_DST="/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions"
+ATK_BASE="/home/$ACTUAL_USER/.local/share/ATK"
+
+echo "Installing custom SuperCollider extensions..."
+sudo -u $ACTUAL_USER mkdir -p "$SC_EXT_DST"
+sudo -u $ACTUAL_USER mkdir -p "$ATK_BASE"
+
+EXTENSION_DIRS=(
+    "ServerMeter2"
+    "Knob360"
+    "MaplinMatrix"
+    "FoaDimension"
+    "FoaZSynthesis"
+    "SFPlayerMeter"
+    "SFPlayerClass"
+)
+
+for ext_dir in "${EXTENSION_DIRS[@]}"; do
+    if [ -d "$CUSTOM_EXT_SRC/$ext_dir" ]; then
+        echo "Installing $ext_dir..."
+        rm -rf "$SC_EXT_DST/$ext_dir"
+        cp -r "$CUSTOM_EXT_SRC/$ext_dir" "$SC_EXT_DST/"
+    else
+        echo "WARNING: Extension directory $ext_dir not found, skipping"
+    fi
+done
+
+for ext_file in "ATK.sc" "FoaMatrix.sc"; do
+    if [ -f "$CUSTOM_EXT_SRC/$ext_file" ]; then
+        echo "Patching $ext_file in atk-sc3..."
+        sudo -u $ACTUAL_USER mkdir -p "$SC_EXT_DST/atk-sc3/Classes"
+        cp "$CUSTOM_EXT_SRC/$ext_file" "$SC_EXT_DST/atk-sc3/Classes/$ext_file"
+    fi
+done
+
+FOA_KERNEL_SRC="$CUSTOM_EXT_SRC/kernels/FOA"
+FOA_KERNEL_DST="$ATK_BASE/kernels/FOA"
+if [ -d "$FOA_KERNEL_SRC" ]; then
+    echo "Deploying custom FOA kernels..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_KERNEL_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_KERNEL_SRC\"/* \"$FOA_KERNEL_DST/\""
+fi
+
+FOA_MATRIX_SRC="$CUSTOM_EXT_SRC/matrices/FOA"
+FOA_MATRIX_DST="$ATK_BASE/matrices/FOA"
+if [ -d "$FOA_MATRIX_SRC" ]; then
+    echo "Deploying custom FOA matrices..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_MATRIX_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_MATRIX_SRC\"/* \"$FOA_MATRIX_DST/\""
+fi
+
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$SC_EXT_DST"
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$ATK_BASE"
+
 step_header "STEP 9/17: Installing ATK Kernels and Matrices"
 echo "Installing ATK and handling GUI component cleanup..."
 cd /home/$ACTUAL_USER
@@ -607,6 +662,13 @@ fi
 
 step_header "STEP 17/17: Installing Launcher Script"
 echo "Installing launcher script..."
+
+echo "Installing USB mounting script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/mount-usb.sh /usr/local/bin/mount-usb
+chmod +x /usr/local/bin/mount-usb
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/mount-usb
+echo "✓ USB mounting script installed to /usr/local/bin/mount-usb"
+
 cp /home/$ACTUAL_USER/UHJ-Pi/start-beh.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start

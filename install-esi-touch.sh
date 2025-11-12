@@ -632,6 +632,13 @@ echo "✓ Bluetooth pairing script installed to /usr/local/bin/"
 
 step_header "STEP 16/16: Installing Launcher Script"
 echo "Installing launcher script..."
+
+echo "Installing USB mounting script..."
+cp /home/$ACTUAL_USER/UHJ-Pi/mount-usb.sh /usr/local/bin/mount-usb
+chmod +x /usr/local/bin/mount-usb
+chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/mount-usb
+echo "✓ USB mounting script installed to /usr/local/bin/mount-usb"
+
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start 
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start

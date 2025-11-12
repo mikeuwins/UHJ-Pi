@@ -123,4 +123,8 @@ echo "🎵 Starting SuperCollider application..."
 
 # Launch SuperCollider with ESI application
 cd "$HOME/UHJ-Pi"
-exec sclang supercollider/app/UHJ_v28_ESI_PAIR.scd
+sclang supercollider/app/UHJ_v28_ESI_PAIR.scd
+exit_code=$?
+stty sane >/dev/null 2>&1 || true
+sleep 1
+exit "$exit_code"
