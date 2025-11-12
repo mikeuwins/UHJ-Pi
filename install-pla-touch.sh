@@ -442,22 +442,6 @@ for ext_file in "ATK.sc" "FoaMatrix.sc"; do
     fi
 done
 
-FOA_KERNEL_SRC="$CUSTOM_EXT_SRC/kernels/FOA"
-FOA_KERNEL_DST="$ATK_BASE/kernels/FOA"
-if [ -d "$FOA_KERNEL_SRC" ]; then
-    echo "Deploying custom FOA kernels..."
-    sudo -u $ACTUAL_USER mkdir -p "$FOA_KERNEL_DST"
-    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_KERNEL_SRC\"/* \"$FOA_KERNEL_DST/\""
-fi
-
-FOA_MATRIX_SRC="$CUSTOM_EXT_SRC/matrices/FOA"
-FOA_MATRIX_DST="$ATK_BASE/matrices/FOA"
-if [ -d "$FOA_MATRIX_SRC" ]; then
-    echo "Deploying custom FOA matrices..."
-    sudo -u $ACTUAL_USER mkdir -p "$FOA_MATRIX_DST"
-    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_MATRIX_SRC\"/* \"$FOA_MATRIX_DST/\""
-fi
-
 sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$SC_EXT_DST"
 sudo chown -R $ACTUAL_USER:$ACTUAL_USER "$ATK_BASE"
 
@@ -612,6 +596,23 @@ fi
 # Set proper ownership for Extensions
 echo "Setting proper ownership for Extensions..."
 sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
+
+# Re-apply patched FOA kernels and matrices (overwrites any stock files)
+FOA_KERNEL_SRC="$CUSTOM_EXT_SRC/kernels/FOA"
+FOA_KERNEL_DST="$ATK_BASE/kernels/FOA"
+if [ -d "$FOA_KERNEL_SRC" ]; then
+    echo "Reinstating custom FOA kernels..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_KERNEL_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_KERNEL_SRC\"/* \"$FOA_KERNEL_DST/\""
+fi
+
+FOA_MATRIX_SRC="$CUSTOM_EXT_SRC/matrices/FOA"
+FOA_MATRIX_DST="$ATK_BASE/matrices/FOA"
+if [ -d "$FOA_MATRIX_SRC" ]; then
+    echo "Reinstating custom FOA matrices..."
+    sudo -u $ACTUAL_USER mkdir -p "$FOA_MATRIX_DST"
+    sudo -u $ACTUAL_USER bash -c "cp -R \"$FOA_MATRIX_SRC\"/* \"$FOA_MATRIX_DST/\""
+fi
 
 # ATK classes are now properly located in Extensions
 
