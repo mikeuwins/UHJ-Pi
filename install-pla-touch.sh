@@ -374,6 +374,36 @@ if [ -d "wslib" ]; then
     echo "Removed entire wslib directory (conflict-prone)"
 fi
 
+# Move ATK dependencies from downloaded-quarks to Extensions
+echo "Moving ATK dependencies to Extensions..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider
+if [ -d "downloaded-quarks/MathLib" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/MathLib Extensions/
+    echo "Moved MathLib to Extensions"
+fi
+if [ -d "downloaded-quarks/MatrixArray" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/MatrixArray Extensions/
+    echo "Moved MatrixArray to Extensions"
+fi
+if [ -d "downloaded-quarks/SignalBox" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SignalBox Extensions/
+    echo "Moved SignalBox to Extensions"
+fi
+if [ -d "downloaded-quarks/SphericalDesign" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/SphericalDesign Extensions/
+    echo "Moved SphericalDesign to Extensions"
+fi
+if [ -d "downloaded-quarks/atk-sc3" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/atk-sc3 Extensions/
+    echo "Moved atk-sc3 to Extensions"
+fi
+if [ -d "downloaded-quarks/AmbiVerbSC" ]; then
+    sudo -u $ACTUAL_USER mv downloaded-quarks/AmbiVerbSC Extensions/
+    echo "Moved AmbiVerbSC to Extensions"
+fi
+
+sudo chown -R $ACTUAL_USER:$ACTUAL_USER Extensions/
+cd /home/$ACTUAL_USER
 
 
 CUSTOM_EXT_SRC="/home/$ACTUAL_USER/UHJ-Pi/supercollider/extensions"
@@ -391,6 +421,7 @@ EXTENSION_DIRS=(
     "FoaDimension"
     "FoaZSynthesis"
     "SFPlayerMeter"
+    "SFPlayerClass"
 )
 
 for ext_dir in "${EXTENSION_DIRS[@]}"; do
