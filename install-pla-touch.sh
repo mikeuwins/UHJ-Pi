@@ -609,6 +609,22 @@ else
     echo "Custom UHJ sounds moved to sounds/ subdirectory"
 fi
 
+# Ensure demo library exists
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various
+sudo -u $ACTUAL_USER mkdir -p /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus
+
+# Copy demo content
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/AJH_eight-positions-uhj.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/ 2>/dev/null || true
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/hifi_sound_1981_ambisonic_tests.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/ 2>/dev/null || true
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/UHJ_Mono_Pink_Noise_North.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Various/ 2>/dev/null || true
+
+sudo -u $ACTUAL_USER cp "/home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium Sunrise.wav" /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/ 2>/dev/null || true
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/audio-samples/uhj/Sodium_Sunrise_UHJ.wav /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/ 2>/dev/null || true
+sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/artwork_sodium_sunrise.jpg /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/ 2>/dev/null || true
+if [ ! -f /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/artwork.jpg ]; then
+    sudo -u $ACTUAL_USER cp /home/$ACTUAL_USER/UHJ-Pi/assets/artwork.jpg /home/$ACTUAL_USER/.local/share/ATK/sounds/uhj/Rhombus/ 2>/dev/null || true
+fi
+
 # STEP 13: Install UHJ-Pi application files
 step_header "STEP 11/17: Installing UHJ-Pi Application Files"
 echo "Installing UHJ-Pi application files..."
