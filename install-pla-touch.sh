@@ -470,14 +470,16 @@ else
     echo "MaplinMatrix already exists, skipping"
 fi
 
-# Install SFPlayerMeter extension (custom meters for Player)
-if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/SFPlayerMeter" ]; then
-    echo "Installing SFPlayerMeter..."
-    cp -r SFPlayerMeter /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
-    echo "SFPlayerMeter installation completed"
-else
-    echo "SFPlayerMeter already exists, skipping"
-fi
+# Install SFPlayerMeter and SFPlayer extensions
+for ext_dir in SFPlayerMeter SFPlayerClass; do
+    if [ ! -d "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/$ext_dir" ]; then
+        echo "Installing $ext_dir..."
+        cp -r "$ext_dir" "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/"
+        echo "$ext_dir installation completed"
+    else
+        echo "$ext_dir already exists, skipping"
+    fi
+done
 
 # Set proper ownership
 chown -R $ACTUAL_USER:$ACTUAL_USER /home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/
