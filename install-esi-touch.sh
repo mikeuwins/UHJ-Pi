@@ -586,7 +586,7 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
-step_header "STEP 13/16: Configuring Qt Platform for Headless Operation"
+step_header "STEP 13/17: Configuring Qt Platform for Headless Operation"
 echo "Configuring Qt platform for headless operation..."
 # Set Qt platform to eglfs for the user's shell
 echo 'export QT_QPA_PLATFORM=eglfs' >> /home/$ACTUAL_USER/.bashrc
@@ -615,20 +615,20 @@ fi
 fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
-step_header "STEP 14/16: Configuring Bluetooth"
+step_header "STEP 14/17: Configuring Bluetooth"
 echo "Configuring Bluetooth..."
 systemctl enable bluetooth >> $INSTALL_LOG 2>&1
 systemctl start bluetooth >> $INSTALL_LOG 2>&1
 echo "✓ Bluetooth configured"
 
-step_header "STEP 15/16: Installing Bluetooth Pairing Script"
+step_header "STEP 15/17: Installing Bluetooth Pairing Script"
 echo "Installing Bluetooth pairing script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
 echo "✓ Bluetooth pairing script installed to /usr/local/bin/"
 
-step_header "STEP 16/16: Installing Launcher Script"
+step_header "STEP 16/17: Installing Launcher Script"
 echo "Installing launcher script..."
 cp /home/$ACTUAL_USER/UHJ-Pi/start-esi.sh /usr/local/bin/start
 chmod +x /usr/local/bin/start 
@@ -647,6 +647,32 @@ EOF
     echo "✓ Automatic login configured for user $ACTUAL_USER"
 fi
 
+step_header "STEP 17/17: Configuring Screen Orientation"
+echo "Configuring screen orientation..."
+echo ""
+echo "Screen Orientation Selection:"
+echo "  1. Normal orientation (0 degrees)"
+echo "  2. Flipped 180 degrees"
+echo ""
+echo -n "Select screen orientation [1 or 2, default: 1] (10 second timeout): "
+SCREEN_ROTATION=""
+read -t 10 SCREEN_ROTATION || true
+SCREEN_ROTATION=${SCREEN_ROTATION:-1}
+
+if [ "$SCREEN_ROTATION" = "2" ]; then
+    ROTATION_VALUE="180"
+    echo "✓ Screen rotation set to 180 degrees (flipped)"
+else
+    ROTATION_VALUE="0"
+    echo "✓ Screen rotation set to 0 degrees (normal)"
+fi
+
+# Set display rotation based on user selection
+echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.bashrc
+echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.profile
+echo "✓ Screen orientation configured"
+
+echo ""
 echo "Installation completed successfully!"
 echo ""
 echo "ESI Audio Setup:"

@@ -250,7 +250,7 @@ thisProcess.platform.name.postln;
     \tflOn, 1,
     \tfrOn, 1,
     \subLPF, 120,
-    \topHPF, 180
+    \topHPF, 2000
 ]);
 
 // --- Octagon layout state preservation variables ---
@@ -1461,7 +1461,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     s.sync(cond);
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
-                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
+                    SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
@@ -1700,7 +1700,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     subGainVal = ~dolbyState[\subGain] ? 0.0;
                     heightGainVal = ~dolbyState[\heightGain] ? 0.0;
                     subLpfVal = ~dolbyState[\subLPF] ? 120;
-                    topHpfVal = ~dolbyState[\topHPF] ? 180;
+                    topHpfVal = ~dolbyState[\topHPF] ? 2000;
 
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                         \maplinSurround, ~maplinState[\surround] ? 0.8, 
@@ -1827,7 +1827,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         s.sync(cond);
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
-                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 180, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
+                        SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
                             var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, centerChan, subChan, heightTFL, heightTFR, lowpass;
                             // Audio source from SFPlayer bus - variable channels based on encoder
                             src = In.ar(~playerBus.index, inputs);
@@ -3864,7 +3864,7 @@ AppClock.sched(0.1, {
                     \tflOn, ~dolbyState[\tflOn] ? 1,
                     \tfrOn, ~dolbyState[\tfrOn] ? 1,
                     \heightGain, ~dolbyState[\heightGain] ? 0.0,
-                    \topHPF, ~dolbyState[\topHPF] ? 180
+                    \topHPF, ~dolbyState[\topHPF] ? 2000
                 );
             });
         };
@@ -5355,9 +5355,9 @@ AppClock.sched(0.1, {
                     .front;
                 // Extra slender faders BELOW the diagram and vertical faders
                 // Geometry: left aligns to right edge of speaker 3 box; right leaves space for value labels
-                // TOP LPF - now top horizontal slender fader (swapped with SUB)
+                // TOP HPF - now top horizontal slender fader (swapped with SUB)
                 ~dolbyTopHpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, controlY + 18 + sliderHeight + 30 + 3, 56, 15))
-                    .string_("TOP LPF")
+                    .string_("TOP HPF")
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
@@ -5366,7 +5366,7 @@ AppClock.sched(0.1, {
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
                     .focusColor_(Color.clear)
-                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 4000, 0, 1))
+                    .value_((~dolbyState[\topHPF] ? 2000).linlin(80, 4000, 0, 1))
                     .action_({ |sl|
                         var hz = (sl.value.linlin(0, 1, 80, 4000) / 10).round * 10; // 80-4000 Hz, stepped in 10s
                         ~dolbyState[\topHPF] = hz;
@@ -5374,7 +5374,7 @@ AppClock.sched(0.1, {
                         if(~synth.notNil) { ~synth.set(\topHPF, hz) };
                     });
                 ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 1, 44, 15))
-                    .string_((((~dolbyState[\topHPF] ? 180) / 10).round * 10).asInteger.asString ++ " Hz")
+                    .string_((((~dolbyState[\topHPF] ? 2000) / 10).round * 10).asInteger.asString ++ " Hz")
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
@@ -5405,7 +5405,7 @@ AppClock.sched(0.1, {
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
 
-                // Dim overlay for TOP LPF (label, fader, value) in Dolby 5.1 to match disabled TOP behavior (now top row)
+                // Dim overlay for TOP HPF (label, fader, value) in Dolby 5.1 to match disabled TOP behavior (now top row)
                 if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
                 ~dolbyTopLpfOverlay = View(
                     ~layoutOverlay,
@@ -5678,7 +5678,7 @@ AppClock.sched(0.1, {
                 if(~dolbyTopLpfOverlay.notNil) { try { ~dolbyTopLpfOverlay.remove; }; ~dolbyTopLpfOverlay = nil; };
 
                 ~dolbyTopHpfLabel = StaticText(~layoutOverlay, Rect((surroundLeftX + speakerSize) - 32 - 6 + 8, controlY + 18 + sliderHeight + 30 + 3, 56, 15))
-                    .string_("TOP LPF")
+                    .string_("TOP HPF")
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
@@ -5688,7 +5688,7 @@ AppClock.sched(0.1, {
                     .knobColor_(Color.cyan)
                     .background_(Color.black)
                     .focusColor_(Color.clear)
-                    .value_((~dolbyState[\topHPF] ? 180).linlin(80, 4000, 0, 1))
+                    .value_((~dolbyState[\topHPF] ? 2000).linlin(80, 4000, 0, 1))
                     .action_({ |sl|
                         var hz = (sl.value.linlin(0, 1, 80, 4000) / 10).round * 10;
                         ~dolbyState[\topHPF] = hz;
@@ -5697,7 +5697,7 @@ AppClock.sched(0.1, {
                     });
 
                 ~dolbyTopHpfValue = StaticText(~layoutOverlay, Rect(controlStartX + (rightmostFaderX - controlStartX) - 28, controlY + 18 + sliderHeight + 30 + 2, 44, 15))
-                    .string_((((~dolbyState[\topHPF] ? 180) / 10).round * 10).asInteger.asString ++ " Hz")
+                    .string_((((~dolbyState[\topHPF] ? 2000) / 10).round * 10).asInteger.asString ++ " Hz")
                     .align_(\right)
                     .stringColor_(Color.cyan)
                     .font_(Font("Helvetica", 11).boldVariant);
