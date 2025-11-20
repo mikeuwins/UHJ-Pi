@@ -801,16 +801,17 @@ chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/start
 echo "Launcher script installed to /usr/local/bin/start"
 
 step_header "STEP 18/18: Configuring Screen Orientation"
-echo "Configuring screen orientation..."
+
+# Ask user about screen orientation
 echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Screen Orientation Selection:"
 echo "  1. Normal orientation (0 degrees)"
 echo "  2. Flipped 180 degrees"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo -n "Select screen orientation [1 or 2, default: 1] (10 second timeout): "
-SCREEN_ROTATION=""
-read -t 10 SCREEN_ROTATION || true
-SCREEN_ROTATION=${SCREEN_ROTATION:-1}
+read -t 10 -p "Select screen orientation [1 or 2, default: 1] (10 second timeout): " SCREEN_ROTATION || true
+SCREEN_ROTATION=${SCREEN_ROTATION:-1} # Default to 1 (0 degrees) if no input or timeout
 
 if [ "$SCREEN_ROTATION" = "2" ]; then
     ROTATION_VALUE="180"
@@ -820,7 +821,7 @@ else
     echo "✓ Screen rotation set to 0 degrees (normal)"
 fi
 
-# Set display rotation based on user selection
+# Set display rotation based on user selection (Qt platform already configured in STEP 15)
 echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.bashrc
 echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.profile
 echo "✓ Screen orientation configured"
