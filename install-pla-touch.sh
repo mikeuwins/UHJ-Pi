@@ -506,7 +506,21 @@ cd /home/$ACTUAL_USER/.local/share/ATK
 
 # Download kernels
 echo "Downloading ATK kernels v1.2.1..."
-if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+    # Verify the download is a valid ZIP file
+    if ! sudo -u $ACTUAL_USER unzip -t kernels.zip >/dev/null 2>&1; then
+        echo "✗ ATK kernels download appears corrupted - retrying..."
+        sudo -u $ACTUAL_USER rm -f kernels.zip
+        if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-kernels/releases/download/v1.2.1/kernels.zip" -o kernels.zip; then
+            if ! sudo -u $ACTUAL_USER unzip -t kernels.zip >/dev/null 2>&1; then
+                echo "✗ ATK kernels download still corrupted after retry!"
+                exit 1
+            fi
+        else
+            echo "✗ ATK kernels download failed on retry!"
+            exit 1
+        fi
+    fi
     echo "Extracting kernels..."
     if sudo -u $ACTUAL_USER unzip -q -o kernels.zip; then
         sudo -u $ACTUAL_USER rm kernels.zip
@@ -522,7 +536,21 @@ fi
 
 # Download matrices  
 echo "Downloading ATK matrices v1.0.3..."
-if sudo -u $ACTUAL_USER curl -s -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+    # Verify the download is a valid ZIP file
+    if ! sudo -u $ACTUAL_USER unzip -t matrices.zip >/dev/null 2>&1; then
+        echo "✗ ATK matrices download appears corrupted - retrying..."
+        sudo -u $ACTUAL_USER rm -f matrices.zip
+        if sudo -u $ACTUAL_USER curl -L "https://github.com/ambisonictoolkit/atk-matrices/releases/download/v1.0.3/matrices.zip" -o matrices.zip; then
+            if ! sudo -u $ACTUAL_USER unzip -t matrices.zip >/dev/null 2>&1; then
+                echo "✗ ATK matrices download still corrupted after retry!"
+                exit 1
+            fi
+        else
+            echo "✗ ATK matrices download failed on retry!"
+            exit 1
+        fi
+    fi
     echo "Extracting matrices..."
     if sudo -u $ACTUAL_USER unzip -q -o matrices.zip; then
         sudo -u $ACTUAL_USER rm matrices.zip
