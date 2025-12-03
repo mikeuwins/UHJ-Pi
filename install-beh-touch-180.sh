@@ -703,10 +703,29 @@ echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.profi
 # Matrix format: "a b c d e f" where a=-1, e=-1 for 180° rotation
 # Using normalized coordinates (0-1), so translation is 1 for full width/height
 echo "Configuring touch screen rotation..."
+
+# Set environment variable in user profile files
 echo "export LIBINPUT_CALIBRATION_MATRIX=\"-1 0 1 0 -1 1\"" >> /home/$ACTUAL_USER/.bashrc
 echo "export LIBINPUT_CALIBRATION_MATRIX=\"-1 0 1 0 -1 1\"" >> /home/$ACTUAL_USER/.profile
 
-# Also create udev rule for touch screen calibration (as fallback)
+# Create system-wide environment file for early loading
+mkdir -p /etc/systemd/system.conf.d
+cat > /etc/systemd/system.conf.d/touch-rotation.conf << EOF
+[Manager]
+DefaultEnvironment="LIBINPUT_CALIBRATION_MATRIX=-1 0 1 0 -1 1"
+EOF
+
+# Create libinput quirks file for touch calibration (most reliable method)
+mkdir -p /etc/libinput
+cat > /etc/libinput/local-overrides.quirks << EOF
+[UHJ-Pi Touch 180 Rotation]
+MatchName=*
+MatchUSBID=*:*
+AttrCalibrationMatrix=-1 0 1 0 -1 1
+EOF
+echo "✓ Created libinput quirks file for touch calibration"
+
+# Also create udev rule for touch screen calibration
 # Find touch screen device and create udev rule
 TOUCH_DEVICE_PATH=$(find /dev/input -name "event*" 2>/dev/null | head -1)
 if [ -n "$TOUCH_DEVICE_PATH" ]; then
@@ -726,7 +745,15 @@ EOF
     fi
 else
     echo "⚠ Touch device not found during installation, using environment variable only"
-    echo "  Touch calibration will be applied via LIBINPUT_CALIBRATION_MATRIX environment variable"
+fi
+
+# Also update the startup script to export the environment variable before launching sclang
+if [ -f "/home/$ACTUAL_USER/UHJ-Pi/start-beh.sh" ]; then
+    # Add export right before sclang launch if not already present
+    if ! grep -q "LIBINPUT_CALIBRATION_MATRIX" "/home/$ACTUAL_USER/UHJ-Pi/start-beh.sh"; then
+        sed -i '/^sclang/i export LIBINPUT_CALIBRATION_MATRIX="-1 0 1 0 -1 1"' "/home/$ACTUAL_USER/UHJ-Pi/start-beh.sh"
+        echo "✓ Updated start-beh.sh to export touch calibration matrix before launching sclang"
+    fi
 fi
 
 echo "✓ Screen and touch orientation configured for 180 degrees"
