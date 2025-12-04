@@ -1462,7 +1462,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
-                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, zMagnitude, zThreshold, heightGateGain, heightGate;
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, zMagnitude, zMagnitudePreReverb, zThreshold, heightGateGain, heightGate;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1554,7 +1554,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Measure Z magnitude (RMS) BEFORE reverb to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
                         // Measure Z from zsynth (before reverb) to avoid reverb-generated Z opening the gate
-                        var zMagnitudePreReverb = Amplitude.kr(zsynth[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
+                        zMagnitudePreReverb = Amplitude.kr(zsynth[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                         zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
                         heightGateGain = (zMagnitudePreReverb > zThreshold); // 1 if Z present, 0 if absent
                         // Also measure final Z for visual indicator (after reverb)
