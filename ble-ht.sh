@@ -61,11 +61,21 @@ for attempt in 1 2; do
     
     # Check if pairing succeeded
     device_info=$(bluetoothctl info "$DEVICE_MAC" 2>/dev/null)
-    is_paired=$(echo "$device_info" | grep -c "Paired: yes" || echo "0")
-    is_connected=$(echo "$device_info" | grep -c "Connected: yes" || echo "0")
+    # Use grep -q for more reliable checking
+    if echo "$device_info" | grep -q "Paired: yes"; then
+        is_paired=1
+    else
+        is_paired=0
+    fi
     
-    if [ "$is_paired" -gt 0 ]; then
-        if [ "$is_connected" -gt 0 ]; then
+    if echo "$device_info" | grep -q "Connected: yes"; then
+        is_connected=1
+    else
+        is_connected=0
+    fi
+    
+    if [ "$is_paired" -eq 1 ]; then
+        if [ "$is_connected" -eq 1 ]; then
             echo "PAIRED_AND_CONNECTED"
             exit 0
         else
