@@ -724,27 +724,50 @@ AttrCalibrationMatrix=-1 0 1 0 -1 1
 EOF
 echo "✓ Created libinput quirks file for touch calibration"
 
-# Also create udev rule for touch screen calibration
-# Find touch screen device and create udev rule
-TOUCH_DEVICE_PATH=$(find /dev/input -name "event*" 2>/dev/null | head -1)
-if [ -n "$TOUCH_DEVICE_PATH" ]; then
-    VENDOR_ID=$(udevadm info "$TOUCH_DEVICE_PATH" 2>/dev/null | grep -i "id_vendor" | cut -d'=' -f2 | head -1)
-    PRODUCT_ID=$(udevadm info "$TOUCH_DEVICE_PATH" 2>/dev/null | grep -i "id_product" | cut -d'=' -f2 | head -1)
+# Also add to /etc/environment for system-wide access
+if ! grep -q "LIBINPUT_CALIBRATION_MATRIX" /etc/environment 2>/dev/null; then
+    echo 'LIBINPUT_CALIBRATION_MATRIX="-1 0 1 0 -1 1"' >> /etc/environment
+    echo "✓ Added to /etc/environment"
+fi
+
+# Create comprehensive udev rule that matches all input devices
+echo "Creating comprehensive udev rules..."
+# First create a broad rule that matches all input devices
+cat > /etc/udev/rules.d/99-touchscreen-rotation-180.rules << 'EOF'
+# UHJ-Pi: Touch screen 180-degree rotation
+# This rule applies to all input devices that could be touch screens
+# Calibration matrix for 180-degree rotation: invert X and Y
+# Matrix format: "a b c d e f" = "-1 0 1 0 -1 1"
+
+# Match any input device (broad rule)
+ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"
+EOF
+
+# Also add device-specific rules for detected devices
+INPUT_DEVICES=()
+for dev in /dev/input/event*; do
+    if [ -e "$dev" ]; then
+        INPUT_DEVICES+=("$dev")
+    fi
+done
+
+RULE_COUNT=0
+for dev in "${INPUT_DEVICES[@]}"; do
+    VENDOR_ID=$(udevadm info "$dev" 2>/dev/null | grep -i "id_vendor" | cut -d'=' -f2 | head -1)
+    PRODUCT_ID=$(udevadm info "$dev" 2>/dev/null | grep -i "id_product" | cut -d'=' -f2 | head -1)
+    DEVICE_NAME=$(udevadm info "$dev" 2>/dev/null | grep -i "name=" | cut -d'=' -f2 | tr -d '"' | head -1)
     
     if [ -n "$VENDOR_ID" ] && [ -n "$PRODUCT_ID" ]; then
-        # Create udev rule for touch screen calibration
-        cat > /etc/udev/rules.d/99-touchscreen-rotation-180.rules << EOF
-# UHJ-Pi: Touch screen 180-degree rotation
-# Calibration matrix for 180-degree rotation: invert X and Y
+        cat >> /etc/udev/rules.d/99-touchscreen-rotation-180.rules << EOF
+
+# Device-specific rule: $DEVICE_NAME
 ACTION=="add", SUBSYSTEM=="input", ATTRS{idVendor}=="$VENDOR_ID", ATTRS{idProduct}=="$PRODUCT_ID", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"
 EOF
-        echo "✓ Created udev rule for touch screen rotation (Vendor: $VENDOR_ID, Product: $PRODUCT_ID)"
-    else
-        echo "⚠ Could not determine touch device IDs, using environment variable only"
+        RULE_COUNT=$((RULE_COUNT + 1))
     fi
-else
-    echo "⚠ Touch device not found during installation, using environment variable only"
-fi
+done
+
+echo "✓ Created comprehensive udev rule with $RULE_COUNT device-specific rules"
 
 # Also update the startup script to export the environment variable before launching sclang
 if [ -f "/home/$ACTUAL_USER/UHJ-Pi/start-vin.sh" ]; then
