@@ -30,7 +30,7 @@ fi
 echo "Scanning for devices..."
 {
     echo "scan on"
-    sleep 10  # Longer scan like debug version
+    sleep 8  # Reduced from 10 - still long enough but faster
     echo "scan off"
     echo "exit"
 } | bluetoothctl > /dev/null
@@ -52,7 +52,7 @@ for attempt in 1 2; do
     
     {
         echo "pair $DEVICE_MAC"
-        sleep 7  # Longer wait for pairing to complete (was 5)
+        sleep 6  # Reduced from 7 - still long enough but faster
         echo "exit"
     } | bluetoothctl
     
@@ -72,7 +72,7 @@ for attempt in 1 2; do
             # Paired but not connected - try to connect
             echo "Device paired but not connected - attempting to connect..."
             bluetoothctl connect "$DEVICE_MAC" 2>&1
-            sleep 4  # Wait for connection to establish
+            sleep 3  # Reduced from 4 - still long enough but faster
             
             # Check again
             device_info=$(bluetoothctl info "$DEVICE_MAC" 2>/dev/null)
