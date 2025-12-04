@@ -5175,9 +5175,11 @@ AppClock.sched(0.1, {
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            // Speaker 7 and 8 labels only (TFL/TFR) - positioned relative to front speakers
-                            Pen.stringAtPoint("TFL", Point(frontLeftX + speakerSize + 2, frontLeftY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the right of speaker 1, horizontally aligned
-                            Pen.stringAtPoint("TFR", Point(frontRightX - 22, frontRightY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the left of speaker 2, horizontally aligned
+                            // Speaker 7 and 8 labels (TFL/TFR) - positioned relative to existing speaker boxes
+                            var topFrontLeftX = frontLeftX, topFrontLeftY = frontLeftY - 40;
+                            var topFrontRightX = frontRightX, topFrontRightY = frontRightY - 40;
+                            Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 2, topFrontLeftY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the right of speaker 7, horizontally aligned with "7"
+                            Pen.stringAtPoint("TFR", Point(topFrontRightX - 22, topFrontRightY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the left of speaker 8, horizontally aligned with "8"
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
