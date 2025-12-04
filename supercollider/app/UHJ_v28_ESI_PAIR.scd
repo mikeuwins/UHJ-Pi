@@ -5258,6 +5258,9 @@ HIDdef.usage( \hidTumble, { |val|
             
             // Check for wrap-around (large jump indicates wrap past 180 degrees)
             rawChange = (mappedVal - ~htTumbleLast).abs;
+            // Also check if going the other way around is shorter (wrap-around case)
+            if(rawChange > 0.5) { rawChange = 1.0 - rawChange };
+            
             if(rawChange > ~htWrapThreshold) {
                 // This is a wrap-around - don't smooth through it, just update directly
                 // This prevents getting stuck at the wrap point
@@ -5267,10 +5270,8 @@ HIDdef.usage( \hidTumble, { |val|
                 ~htTumbleSmoothed = (~htTumbleSmoothed * (1 - ~htSmoothFactor)) + (mappedVal * ~htSmoothFactor);
             };
             
-            // Calculate change from last value
+            // Calculate change from last value (simple absolute difference)
             change = (~htTumbleSmoothed - ~htTumbleLast).abs;
-            // Check wrap-around case for change (shorter path around circle)
-            if(change > 0.5) { change = 1.0 - change };
             
             // Only update if change is significant (above threshold)
             if(change > ~htChangeThreshold) {
