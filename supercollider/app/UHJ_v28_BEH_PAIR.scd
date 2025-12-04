@@ -1869,34 +1869,62 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                         };
                     }.defer;
                 } {
-                    // Device is paired but NOT connected - try to CONNECT
-                    ("Device is paired but not connected - connecting...").postln;
-                    try {
-                        result = ("bluetoothctl connect " ++ ~headtrackerMac).unixCmdGetStdOut;
-                        ("Connect result: " ++ result).postln;
-                        3.wait; // Wait for connection to establish
-                        
-                        // Check if connection succeeded
-                        deviceInfo = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
-                        if (deviceInfo.contains("Connected: yes")) {
-                            success = true;
-                            ("Successfully connected!").postln;
-                        } {
-                            success = false;
-                            ("Connection failed").postln;
+                    // Device is paired but NOT connected - use pairing script to remove and re-pair
+                    ("Device is paired but not connected - removing and re-pairing...").postln;
+                    
+                    // Run pairing script in background with timeout
+                    scriptPath = "/usr/local/bin/ble-ht.sh";
+                    
+                    // Safety timeout - reset button after 15 seconds if script hangs
+                    AppClock.sched(15, { 
+                        if (~pairingInProgress) {
+                            ~pairingInProgress = false;  // Reset flag
+                            ~headtrackPairBtn.value_(3); // Show failed if still in progress
+                            AppClock.sched(3, { ~headtrackPairBtn.value_(0); nil });
                         };
+                        nil 
+                    });
+                    
+                    // First attempt
+                    try {
+                        result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                        success = result.contains("PAIRED_AND_CONNECTED");
                     } { |error|
-                        ("Connect error: " ++ error).postln;
+                        ("Pairing script error: " ++ error).postln;
                         success = false;
                     };
                     
+                    // If first attempt failed, automatically retry once
+                    if (success.not) {
+                        ("First pairing attempt failed, retrying automatically...").postln;
+                        1.wait; // Brief pause between attempts
+                        
+                        try {
+                            result = ("timeout 15 bash -c '" ++ scriptPath ++ "'").unixCmdGetStdOut;
+                            success = result.contains("PAIRED_AND_CONNECTED");
+                            if (success) {
+                                ("Second attempt succeeded!").postln;
+                            } {
+                                ("Both pairing attempts failed").postln;
+                            };
+                        } { |error|
+                            ("Retry script error: " ++ error).postln;
+                            success = false;
+                        };
+                    };
+                    
+                    // Always update button, even if script failed
                     {
-                        ~pairingInProgress = false;
+                        ~pairingInProgress = false;  // Reset flag
                         if (success) {
-                            ~headtrackPairBtn.value_(2); // Show paired and connected state
+                            ~headtrackPairBtn.value_(2); // Success - stay cyan to show paired
                         } {
-                            ~headtrackPairBtn.value_(3); // Show failed
-                            AppClock.sched(3, { ~headtrackPairBtn.value_(0); nil });
+                            ~headtrackPairBtn.value_(3); // Failed - red X
+                            // Reset to PAIR after 3 seconds only on failure
+                            AppClock.sched(3, { 
+                                ~headtrackPairBtn.value_(0); 
+                                nil 
+                            });
                         };
                     }.defer;
                 };
