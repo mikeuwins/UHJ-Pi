@@ -962,6 +962,13 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         ambient = zsynth + wetOnly;
                         // Spatial transformations (rotation, tilt, tumble) temporarily disabled
                         trans = ambient; // bypass FoaRTT
+                        
+                        // Measure Z magnitude (RMS) after all processing to gate height speakers
+                        // This prevents W/X/Y leakage into height speakers when Z is absent
+                        var zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
+                        var zThreshold = 0.0001; // Threshold below which Z is considered absent
+                        var heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
+                        
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
                         if(outputs == 2, {
@@ -1011,8 +1018,10 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                                 var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for LFE/SUB
                                 var centerChan = out[0] * centerGain.dbamp * centerOn;
                                 var subChan = lowpass * subGain.dbamp * subOn;
-                                var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
-                                var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
+                                // Gate height speakers based on Z presence (measured before decode)
+                                var heightGate = K2A.ar(heightGateGain); // Convert control rate to audio rate
+                                var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
+                                var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
                                 out = [
                                     out[1] * flOn, // FL (Speaker 1) - Front Left
                                     out[4] * frOn, // FR (Speaker 2) - Front Right
@@ -1297,6 +1306,13 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                             ambient = zsynth + wetOnly2;
                             // Spatial transformations (rotation, tilt, tumble) temporarily disabled
                             trans = ambient; // bypass FoaRTT
+                            
+                            // Measure Z magnitude (RMS) after all processing to gate height speakers
+                            // This prevents W/X/Y leakage into height speakers when Z is absent
+                            var zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
+                            var zThreshold2 = 0.0001; // Threshold below which Z is considered absent
+                            var heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
+                            
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
                             if(outputs == 2, {
@@ -1345,8 +1361,10 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                                     var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for LFE/SUB
                                     var centerChan = out[0] * centerGain.dbamp * centerOn;
                                     var subChan = lowpass * subGain.dbamp * subOn;
-                                    var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
-                                    var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
+                                    // Gate height speakers based on Z presence (measured before decode)
+                                    var heightGate2 = K2A.ar(heightGateGain2); // Convert control rate to audio rate
+                                    var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate2 * tflOn;
+                                    var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate2 * tfrOn;
                                     out = [
                                         out[1] * flOn, // FL (Speaker 1) - Front Left
                                         out[4] * frOn, // FR (Speaker 2) - Front Right
