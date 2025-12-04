@@ -1551,15 +1551,17 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         
-                        // Measure Z magnitude (RMS) to gate height speakers
-                        // Measure from ambient (after reverb mix) to catch both synthesized Z and reverb-processed Z
-                        // This ensures gate opens when either Z synthesis or reverb produces Z signal
-                        zMagnitudeAmbient = Amplitude.kr(ambient[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
+                        // Measure Z magnitude from zsynth (directly from Z synthesis output)
+                        // This tells us if Z synthesis is actually producing Z signal
+                        zMagnitudeSynth = Amplitude.kr(zsynth[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
+                        // Also measure from ambient to catch reverb-processed Z
+                        zMagnitudeAmbient = Amplitude.kr(ambient[3], 0.01, 0.1);
                         zThreshold = 0.000001; // Threshold to detect Z signal (very low to catch weak Z synth output)
-                        // Gate opens if Z is present OR if height synthesis is enabled (to allow synthesized Z through)
-                        heightGateGain = (zMagnitudeAmbient > zThreshold) + ((zsynthHeightSource > 0) * 0.5); // 1 if Z present, 0.5+ if height synth enabled, 0 if absent
+                        // Gate opens if Z is present in either zsynth OR ambient (reverb can add Z too)
+                        // OR if height synthesis is enabled (to allow synthesized Z through even if below threshold)
+                        heightGateGain = (zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold) + ((zsynthHeightSource > 0) * 0.5);
                         heightGateGain = heightGateGain.min(1); // Clamp to 1
-                        // Send gate state to control bus 1000 for visual indicator
+                        // Send gate state to control bus 1000 for visual indicator (1 if Z detected, 0.5+ if height synth enabled)
                         Out.kr(1000, heightGateGain);
                         
                         // Decode using selected decoder
