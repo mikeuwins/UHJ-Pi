@@ -1561,12 +1561,16 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // - If height synthesis is enabled (heightSource = 1), always open gate to 1.0
                         //   This allows synthesized Z to pass through even if it's below detection threshold
                         // - Otherwise, gate opens only if Z is detected above threshold (prevents W/X/Y leakage)
+                        // Note: When heightSource = 1, FoaZSynthesis should produce Z from X/Y, so gate should be open
                         heightGateGain = if(zsynthHeightSource > 0, 
-                            1.0, // Height synthesis enabled: always open gate fully
+                            1.0, // Height synthesis enabled: always open gate fully (FoaZSynthesis should produce Z)
                             if((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold) > 0, 1.0, 0.0) // Otherwise: gate only if Z detected
                         );
                         // Send gate state to control bus 1000 for visual indicator (1.0 = ON, 0.0 = OFF)
+                        // Also send Z magnitude for debugging (multiply by 1000 to make it more visible)
                         Out.kr(1000, heightGateGain);
+                        Out.kr(1001, zMagnitudeSynth * 1000); // Debug: Z magnitude from synthesis
+                        Out.kr(1002, zMagnitudeAmbient * 1000); // Debug: Z magnitude from ambient
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -4295,12 +4299,16 @@ AppClock.sched(0.1, {
                 .background_(Color.black);
             
             // Monitor Z signal and update indicator
+            // Read gate state (bus 1000), Z magnitude from synthesis (bus 1001), Z magnitude from ambient (bus 1002)
             ~zMonitorRoutine = Routine({
                 loop {
-                    var zDetected = In.kr(1000);
+                    var zGate = In.kr(1000);
+                    var zSynthMag = In.kr(1001);
+                    var zAmbientMag = In.kr(1002);
                     {
                         if(~zSignalIndicator.notNil) {
-                            if(zDetected > 0.5) {
+                            // Show gate state: ON if gate > 0.5 (height synthesis enabled or Z detected)
+                            if(zGate > 0.5) {
                                 ~zSignalIndicator.string_("Z: ON");
                                 ~zSignalIndicator.stringColor_(Color.cyan);
                             } {
