@@ -1554,8 +1554,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Measure Z magnitude (RMS) BEFORE reverb to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
                         // Measure Z from zsynth (before reverb) to avoid reverb-generated Z opening the gate
-                        zMagnitudePreReverb = Amplitude.kr(zsynth[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                        zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
+                        // Use longer attack/release for more stable detection of synthesized Z
+                        zMagnitudePreReverb = Amplitude.kr(zsynth[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
+                        zThreshold = 0.000001; // Threshold to detect Z signal (very low to catch weak Z synth output)
                         heightGateGain = (zMagnitudePreReverb > zThreshold); // 1 if Z present, 0 if absent
                         // Also measure final Z for visual indicator (after reverb)
                         zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05);
@@ -4242,11 +4243,12 @@ AppClock.sched(0.1, {
                 .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
-                .value_(0)
+                .value_(if((~ambienceState[\active] ? 0) == 1, 1, 0))
                 .action_({ |btn|
                     var mixSlider = if(~ambienceSliders.notNil and: { ~ambienceSliders.size > 2 }, { ~ambienceSliders[2] }, { nil });
                     if(btn.value == 1) {
-                        var mixVal = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
+                        // Turn reverb ON: use slider value if > 0, otherwise restore last mix
+                        var mixVal = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0.5 });
                         if(mixVal <= 0 and: { ~ambienceLastMix.notNil and: { ~ambienceLastMix > 0 } }) {
                             mixVal = ~ambienceLastMix;
                             if(mixSlider.notNil) { mixSlider.value_(mixVal); };
@@ -4255,8 +4257,9 @@ AppClock.sched(0.1, {
                         ~ambienceState[\active] = 1;
                         if(~synth.notNil) { ~synth.set(\ambience, mixVal.linlin(0, 1, 0, 0.2)); };
                     } {
-                        var currentMix = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
-                        ~ambienceLastMix = currentMix;
+                        // Turn reverb OFF: save current slider value, then set to 0
+                        var currentMix = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0.5 });
+                        if(currentMix > 0) { ~ambienceLastMix = currentMix; };
                         ~ambienceState[\active] = 0;
                         if(~synth.notNil) { ~synth.set(\ambience, 0); };
                     };
