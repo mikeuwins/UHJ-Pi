@@ -318,8 +318,7 @@ win.onClose_({
     // Stop connection monitor
     if(~connectionMonitor.notNil) { ~connectionMonitor.stop; };
     if(s.serverRunning) { s.quit; };
-    // Use thisProcess.shutdown for clean EGLFS exit
-    thisProcess.shutdown;
+    0.exit;
 });
 // Position at visible top-left corner
 if(Platform.name == \osx, {
