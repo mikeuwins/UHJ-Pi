@@ -1551,15 +1551,14 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         
-                        // Measure Z magnitude (RMS) BEFORE reverb to gate height speakers
-                        // This prevents W/X/Y leakage into height speakers when Z is absent
-                        // Measure Z from zsynth (before reverb) to avoid reverb-generated Z opening the gate
-                        // Use longer attack/release for more stable detection of synthesized Z
-                        zMagnitudePreReverb = Amplitude.kr(zsynth[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
+                        // Measure Z magnitude (RMS) to gate height speakers
+                        // Measure from ambient (after reverb mix) to catch both synthesized Z and reverb-processed Z
+                        // This ensures gate opens when either Z synthesis or reverb produces Z signal
+                        zMagnitudeAmbient = Amplitude.kr(ambient[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
                         zThreshold = 0.000001; // Threshold to detect Z signal (very low to catch weak Z synth output)
-                        heightGateGain = (zMagnitudePreReverb > zThreshold); // 1 if Z present, 0 if absent
-                        // Also measure final Z for visual indicator (after reverb)
-                        zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05);
+                        // Gate opens if Z is present OR if height synthesis is enabled (to allow synthesized Z through)
+                        heightGateGain = (zMagnitudeAmbient > zThreshold) + ((zsynthHeightSource > 0) * 0.5); // 1 if Z present, 0.5+ if height synth enabled, 0 if absent
+                        heightGateGain = heightGateGain.min(1); // Clamp to 1
                         // Send gate state to control bus 1000 for visual indicator
                         Out.kr(1000, heightGateGain);
                         
