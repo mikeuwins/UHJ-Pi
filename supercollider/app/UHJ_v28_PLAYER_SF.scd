@@ -1553,14 +1553,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         
                         // Measure Z magnitude (RMS) after all processing to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
-                        // DEBUG: Monitor Z signal level
                         zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                        // Send Z magnitude to control bus for monitoring (bus 1000)
-                        Out.kr(1000, zMagnitude);
-                        zThreshold = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
-                        // TEMP: Gate disabled for testing - check if Z synth is producing signal
-                        heightGateGain = 1; // TEMP: Always open gate to test Z synth output
-                        // heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
+                        zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
+                        heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -1716,15 +1711,6 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                     subLpfVal = ~dolbyState[\subLPF] ? 120;
                     topHpfVal = ~dolbyState[\topHPF] ? 2000;
 
-                    // DEBUG: Monitor Z signal level (check bus 1000 every 2 seconds)
-                    ~zMonitor = {
-                        loop {
-                            var zLevel = In.kr(1000);
-                            ("Z magnitude: " ++ zLevel.round(0.00001) ++ " | heightSource: " ++ zsSource ++ " | heightAmount: " ++ zsAmount).postln;
-                            2.wait;
-                        };
-                    }.fork;
-                    
                     ~synth = Synth(\kernelEncodeDecode, [\buffer, sndbuf, \amp, voltmp, 
                         \maplinSurround, ~maplinState[\surround] ? 0.8, 
                         \maplinEffect, ~maplinState[\effect] ? 0.8,
@@ -1909,14 +1895,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             
                             // Measure Z magnitude (RMS) after all processing to gate height speakers
                             // This prevents W/X/Y leakage into height speakers when Z is absent
-                            // DEBUG: Monitor Z signal level
                             zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                            // Send Z magnitude to control bus for monitoring (bus 1000)
-                            Out.kr(1000, zMagnitude2);
-                            zThreshold2 = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
-                            // TEMP: Gate disabled for testing - check if Z synth is producing signal
-                            heightGateGain2 = 1; // TEMP: Always open gate to test Z synth output
-                            // heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
+                            zThreshold2 = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
+                            heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
                             
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
