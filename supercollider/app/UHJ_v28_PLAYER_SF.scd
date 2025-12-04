@@ -4163,21 +4163,15 @@ AppClock.sched(0.1, {
                                 2, {
                                     var currentMix = sl.value;
                                     ~ambienceValues[i].string = valPct.asString ++ "%";
+                                    // Only update reverb if button is already ON - don't auto-toggle button
                                     if(~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 }) {
                                         if(~synth.notNil) { ~synth.set(\ambience, currentMix.linlin(0, 1, 0, 0.2)); };
                                         ~ambienceLastMix = currentMix;
                                     } {
+                                        // Save slider value even when button is off
                                         ~ambienceLastMix = currentMix;
                                     };
-                                    if(~ambienceRestoring.not and: { ~ambienceOnOffBtn.notNil }) {
-                                        if(currentMix > 0 and: { ~ambienceOnOffBtn.value == 0 }) {
-                                            ~ambienceOnOffBtn.valueAction_(1);
-                                        } {
-                                            if(currentMix <= 0 and: { ~ambienceOnOffBtn.value == 1 }) {
-                                                ~ambienceOnOffBtn.valueAction_(0);
-                                            };
-                                        };
-                                    };
+                                    // Removed auto-toggle behavior - button should only be controlled manually
                                 },
                                 3, {
                                     var pd = sl.value.linlin(0,1,0,0.25);
