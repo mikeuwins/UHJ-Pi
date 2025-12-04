@@ -32,6 +32,12 @@ var win, mainView,
 ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
 // --- Power button state ---
 ~powerBtnPressed = false;
+// --- Headtracker drift compensation variables ---
+~htRotateSmoothed = 0.5;  // Smoothed rotation value (0-1, center = 0.5)
+~htRotateLast = 0.5;      // Last rotation value for change detection
+~htSmoothFactor = 0.15;   // Smoothing factor (0-1, lower = more smoothing)
+~htDeadZone = 0.02;       // Dead zone around center (ignore changes smaller than this)
+~htChangeThreshold = 0.005; // Minimum change threshold to update
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -5196,11 +5202,34 @@ Tdef( 'tryOpenHID' ).play;
 // Map HID usages to GUI knobs (always active, no gating)
 HIDdef.usage( \hidRotation, { |val|
     {
-        //("Headtracker raw rotation: " ++ val).postln;  // <-- Add this line
         if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
-            ~rotateKnob.valueAction_(
-                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
-            );
+            // Map raw HID value to 0-1 range
+            var mappedVal = 1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1);
+            
+            // Apply exponential smoothing
+            ~htRotateSmoothed = (~htRotateSmoothed * (1 - ~htSmoothFactor)) + (mappedVal * ~htSmoothFactor);
+            
+            // Calculate change from last value
+            var change = (~htRotateSmoothed - ~htRotateLast).abs;
+            
+            // Only update if change is significant (above threshold)
+            if(change > ~htChangeThreshold) {
+                // Check if we're in dead zone around center (0.5)
+                var distFromCenter = (~htRotateSmoothed - 0.5).abs;
+                
+                if(distFromCenter > ~htDeadZone) {
+                    // Outside dead zone - update knob
+                    ~rotateKnob.valueAction_(~htRotateSmoothed);
+                    ~htRotateLast = ~htRotateSmoothed;
+                } {
+                    // In dead zone - snap to center if we were outside before
+                    if((~htRotateLast - 0.5).abs > ~htDeadZone) {
+                        ~rotateKnob.valueAction_(0.5);
+                        ~htRotateLast = 0.5;
+                        ~htRotateSmoothed = 0.5; // Reset smoothed value to center
+                    };
+                };
+            };
         };
     }.defer;
 }, \Z );
