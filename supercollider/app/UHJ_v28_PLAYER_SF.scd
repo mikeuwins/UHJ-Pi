@@ -1551,11 +1551,14 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         
-                        // Measure Z magnitude (RMS) after all processing to gate height speakers
+                        // Measure Z magnitude (RMS) BEFORE reverb to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
-                        zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
+                        // Measure Z from zsynth (before reverb) to avoid reverb-generated Z opening the gate
+                        var zMagnitudePreReverb = Amplitude.kr(zsynth[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                         zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
-                        heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
+                        heightGateGain = (zMagnitudePreReverb > zThreshold); // 1 if Z present, 0 if absent
+                        // Also measure final Z for visual indicator (after reverb)
+                        zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05);
                         // Send gate state to control bus 1000 for visual indicator
                         Out.kr(1000, heightGateGain);
                         
@@ -1895,8 +1898,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             // Apply rotation/tilt/tumble
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                             
-                            // Measure Z magnitude (RMS) after all processing to gate height speakers
+                            // Measure Z magnitude (RMS) BEFORE reverb to gate height speakers
                             // This prevents W/X/Y leakage into height speakers when Z is absent
+                            // Note: In this branch (reboot path), reverb is applied directly to encode, so measure after FoaRTT
                             zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                             zThreshold2 = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
                             heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
