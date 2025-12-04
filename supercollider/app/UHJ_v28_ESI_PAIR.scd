@@ -5201,21 +5201,22 @@ Tdef( 'tryOpenHID' ).play;
 
 // Map HID usages to GUI knobs (always active, no gating)
 HIDdef.usage( \hidRotation, { |val|
+    var mappedVal, change, distFromCenter;
     {
         if(~rotateKnob.notNil and: { ~rotateKnob.enabled }) {
             // Map raw HID value to 0-1 range
-            var mappedVal = 1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1);
+            mappedVal = 1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1);
             
             // Apply exponential smoothing
             ~htRotateSmoothed = (~htRotateSmoothed * (1 - ~htSmoothFactor)) + (mappedVal * ~htSmoothFactor);
             
             // Calculate change from last value
-            var change = (~htRotateSmoothed - ~htRotateLast).abs;
+            change = (~htRotateSmoothed - ~htRotateLast).abs;
             
             // Only update if change is significant (above threshold)
             if(change > ~htChangeThreshold) {
                 // Check if we're in dead zone around center (0.5)
-                var distFromCenter = (~htRotateSmoothed - 0.5).abs;
+                distFromCenter = (~htRotateSmoothed - 0.5).abs;
                 
                 if(distFromCenter > ~htDeadZone) {
                     // Outside dead zone - update knob
