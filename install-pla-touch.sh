@@ -491,9 +491,9 @@ for ext_dir in SFPlayerMeter SFPlayerClass; do
         echo "Installing $ext_dir..."
         cp -r "$ext_dir" "/home/$ACTUAL_USER/.local/share/SuperCollider/Extensions/"
         echo "$ext_dir installation completed"
-    else
+else
         echo "$ext_dir already exists, skipping"
-    fi
+fi
 done
 
 # Set proper ownership
@@ -802,26 +802,12 @@ echo "Launcher script installed to /usr/local/bin/start"
 
 step_header "STEP 18/18: Configuring Screen Orientation"
 
-# Ask user about screen orientation
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Screen Orientation Selection:"
-echo "  1. Normal orientation (0 degrees)"
-echo "  2. Flipped 180 degrees"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-read -t 10 -p "Select screen orientation [1 or 2, default: 1] (10 second timeout): " SCREEN_ROTATION || true
-SCREEN_ROTATION=${SCREEN_ROTATION:-1} # Default to 1 (0 degrees) if no input or timeout
+# Player (PLA) default install: normal (0 degree) orientation.
+# For flipped 180° screens, use the dedicated *-touch-180 installers instead.
+ROTATION_VALUE="0"
+echo "✓ Screen rotation set to 0 degrees (normal)"
 
-if [ "$SCREEN_ROTATION" = "2" ]; then
-    ROTATION_VALUE="180"
-    echo "✓ Screen rotation set to 180 degrees (flipped)"
-else
-    ROTATION_VALUE="0"
-    echo "✓ Screen rotation set to 0 degrees (normal)"
-fi
-
-# Set display rotation based on user selection (Qt platform already configured in STEP 15)
+# Set display rotation (Qt platform already configured in STEP 15)
 echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.bashrc
 echo "export QT_QPA_EGLFS_ROTATION=$ROTATION_VALUE" >> /home/$ACTUAL_USER/.profile
 echo "✓ Screen orientation configured"
