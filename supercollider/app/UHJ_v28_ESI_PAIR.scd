@@ -35,9 +35,13 @@ var win, mainView,
 // --- Headtracker drift compensation variables ---
 ~htRotateSmoothed = 0.5;  // Smoothed rotation value (0-1, center = 0.5)
 ~htRotateLast = 0.5;      // Last rotation value for change detection
+~htTumbleSmoothed = 0.5;  // Smoothed tumble value (0-1, center = 0.5)
+~htTumbleLast = 0.5;      // Last tumble value for change detection
 ~htSmoothFactor = 0.15;   // Smoothing factor (0-1, lower = more smoothing)
 ~htDeadZone = 0.02;       // Dead zone around center (ignore changes smaller than this)
 ~htChangeThreshold = 0.005; // Minimum change threshold to update
+~htWrapThreshold = 0.5;   // Threshold to detect wrap-around (if change > this, it's a wrap)
+~htWrapThreshold = 0.5;   // Threshold to detect wrap-around (if change > this, it's a wrap)
 // --- AmbiVerbSC preset system variables ---
 ~ambiencePresetNames = nil; ~ambiencePresetDict = nil; ~ambiencePresetMenu = nil;
 
@@ -5246,11 +5250,48 @@ HIDdef.usage( \hidTilt, { |val|
 }, \Y );
 
 HIDdef.usage( \hidTumble, { |val|
+    var mappedVal, change, distFromCenter, rawChange;
     {
         if(~tumbleKnob.notNil and: { ~tumbleKnob.enabled }) {
-            ~tumbleKnob.valueAction_(
-                1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1)
-            );
+            // Map raw HID value to 0-1 range
+            mappedVal = 1 - val.linlin(0.060606062412262, 0.94037145376205, 0, 1);
+            
+            // Check for wrap-around (large jump indicates wrap past 180 degrees)
+            rawChange = (mappedVal - ~htTumbleLast).abs;
+            if(rawChange > ~htWrapThreshold) {
+                // This is a wrap-around - don't smooth through it, just update directly
+                // This prevents getting stuck at the wrap point
+                ~htTumbleSmoothed = mappedVal;
+            } {
+                // Normal smoothing (no wrap)
+                ~htTumbleSmoothed = (~htTumbleSmoothed * (1 - ~htSmoothFactor)) + (mappedVal * ~htSmoothFactor);
+            };
+            
+            // Calculate change from last value
+            change = (~htTumbleSmoothed - ~htTumbleLast).abs;
+            // Check wrap-around case for change (shorter path around circle)
+            if(change > 0.5) { change = 1.0 - change };
+            
+            // Only update if change is significant (above threshold)
+            if(change > ~htChangeThreshold) {
+                // Check if we're in dead zone around center (0.5)
+                distFromCenter = (~htTumbleSmoothed - 0.5).abs;
+                // Check wrap-around dead zone (shorter path)
+                if(distFromCenter > 0.5) { distFromCenter = 1.0 - distFromCenter };
+                
+                if(distFromCenter > ~htDeadZone) {
+                    // Outside dead zone - update knob
+                    ~tumbleKnob.valueAction_(~htTumbleSmoothed);
+                    ~htTumbleLast = ~htTumbleSmoothed;
+                } {
+                    // In dead zone - snap to center if we were outside before
+                    if((~htTumbleLast - 0.5).abs > ~htDeadZone) {
+                        ~tumbleKnob.valueAction_(0.5);
+                        ~htTumbleLast = 0.5;
+                        ~htTumbleSmoothed = 0.5; // Reset smoothed value to center
+                    };
+                };
+            };
         };
     }.defer;
 }, \X );
