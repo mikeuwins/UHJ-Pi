@@ -966,7 +966,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         // Measure Z magnitude (RMS) after all processing to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
                         var zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                        var zThreshold = 0.0001; // Threshold below which Z is considered absent
+                        var zThreshold = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
                         var heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
                         
                         // Decode using selected decoder
@@ -1310,7 +1310,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                             // Measure Z magnitude (RMS) after all processing to gate height speakers
                             // This prevents W/X/Y leakage into height speakers when Z is absent
                             var zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                            var zThreshold2 = 0.0001; // Threshold below which Z is considered absent
+                            var zThreshold2 = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
                             var heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
                             
                             // Decode using selected decoder
