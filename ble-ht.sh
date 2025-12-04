@@ -52,12 +52,12 @@ for attempt in 1 2; do
     
     {
         echo "pair $DEVICE_MAC"
-        sleep 5  # Increased wait time for pairing to complete
+        sleep 7  # Longer wait for pairing to complete (was 5)
         echo "exit"
     } | bluetoothctl
     
-    # Wait a bit for status to update
-    sleep 2
+    # Wait longer for status to update
+    sleep 3  # Increased from 2
     
     # Check if pairing succeeded (simpler check like debug version)
     if bluetoothctl info "$DEVICE_MAC" 2>/dev/null | grep -q "Paired: yes"; then
@@ -67,7 +67,7 @@ for attempt in 1 2; do
     
     if [ $attempt -eq 1 ]; then
         echo "First attempt failed, retrying..."
-        sleep 2  # Longer wait between attempts
+        sleep 3  # Longer wait between attempts (was 2)
     fi
 done
 
