@@ -1554,7 +1554,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Measure Z magnitude (RMS) after all processing to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
                         zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                        zThreshold = 0.0001; // Threshold below which Z is considered absent
+                        zThreshold = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
                         heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
                         
                         // Decode using selected decoder
@@ -1896,7 +1896,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             // Measure Z magnitude (RMS) after all processing to gate height speakers
                             // This prevents W/X/Y leakage into height speakers when Z is absent
                             zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                            zThreshold2 = 0.0001; // Threshold below which Z is considered absent
+                            zThreshold2 = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
                             heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
                             
                             // Decode using selected decoder
@@ -4132,6 +4132,10 @@ AppClock.sched(0.1, {
                             var labelText = if(snap <= 0.25, "Lower", if(snap >= 0.75, "Height", "All"));
                             ~ambienceValues[i].string = labelText;
                         };
+                        // Save slider value to state
+                        if(~ambienceState[\sliderValues].notNil) {
+                            ~ambienceState[\sliderValues][i] = sl.value;
+                        };
                         if(~synth.notNil) {
                             switch(i,
                                 0, {
@@ -4213,6 +4217,10 @@ AppClock.sched(0.1, {
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
+                // Save slider value to state
+                if(~ambienceState[\sliderValues].notNil) {
+                    ~ambienceState[\sliderValues][0] = sl.value;
+                };
                 if(~synth.notNil and: { ~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 } }) {
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 };
