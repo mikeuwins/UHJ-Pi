@@ -862,6 +862,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 2000, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1, lOn = 1, rOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         var lineInputs, phonoInputs, ucaPair, ufoPair, primaryPair, phjInputs;
+                        var zMagnitudeSynth, zMagnitudeAmbient, zThreshold, heightGateGain, heightGate;
                         var muteGate, gainL, gainR, ampCtl;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
                         // Audio source - live input from hardware
@@ -968,6 +969,30 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         // If HEIGHT is OFF (zsynthHeightSource == 0), suppress any wet Z contribution
                         wetOnly = [wetOnly[0], wetOnly[1], wetOnly[2], wetOnly[3] * (zsynthHeightSource > 0)];
                         ambient = zsynth + wetOnly;
+                        
+                        // Measure Z magnitude from zsynth (directly from Z synthesis output)
+                        // This tells us if Z synthesis is actually producing Z signal
+                        zMagnitudeSynth = Amplitude.kr(zsynth[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
+                        // Also measure from ambient to catch reverb-processed Z
+                        zMagnitudeAmbient = Amplitude.kr(ambient[3], 0.01, 0.1);
+                        zThreshold = 0.000001; // Threshold to detect Z signal (very low to catch weak Z synth output)
+                        // Gate logic: 
+                        // - If height synthesis is enabled (heightSource = 1), always open gate to 1.0
+                        //   This allows synthesized Z to pass through even if it's below detection threshold
+                        // - Otherwise, gate opens only if Z is detected above threshold (prevents W/X/Y leakage)
+                        // Use Select.kr instead of if for control rate (more reliable)
+                        heightGateGain = Select.kr(
+                            (zsynthHeightSource > 0).asInteger, // 1 if height synthesis enabled, 0 otherwise
+                            [
+                                // Case 0: Height synthesis disabled - gate only if Z detected
+                                if((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold) > 0, 1.0, 0.0),
+                                // Case 1: Height synthesis enabled - always open gate
+                                1.0
+                            ]
+                        );
+                        // Send gate state to control bus 1000 for visual indicator (1.0 = ON, 0.0 = OFF)
+                        Out.kr(1000, heightGateGain);
+                        
                         // Spatial transformations (rotation, tilt, tumble) temporarily disabled
                         trans = ambient; // bypass FoaRTT
                         // Decode using selected decoder
@@ -1019,8 +1044,10 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                                 var lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4); // Sum FL + FR for LFE/SUB
                                 var centerChan = out[0] * centerGain.dbamp * centerOn;
                                 var subChan = lowpass * subGain.dbamp * subOn;
-                                var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
-                                var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
+                                // Gate height speakers based on Z presence (measured before decode)
+                                heightGate = K2A.ar(heightGateGain); // Convert control rate to audio rate
+                                var heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
+                                var heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
                                 out = [
                                     out[1] * flOn, // FL (Speaker 1) - Front Left
                                     out[4] * frOn, // FR (Speaker 2) - Front Right
