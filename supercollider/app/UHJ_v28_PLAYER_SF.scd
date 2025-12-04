@@ -5145,8 +5145,6 @@ AppClock.sched(0.1, {
                             var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
                             var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
                             var subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
-                            var tflX = frontLeftX + 25, tflY = frontLeftY - 25, tflOn = ~dolbyState[\tflOn] ? 1;
-                            var tfrX = frontRightX - 25, tfrY = frontRightY - 25, tfrOn = ~dolbyState[\tfrOn] ? 1;
                             Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
                             // Speaker 1: Front Left
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
@@ -5177,16 +5175,9 @@ AppClock.sched(0.1, {
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            // Speaker 7: Top Front Left (TFL) - positioned above front speakers
-                            Pen.color = if(tflOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(tflX, tflY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(tflX, tflY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("7", Point(tflX + 5, tflY + 2), Font("Helvetica", 13).boldVariant, if(tflOn == 1, { Color.black }, { Color.cyan }));
-                            Pen.stringAtPoint("TFL", Point(tflX + speakerSize + 2, tflY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label horizontally aligned with "7", slightly to the right
-                            // Speaker 8: Top Front Right (TFR) - positioned above front speakers
-                            Pen.color = if(tfrOn == 1, { Color.cyan }, { Color.black }); Pen.addRect(Rect(tfrX, tfrY, speakerSize, speakerSize)); Pen.fill;
-                            Pen.color = Color.cyan; Pen.addRect(Rect(tfrX, tfrY, speakerSize, speakerSize)); Pen.stroke;
-                            Pen.stringAtPoint("8", Point(tfrX + 5, tfrY + 2), Font("Helvetica", 13).boldVariant, if(tfrOn == 1, { Color.black }, { Color.cyan }));
-                            Pen.stringAtPoint("TFR", Point(tfrX - 22, tfrY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label horizontally aligned with "8", slightly to the left
+                            // Speaker 7 and 8 labels only (TFL/TFR) - positioned relative to front speakers
+                            Pen.stringAtPoint("TFL", Point(frontLeftX + speakerSize + 2, frontLeftY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the right of speaker 1, horizontally aligned
+                            Pen.stringAtPoint("TFR", Point(frontRightX - 22, frontRightY + 2), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the left of speaker 2, horizontally aligned
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
