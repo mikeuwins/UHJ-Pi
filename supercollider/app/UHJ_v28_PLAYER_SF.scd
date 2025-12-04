@@ -5152,12 +5152,12 @@ AppClock.sched(0.1, {
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 11), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 11), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 3: Rear Left (RL)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
@@ -5172,14 +5172,14 @@ AppClock.sched(0.1, {
                             Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("5", Point(centerX_speaker + 5, centerY_speaker + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("C", Point(centerX_speaker + 5, centerY_speaker - 11), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("C", Point(centerX_speaker + 5, centerY_speaker - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 6: Subwoofer (Sub = 6)
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 7 and 8 labels (TFL/TFR) - positioned relative to existing speaker boxes
-                            Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 2, topFrontLeftY + 1), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the right of speaker 7, horizontally aligned with "7"
-                            Pen.stringAtPoint("TFR", Point(topFrontRightX - 22, topFrontRightY + 1), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the left of speaker 8, horizontally aligned with "8"
+                            Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 2, topFrontLeftY + 3), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the right of speaker 7, horizontally aligned with "7"
+                            Pen.stringAtPoint("TFR", Point(topFrontRightX - 22, topFrontRightY + 3), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the left of speaker 8, horizontally aligned with "8"
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
