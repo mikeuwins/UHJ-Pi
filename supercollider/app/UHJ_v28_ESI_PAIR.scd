@@ -1731,7 +1731,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .action_({
         var out;
         // Run pairing script and capture stdout for post window
-        out = "bash -lc 'auto_pair_headtracker.sh'".unixCmdGetStdOut;
+        out = "/usr/local/bin/auto_pair_headtracker.sh".unixCmdGetStdOut;
         out.postln;
     });
 // Ensure button is above overlays

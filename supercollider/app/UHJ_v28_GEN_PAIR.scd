@@ -1818,7 +1818,7 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     .action_({
         var out;
         // Run pairing script and capture stdout for post window
-        out = "bash -lc 'auto_pair_headtracker.sh'".unixCmdGetStdOut;
+        out = "/usr/local/bin/auto_pair_headtracker.sh".unixCmdGetStdOut;
         out.postln;
     });
 // Ensure button is above overlays
@@ -5031,9 +5031,11 @@ HIDdef.usage( \hidTumble, { |val|
     .font_(Font("Helvetica", 10)) // Same size as RESET button
     .focusColor_(Color.clear)
     .mouseDownAction_({ |view, x, y, modifiers, buttonNumber, clickCount|
-        win.close;
-    });
+        win.close;    });
 
 ~powerBtn.tryPerform(\touchBeginAction_, { |view, x, y, pressure, id|
     win.close;
 });
+
+        win.close;
+        win.close;
