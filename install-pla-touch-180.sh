@@ -770,12 +770,20 @@ fc-cache -f >> $INSTALL_LOG 2>&1
 echo "✓ Custom fonts installed"
 
 # STEP 22: Install Bluetooth pairing script
-step_header "STEP 16/18: Installing Bluetooth Pairing Script"
-echo "Installing Bluetooth pairing script..."
+step_header "STEP 16/18: Installing Bluetooth Pairing Scripts"
+echo "Installing Bluetooth pairing scripts..."
 cp /home/$ACTUAL_USER/UHJ-Pi/ble-ht.sh /usr/local/bin/
 chmod +x /usr/local/bin/ble-ht.sh
 chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/ble-ht.sh
-echo "Bluetooth pairing script installed to /usr/local/bin/"
+echo "✓ Bluetooth pairing script (ble-ht.sh) installed to /usr/local/bin/"
+
+# Also install auto_pair_headtracker.sh if it exists
+if [ -f "/home/$ACTUAL_USER/UHJ-Pi/auto_pair_headtracker.sh" ]; then
+    cp /home/$ACTUAL_USER/UHJ-Pi/auto_pair_headtracker.sh /usr/local/bin/
+    chmod +x /usr/local/bin/auto_pair_headtracker.sh
+    chown $ACTUAL_USER:$ACTUAL_USER /usr/local/bin/auto_pair_headtracker.sh
+    echo "✓ Auto pairing script (auto_pair_headtracker.sh) installed to /usr/local/bin/"
+fi
 
 # Configure passwordless sudo for reboot
 echo "Configuring passwordless sudo for reboot..."
