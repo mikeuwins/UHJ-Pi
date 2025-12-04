@@ -27,8 +27,8 @@ echo "Found headtracker at $DEVICE_MAC"
 
 # Check if device is already paired and remove it first
 echo "Checking if device is already paired..."
-device_info=$(bluetoothctl info "$DEVICE_MAC" 2>/dev/null)
-if echo "$device_info" | grep -q "Paired: yes"; then
+# First check if we can get info on this MAC
+if bluetoothctl info "$DEVICE_MAC" 2>/dev/null | grep -q "Paired: yes"; then
     echo "Device is already paired - removing it first..."
     bluetoothctl disconnect "$DEVICE_MAC" > /dev/null 2>&1
     sleep 1
@@ -46,6 +46,17 @@ if echo "$device_info" | grep -q "Paired: yes"; then
         echo "scan off"
         echo "exit"
     } | bluetoothctl > /dev/null 2>&1
+else
+    # Also check if device is in paired devices list (might have different MAC)
+    PAIRED_MAC=$(bluetoothctl devices Paired | grep -i "$DEVICE_NAME" | awk '{print $2}')
+    if [ -n "$PAIRED_MAC" ] && [ "$PAIRED_MAC" != "$DEVICE_MAC" ]; then
+        echo "Found different paired device with same name - removing it..."
+        bluetoothctl disconnect "$PAIRED_MAC" > /dev/null 2>&1
+        sleep 1
+        bluetoothctl remove "$PAIRED_MAC" > /dev/null 2>&1
+        sleep 2
+        echo "Existing pairing removed"
+    fi
 fi
 
 # Try pairing (with automatic retry)
