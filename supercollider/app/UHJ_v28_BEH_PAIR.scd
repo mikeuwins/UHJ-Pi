@@ -2042,22 +2042,33 @@ StaticText(mainView, Rect(618, 10, 140, 28))
     loop {
         5.wait; // Check every 5 seconds
         
-        // Only check if button exists, shows paired status and not currently pairing
+        // Check if button exists and not currently pairing
         // Use defer to access GUI elements from background thread
         {
-            if ((~headtrackPairBtn.notNil) && (~headtrackPairBtn.value == 2) && (~pairingInProgress.not)) {
+            if ((~headtrackPairBtn.notNil) && (~pairingInProgress.not)) {
                 if (~headtrackerMac.notEmpty) {
                     checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
                     isConnected = checkResult.contains("Connected: yes");
                     isPaired = checkResult.contains("Paired: yes");
                     
-                    if (isPaired.not || isConnected.not) {
-                        // Device is disconnected/removed - reset button
-                        ~headtrackPairBtn.value_(0);
+                    if (isPaired && isConnected) {
+                        // Device is paired and connected - show paired state
+                        if (~headtrackPairBtn.value != 2) {
+                            ~headtrackPairBtn.value_(2);
+                        };
+                    } {
+                        if (isPaired.not || isConnected.not) {
+                            // Device is disconnected/removed - reset button
+                            if (~headtrackPairBtn.value != 0) {
+                                ~headtrackPairBtn.value_(0);
+                            };
+                        };
                     };
                 } {
-                    // No headtracker MAC - reset button
-                    ~headtrackPairBtn.value_(0);
+                    // No headtracker MAC - reset button if not already reset
+                    if (~headtrackPairBtn.value != 0) {
+                        ~headtrackPairBtn.value_(0);
+                    };
                 };
             };
         }.defer;
