@@ -1557,11 +1557,14 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Also measure from ambient to catch reverb-processed Z
                         zMagnitudeAmbient = Amplitude.kr(ambient[3], 0.01, 0.1);
                         zThreshold = 0.000001; // Threshold to detect Z signal (very low to catch weak Z synth output)
-                        // Gate opens if Z is present in either zsynth OR ambient (reverb can add Z too)
-                        // OR if height synthesis is enabled (to allow synthesized Z through even if below threshold)
-                        heightGateGain = (zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold) + ((zsynthHeightSource > 0) * 0.5);
-                        heightGateGain = heightGateGain.min(1); // Clamp to 1
-                        // Send gate state to control bus 1000 for visual indicator (1 if Z detected, 0.5+ if height synth enabled)
+                        // Gate logic: 
+                        // - If height synthesis is enabled, always open gate (height synthesis should produce Z)
+                        // - Otherwise, gate opens only if Z is detected above threshold (prevents W/X/Y leakage)
+                        heightGateGain = if(zsynthHeightSource > 0, 
+                            1.0, // Height synthesis enabled: always open gate
+                            ((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold)).min(1) // Otherwise: gate only if Z detected
+                        );
+                        // Send gate state to control bus 1000 for visual indicator
                         Out.kr(1000, heightGateGain);
                         
                         // Decode using selected decoder
