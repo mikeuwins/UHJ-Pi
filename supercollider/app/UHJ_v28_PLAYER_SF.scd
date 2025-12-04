@@ -1553,9 +1553,11 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         
                         // Measure Z magnitude (RMS) after all processing to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
+                        // TEMPORARILY DISABLED FOR TESTING - gate always open
                         zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                         zThreshold = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
-                        heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
+                        heightGateGain = 1; // TEMP: Always open gate to test Z synth output
+                        // heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -1895,9 +1897,11 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             
                             // Measure Z magnitude (RMS) after all processing to gate height speakers
                             // This prevents W/X/Y leakage into height speakers when Z is absent
+                            // TEMPORARILY DISABLED FOR TESTING - gate always open
                             zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                             zThreshold2 = 0.00001; // Lower threshold to detect Z synth output (was 0.0001)
-                            heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
+                            heightGateGain2 = 1; // TEMP: Always open gate to test Z synth output
+                            // heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
                             
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
