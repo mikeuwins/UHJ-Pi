@@ -2065,6 +2065,11 @@ StaticText(mainView, Rect(618, 10, 140, 28))
         // Use defer to access GUI elements from background thread
         {
             if ((~headtrackPairBtn.notNil) && (~pairingInProgress.not)) {
+                // If MAC is empty, try to detect it (device might have reconnected)
+                if (~headtrackerMac.isEmpty) {
+                    ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
+                };
+                
                 if (~headtrackerMac.notEmpty) {
                     checkResult = ("bluetoothctl info " ++ ~headtrackerMac).unixCmdGetStdOut;
                     isConnected = checkResult.contains("Connected: yes");
