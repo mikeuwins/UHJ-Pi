@@ -54,9 +54,28 @@ for attempt in 1 2; do
     sleep 2
     
     # Check if pairing succeeded
-    if bluetoothctl info "$DEVICE_MAC" | grep -q "Paired: yes"; then
-        echo "PAIRED_AND_CONNECTED"
-        exit 0
+    device_info=$(bluetoothctl info "$DEVICE_MAC" 2>/dev/null)
+    is_paired=$(echo "$device_info" | grep -c "Paired: yes" || echo "0")
+    is_connected=$(echo "$device_info" | grep -c "Connected: yes" || echo "0")
+    
+    if [ "$is_paired" -gt 0 ]; then
+        if [ "$is_connected" -gt 0 ]; then
+            echo "PAIRED_AND_CONNECTED"
+            exit 0
+        else
+            # Paired but not connected - try to connect
+            echo "Device paired but not connected - attempting to connect..."
+            bluetoothctl connect "$DEVICE_MAC" 2>&1
+            sleep 4  # Wait longer for connection to establish
+            
+            # Check again
+            device_info=$(bluetoothctl info "$DEVICE_MAC" 2>/dev/null)
+            if echo "$device_info" | grep -q "Connected: yes"; then
+                echo "PAIRED_AND_CONNECTED"
+                exit 0
+            fi
+            # If still not connected, continue to next attempt or exit with failure
+        fi
     fi
     
     if [ $attempt -eq 1 ]; then
