@@ -1556,6 +1556,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                         zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
                         heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
+                        // Send gate state to control bus 1000 for visual indicator
+                        Out.kr(1000, heightGateGain);
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -1898,6 +1900,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
                             zThreshold2 = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
                             heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
+                            // Send gate state to control bus 1000 for visual indicator
+                            Out.kr(1000, heightGateGain2);
                             
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
@@ -4058,7 +4062,11 @@ AppClock.sched(0.1, {
             if(~metersOverlay.notNil) { 
                 ~metersOverlay.remove; ~metersOverlay = nil; 
             };
-            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
+            if(~ambienceOverlay.notNil) { 
+                if(~zMonitorRoutine.notNil) { ~zMonitorRoutine.stop; ~zMonitorRoutine = nil; };
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil; 
+                ~zSignalIndicator = nil;
+            };
             sliderWidth = 32; sliderHeight = 140; startX = 12; gap = 44;
             ~ambienceOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
             UserView(~ambienceOverlay, Rect(0, 0, 320, 275))
@@ -4271,6 +4279,33 @@ AppClock.sched(0.1, {
                     ~zsynthState[\heightSource] = src;
                     if(~synth.notNil) { ~synth.set(\zsynthHeightSource, src); };
                 });
+            
+            // Z signal indicator - shows when Z is detected
+            ~zSignalIndicator = StaticText(~ambienceOverlay, Rect(18, 260, 80, 16))
+                .string_("Z: OFF")
+                .align_(\center)
+                .stringColor_(Color.grey)
+                .font_(Font("Helvetica", 10))
+                .background_(Color.black);
+            
+            // Monitor Z signal and update indicator
+            ~zMonitorRoutine = {
+                loop {
+                    var zDetected = In.kr(1000);
+                    {
+                        if(~zSignalIndicator.notNil) {
+                            if(zDetected > 0.5) {
+                                ~zSignalIndicator.string_("Z: ON");
+                                ~zSignalIndicator.stringColor_(Color.green);
+                            } {
+                                ~zSignalIndicator.string_("Z: OFF");
+                                ~zSignalIndicator.stringColor_(Color.grey);
+                            };
+                        };
+                    }.defer;
+                    0.1.wait; // Update 10 times per second
+                };
+            }.fork;
             ~ambienceOverlay.front;
             if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
                 ("Found saved state, restoring...").postln;
@@ -4282,7 +4317,9 @@ AppClock.sched(0.1, {
                 }
             }
         } {
+            if(~zMonitorRoutine.notNil) { ~zMonitorRoutine.stop; ~zMonitorRoutine = nil; };
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
+            ~zSignalIndicator = nil;
         }
     });
 // PLAYER button - aligned with left edge of picker windows
