@@ -208,6 +208,8 @@ formatDbValue = { |dbValue|
 win = Window("UHJ Ambisonic System", Rect(0, 0, 800, 480), border: false).background_(Color.black);
 // Ensure server and interpreter quit when window is closed
 win.onClose_({
+    // Stop connection monitor
+    if(~connectionMonitor.notNil) { ~connectionMonitor.stop; };
     if(s.serverRunning) { s.quit; };
     0.exit;
 });
