@@ -4284,23 +4284,23 @@ AppClock.sched(0.1, {
                     if(~synth.notNil) { ~synth.set(\zsynthHeightSource, src); };
                 });
             
-            // Z signal indicator - shows when Z is detected
-            ~zSignalIndicator = StaticText(~ambienceOverlay, Rect(18, 260, 80, 16))
+            // Z signal indicator - shows when Z is detected (positioned below HEIGHT button)
+            ~zSignalIndicator = StaticText(~ambienceOverlay, Rect(18, 260, 80, 20))
                 .string_("Z: OFF")
                 .align_(\center)
                 .stringColor_(Color.grey)
-                .font_(Font("Helvetica", 10))
+                .font_(Font("Helvetica", 11).boldVariant)
                 .background_(Color.black);
             
             // Monitor Z signal and update indicator
-            ~zMonitorRoutine = {
+            ~zMonitorRoutine = Routine({
                 loop {
                     var zDetected = In.kr(1000);
                     {
                         if(~zSignalIndicator.notNil) {
                             if(zDetected > 0.5) {
                                 ~zSignalIndicator.string_("Z: ON");
-                                ~zSignalIndicator.stringColor_(Color.green);
+                                ~zSignalIndicator.stringColor_(Color.cyan);
                             } {
                                 ~zSignalIndicator.string_("Z: OFF");
                                 ~zSignalIndicator.stringColor_(Color.grey);
@@ -4309,7 +4309,7 @@ AppClock.sched(0.1, {
                     }.defer;
                     0.1.wait; // Update 10 times per second
                 };
-            }.fork;
+            }).play(AppClock);
             ~ambienceOverlay.front;
             if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
                 ("Found saved state, restoring...").postln;
