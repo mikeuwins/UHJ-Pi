@@ -2007,6 +2007,13 @@ StaticText(mainView, Rect(618, 10, 140, 28))
                 {
                     ~pairingInProgress = false;  // Reset flag
                     if (success) {
+                        // Re-detect MAC address after successful pairing
+                        ~headtrackerMac = "bluetoothctl devices | grep 'HT' | awk '{print $2}'".unixCmdGetStdOut.stripWhiteSpace;
+                        if (~headtrackerMac.isEmpty) {
+                            ("Warning: Could not detect headtracker MAC after pairing").postln;
+                        } {
+                            ("Headtracker MAC detected: " ++ ~headtrackerMac).postln;
+                        };
                         ~headtrackPairBtn.value_(2); // Success - stay cyan to show paired
                     } {
                         ~headtrackPairBtn.value_(3); // Failed - red X
