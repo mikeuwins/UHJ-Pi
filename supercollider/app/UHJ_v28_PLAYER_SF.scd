@@ -1562,9 +1562,15 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         //   This allows synthesized Z to pass through even if it's below detection threshold
                         // - Otherwise, gate opens only if Z is detected above threshold (prevents W/X/Y leakage)
                         // Note: When heightSource = 1, FoaZSynthesis should produce Z from X/Y, so gate should be open
-                        heightGateGain = if(zsynthHeightSource > 0, 
-                            1.0, // Height synthesis enabled: always open gate fully (FoaZSynthesis should produce Z)
-                            if((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold) > 0, 1.0, 0.0) // Otherwise: gate only if Z detected
+                        // Use Select.kr instead of if for control rate (more reliable)
+                        heightGateGain = Select.kr(
+                            (zsynthHeightSource > 0).asInteger, // 1 if height synthesis enabled, 0 otherwise
+                            [
+                                // Case 0: Height synthesis disabled - gate only if Z detected
+                                if((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold) > 0, 1.0, 0.0),
+                                // Case 1: Height synthesis enabled - always open gate
+                                1.0
+                            ]
                         );
                         // Send gate state to control bus 1000 for visual indicator (1.0 = ON, 0.0 = OFF)
                         // Also send Z magnitude for debugging (multiply by 1000 to make it more visible)
