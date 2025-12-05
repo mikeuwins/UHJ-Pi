@@ -872,6 +872,7 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionLFGain = 0, dimensionHFGain = 0, dimensionOutputTrim = 0, dimensionShelvesMode = 0, dimensionGerzonPresets = 0, dimensionActive = 1, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, reverbTarget = 1, centerGain = 0, subGain = 0, heightGain = 0, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, subLPF = 120, topHPF = 2000, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1, lOn = 1, rOn = 1|
                         var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput;
                         var wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, rtAr, zeroA;
+                        var zMagnitude, zThreshold, heightGateGain;
                         // Audio source - live input from hardware
                         src = SoundIn.ar([0,1]);
                         // For file playback testing, use: src = PlayBuf.ar(sndbuf.numChannels, buffer, BufRateScale.kr(buffer), loop: 1);
@@ -965,9 +966,9 @@ StaticText(mainView, Rect(345, 10, 140, 28))
                         
                         // Measure Z magnitude (RMS) after all processing to gate height speakers
                         // This prevents W/X/Y leakage into height speakers when Z is absent
-                        var zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                        var zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
-                        var heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
+                        zMagnitude = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
+                        zThreshold = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
+                        heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
