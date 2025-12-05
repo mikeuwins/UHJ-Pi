@@ -1462,7 +1462,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
-                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, heightGateGain, heightGate;
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, zMagnitude, zThreshold, heightGateGain, heightGate;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1546,15 +1546,18 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             maxPreDelay: 10,
                             feedbackSpread: 1
                         ) - wetSrc;
-                        wetOnly = [wetOnly[0], wetOnly[1], wetOnly[2], wetOnly[3] * (zsynthHeightSource > 0)];
+                        // Reverb Z should flow independently - don't gate it by height synthesis button
+                        // wetOnly[3] is the reverb-processed Z, which should always flow when reverb is active
                         ambient = zsynth + wetOnly;
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         
-                        // Gate logic: Simple - always open when height synthesis is enabled
-                        // When heightSource = 1, FoaZSynthesis should produce Z from X/Y
-                        // No detection needed - if height synthesis is enabled, allow Z through
-                        heightGateGain = (zsynthHeightSource > 0);
+                        // Gate logic: Detect Z presence in ambient[3] (after reverb mix)
+                        // This opens the gate when Z is present from either synthesis OR reverb
+                        // Measure Z magnitude after all processing (ambient[3] = zsynth[3] + wetOnly[3])
+                        zMagnitude = Amplitude.kr(ambient[3], 0.01, 0.05); // RMS envelope of Z component
+                        zThreshold = 0.000001; // Very low threshold to detect any Z signal
+                        heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -1602,12 +1605,9 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 centerChan = out[0] * centerGain.dbamp * centerOn;
                                 lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
                                 subChan = lowpass * subGain.dbamp * subOn;
-                                // Gate height speakers: bypass gate when height synthesis enabled (always allow Z through)
-                                // When heightSource = 1, FoaZSynthesis should produce Z, so no gate needed
-                                heightGate = if(zsynthHeightSource > 0, 
-                                    1.0, // Height synthesis enabled: bypass gate (always allow Z through)
-                                    K2A.ar(heightGateGain) // Otherwise: use gate to prevent W/X/Y leakage
-                                );
+                                // Gate height speakers based on Z presence (detected in ambient[3])
+                                // Gate opens when Z is present from synthesis OR reverb
+                                heightGate = K2A.ar(heightGateGain); // Convert control rate to audio rate
                                 heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
                                 heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
                                 out = [
