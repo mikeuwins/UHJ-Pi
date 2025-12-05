@@ -1462,7 +1462,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
-                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, zMagnitude, zThreshold, heightGateGain, heightGate;
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1546,19 +1546,10 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             maxPreDelay: 10,
                             feedbackSpread: 1
                         ) - wetSrc;
-                        // Reverb Z should flow independently - don't gate it by height synthesis button
-                        // wetOnly[3] is the reverb-processed Z, which should always flow when reverb is active
+                        wetOnly = [wetOnly[0], wetOnly[1], wetOnly[2], wetOnly[3] * (zsynthHeightSource > 0)];
                         ambient = zsynth + wetOnly;
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
-                        
-                        // Gate logic: Detect Z presence in ambient[3] (after reverb mix)
-                        // This opens the gate when Z is present from either synthesis OR reverb
-                        // Measure Z magnitude after all processing (ambient[3] = zsynth[3] + wetOnly[3])
-                        zMagnitude = Amplitude.kr(ambient[3], 0.01, 0.05); // RMS envelope of Z component
-                        zThreshold = 0.000001; // Very low threshold to detect any Z signal
-                        heightGateGain = (zMagnitude > zThreshold); // 1 if Z present, 0 if absent
-                        
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
                         if(outputs == 2, {
@@ -1605,11 +1596,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 centerChan = out[0] * centerGain.dbamp * centerOn;
                                 lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
                                 subChan = lowpass * subGain.dbamp * subOn;
-                                // Gate height speakers based on Z presence (detected in ambient[3])
-                                // Gate opens when Z is present from synthesis OR reverb
-                                heightGate = K2A.ar(heightGateGain); // Convert control rate to audio rate
-                                heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
-                                heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
+                                heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
+                                heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
                                 out = [
                                     out[1] * flOn, // FL (Speaker 1) - Front Left
                                     out[4] * frOn, // FR (Speaker 2) - Front Right
@@ -1840,7 +1828,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                         // Define the main audio processing SynthDef (adapted from MainApp2)
                         SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
-                            var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, centerChan, subChan, heightTFL, heightTFR, lowpass, zMagnitude2, zThreshold2, heightGateGain2, heightGate2;
+                            var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, centerChan, subChan, heightTFL, heightTFR, lowpass;
                             // Audio source from SFPlayer bus - variable channels based on encoder
                             src = In.ar(~playerBus.index, inputs);
                             // Amplitude scaling
@@ -1895,16 +1883,6 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                             );
                             // Apply rotation/tilt/tumble
                             trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
-                            
-                            // Measure Z magnitude (RMS) BEFORE reverb to gate height speakers
-                            // This prevents W/X/Y leakage into height speakers when Z is absent
-                            // Note: In this branch (reboot path), reverb is applied directly to encode, so measure after FoaRTT
-                            zMagnitude2 = Amplitude.kr(trans[3], 0.01, 0.05); // RMS envelope: 10ms attack, 50ms release
-                            zThreshold2 = 0.00001; // Threshold to detect Z signal (very low to catch Z synth output)
-                            heightGateGain2 = (zMagnitude2 > zThreshold2); // 1 if Z present, 0 if absent
-                            // Send gate state to control bus 1000 for visual indicator
-                            Out.kr(1000, heightGateGain2);
-                            
                             // Decode using selected decoder
                             out = FoaDecode.ar(trans, decoder);
                             if(outputs == 2, {
@@ -1950,10 +1928,8 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                     lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
                                     centerChan = out[0] * centerGain.dbamp * centerOn;
                                     subChan = lowpass * subGain.dbamp * subOn;
-                                    // Gate height speakers based on Z presence (measured before decode)
-                                    heightGate2 = K2A.ar(heightGateGain2); // Convert control rate to audio rate
-                                    heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate2 * tflOn;
-                                    heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate2 * tfrOn;
+                                    heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * tflOn;
+                                    heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * tfrOn;
                                     out = [
                                         out[1] * flOn, // FL (Speaker 1) - Front Left
                                         out[4] * frOn, // FR (Speaker 2) - Front Right
@@ -4064,9 +4040,7 @@ AppClock.sched(0.1, {
             if(~metersOverlay.notNil) { 
                 ~metersOverlay.remove; ~metersOverlay = nil; 
             };
-            if(~ambienceOverlay.notNil) { 
-                ~ambienceOverlay.remove; ~ambienceOverlay = nil;
-            };
+            if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
             sliderWidth = 32; sliderHeight = 140; startX = 12; gap = 44;
             ~ambienceOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
             UserView(~ambienceOverlay, Rect(0, 0, 320, 275))
@@ -4140,10 +4114,6 @@ AppClock.sched(0.1, {
                             var labelText = if(snap <= 0.25, "Lower", if(snap >= 0.75, "Height", "All"));
                             ~ambienceValues[i].string = labelText;
                         };
-                        // Save slider value to state
-                        if(~ambienceState[\sliderValues].notNil) {
-                            ~ambienceState[\sliderValues][i] = sl.value;
-                        };
                         if(~synth.notNil) {
                             switch(i,
                                 0, {
@@ -4158,15 +4128,21 @@ AppClock.sched(0.1, {
                                 2, {
                                     var currentMix = sl.value;
                                     ~ambienceValues[i].string = valPct.asString ++ "%";
-                                    // Only update reverb if button is already ON - don't auto-toggle button
                                     if(~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 }) {
                                         if(~synth.notNil) { ~synth.set(\ambience, currentMix.linlin(0, 1, 0, 0.2)); };
                                         ~ambienceLastMix = currentMix;
                                     } {
-                                        // Save slider value even when button is off
                                         ~ambienceLastMix = currentMix;
                                     };
-                                    // Removed auto-toggle behavior - button should only be controlled manually
+                                    if(~ambienceRestoring.not and: { ~ambienceOnOffBtn.notNil }) {
+                                        if(currentMix > 0 and: { ~ambienceOnOffBtn.value == 0 }) {
+                                            ~ambienceOnOffBtn.valueAction_(1);
+                                        } {
+                                            if(currentMix <= 0 and: { ~ambienceOnOffBtn.value == 1 }) {
+                                                ~ambienceOnOffBtn.valueAction_(0);
+                                            };
+                                        };
+                                    };
                                 },
                                 3, {
                                     var pd = sl.value.linlin(0,1,0,0.25);
@@ -4219,10 +4195,6 @@ AppClock.sched(0.1, {
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
-                // Save slider value to state
-                if(~ambienceState[\sliderValues].notNil) {
-                    ~ambienceState[\sliderValues][0] = sl.value;
-                };
                 if(~synth.notNil and: { ~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 } }) {
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 };
@@ -4232,12 +4204,11 @@ AppClock.sched(0.1, {
                 .states_([["REVERB", Color.cyan, Color.black], ["REVERB", Color.black, Color.cyan]])
                 .font_(Font("Helvetica", 11))
                 .focusColor_(Color.clear)
-                .value_(if((~ambienceState[\active] ? 0) == 1, 1, 0))
+                .value_(0)
                 .action_({ |btn|
                     var mixSlider = if(~ambienceSliders.notNil and: { ~ambienceSliders.size > 2 }, { ~ambienceSliders[2] }, { nil });
                     if(btn.value == 1) {
-                        // Turn reverb ON: use slider value if > 0, otherwise restore last mix
-                        var mixVal = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0.5 });
+                        var mixVal = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
                         if(mixVal <= 0 and: { ~ambienceLastMix.notNil and: { ~ambienceLastMix > 0 } }) {
                             mixVal = ~ambienceLastMix;
                             if(mixSlider.notNil) { mixSlider.value_(mixVal); };
@@ -4246,9 +4217,8 @@ AppClock.sched(0.1, {
                         ~ambienceState[\active] = 1;
                         if(~synth.notNil) { ~synth.set(\ambience, mixVal.linlin(0, 1, 0, 0.2)); };
                     } {
-                        // Turn reverb OFF: save current slider value, then set to 0
-                        var currentMix = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0.5 });
-                        if(currentMix > 0) { ~ambienceLastMix = currentMix; };
+                        var currentMix = if(mixSlider.notNil, { mixSlider.value }, { ~ambienceLastMix ? 0 });
+                        ~ambienceLastMix = currentMix;
                         ~ambienceState[\active] = 0;
                         if(~synth.notNil) { ~synth.set(\ambience, 0); };
                     };
@@ -4275,7 +4245,6 @@ AppClock.sched(0.1, {
                     ~zsynthState[\heightSource] = src;
                     if(~synth.notNil) { ~synth.set(\zsynthHeightSource, src); };
                 });
-            
             ~ambienceOverlay.front;
             if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
                 ("Found saved state, restoring...").postln;
@@ -5109,19 +5078,17 @@ AppClock.sched(0.1, {
                             var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
                             var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
                             var subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
-                            var topFrontLeftX = frontLeftX, topFrontLeftY = frontLeftY - 40; // Speaker 7 position (matches button position)
-                            var topFrontRightX = frontRightX, topFrontRightY = frontRightY - 40; // Speaker 8 position (matches button position)
                             Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
                             // Speaker 1: Front Left
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 3: Rear Left (RL)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
@@ -5136,14 +5103,11 @@ AppClock.sched(0.1, {
                             Pen.color = Color.black; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(centerX_speaker, centerY_speaker, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("5", Point(centerX_speaker + 5, centerY_speaker + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("C", Point(centerX_speaker + 5, centerY_speaker - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("C", Point(centerX_speaker + 5, centerY_speaker - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 6: Subwoofer (Sub = 6)
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
-                            // Speaker 7 and 8 labels (TFL/TFR) - positioned relative to existing speaker boxes
-                            Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 2, topFrontLeftY + 3), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the right of speaker 7, horizontally aligned with "7"
-                            Pen.stringAtPoint("TFR", Point(topFrontRightX - 22, topFrontRightY + 3), Font("Helvetica", 10).boldVariant, Color.cyan); // Label to the left of speaker 8, horizontally aligned with "8"
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
