@@ -1602,8 +1602,12 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 centerChan = out[0] * centerGain.dbamp * centerOn;
                                 lowpass = BLowPass.ar((out[1] + out[4]), subLPF, 1, 0.4);
                                 subChan = lowpass * subGain.dbamp * subOn;
-                                // Gate height speakers based on Z presence (measured before decode)
-                                heightGate = K2A.ar(heightGateGain); // Convert control rate to audio rate
+                                // Gate height speakers: bypass gate when height synthesis enabled (always allow Z through)
+                                // When heightSource = 1, FoaZSynthesis should produce Z, so no gate needed
+                                heightGate = if(zsynthHeightSource > 0, 
+                                    1.0, // Height synthesis enabled: bypass gate (always allow Z through)
+                                    K2A.ar(heightGateGain) // Otherwise: use gate to prevent W/X/Y leakage
+                                );
                                 heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
                                 heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
                                 out = [
