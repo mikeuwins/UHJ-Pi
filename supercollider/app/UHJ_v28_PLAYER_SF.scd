@@ -1462,7 +1462,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
 
                     // Define the main audio processing SynthDef (adapted from MainApp2)
                     SynthDef(\kernelEncodeDecode, { |buffer, rotation = 0, tilt = 0, tumble = 0, quadLR = 0, quadFR = 0, ambience = 0, preDelay = 0, lowRT = 0.2, highRT = 2, dispersion = 1, modWidth = 0.2, modRate = 0.3, reverbTarget = 1, eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0, eq7 = 0, maplinSurround = 0.8, maplinEffect = 0.8, maplinDelay = 0.4, maplinActive = 1, maplinMode = 0, dimensionWidth = 0.0, dimensionWidthHPF = 180, dimensionOutputTrim = 0, dimensionActive = 0, zsynthHeightAmount = 30, zsynthHeightDelay = 7, zsynthHeightTrim = 0, zsynthHeightSource = 0, zsynthAmbienceSize = 2.5, zsynthAmbienceDampening = 0.2, zsynthAmbienceMix = 70, centerGain = 0, subGain = 0, heightGain = 0, subLPF = 120, topHPF = 2000, centerOn = 1, subOn = 1, tflOn = 1, tfrOn = 1, lOn = 1, rOn = 1, flOn = 1, frOn = 1, rlOn = 1, rrOn = 1, s1On = 1, s2On = 1, s3On = 1, s4On = 1, s5On = 1, s6On = 1, s7On = 1, s8On = 1|
-                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, zMagnitude, zMagnitudePreReverb, zMagnitudeSynth, zMagnitudeAmbient, zThreshold, heightGateGain, heightGate, zDetected;
+                        var out, src, trans, encode, dimensioned, zsynth, ambient, eqed, frontStereo, rearStereo, quadOutFront, quadOutRear, maplinQuad, encodeInput, rtAr, zeroA, wetSrcW, wetSrcX, wetSrcY, wetSrcZ, wetSrc, wetOnly, centerChan, subChan, heightTFL, heightTFR, lowpass, heightGateGain, heightGate;
                         // Audio source from SFPlayer bus - variable channels based on encoder
                         src = In.ar(~playerBus.index, inputs);
                         // Amplitude scaling
@@ -1551,25 +1551,10 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         // Spatial transformations (rotation, tilt, tumble) - apply to all modes
                         trans = FoaRTT.ar(ambient, rotAngle: rotation, tilAngle: tilt, tumAngle: tumble);
                         
-                        // Measure Z magnitude from zsynth (directly from Z synthesis output)
-                        // This tells us if Z synthesis is actually producing Z signal
-                        zMagnitudeSynth = Amplitude.kr(zsynth[3], 0.01, 0.1); // RMS envelope: 10ms attack, 100ms release
-                        // Also measure from ambient to catch reverb-processed Z
-                        zMagnitudeAmbient = Amplitude.kr(ambient[3], 0.01, 0.1);
-                        zThreshold = 0.000001; // Threshold to detect Z signal (very low to catch weak Z synth output)
-                        // Gate logic: 
-                        // - If height synthesis is enabled (heightSource = 1), always open gate to 1.0
-                        //   This allows synthesized Z to pass through even if it's below detection threshold
-                        // - Otherwise, gate opens only if Z is detected above threshold (prevents W/X/Y leakage)
-                        // Simplified arithmetic: when heightSource > 0, gate = 1.0, otherwise check Z detection
-                        zDetected = ((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold)).min(1);
-                        heightGateGain = (zsynthHeightSource > 0) + ((zsynthHeightSource <= 0) * zDetected);
-                        heightGateGain = heightGateGain.min(1); // Clamp to 1.0
-                        // Send gate state to control bus 1000 for visual indicator (1.0 = ON, 0.0 = OFF)
-                        // Also send Z magnitude for debugging (multiply by 1000 to make it more visible)
-                        Out.kr(1000, heightGateGain);
-                        Out.kr(1001, zMagnitudeSynth * 1000); // Debug: Z magnitude from synthesis
-                        Out.kr(1002, zMagnitudeAmbient * 1000); // Debug: Z magnitude from ambient
+                        // Gate logic: Simple - always open when height synthesis is enabled
+                        // When heightSource = 1, FoaZSynthesis should produce Z from X/Y
+                        // No detection needed - if height synthesis is enabled, allow Z through
+                        heightGateGain = (zsynthHeightSource > 0);
                         
                         // Decode using selected decoder
                         out = FoaDecode.ar(trans, decoder);
@@ -4076,9 +4061,7 @@ AppClock.sched(0.1, {
                 ~metersOverlay.remove; ~metersOverlay = nil; 
             };
             if(~ambienceOverlay.notNil) { 
-                if(~zMonitorRoutine.notNil) { ~zMonitorRoutine.stop; ~zMonitorRoutine = nil; };
-                ~ambienceOverlay.remove; ~ambienceOverlay = nil; 
-                ~zSignalIndicator = nil;
+                ~ambienceOverlay.remove; ~ambienceOverlay = nil;
             };
             sliderWidth = 32; sliderHeight = 140; startX = 12; gap = 44;
             ~ambienceOverlay = View(mainView, Rect(180, 107, 320, 275)).background_(Color.black);
@@ -4289,36 +4272,6 @@ AppClock.sched(0.1, {
                     if(~synth.notNil) { ~synth.set(\zsynthHeightSource, src); };
                 });
             
-            // Z signal indicator - shows when Z is detected (positioned below HEIGHT button)
-            ~zSignalIndicator = StaticText(~ambienceOverlay, Rect(18, 260, 80, 20))
-                .string_("Z: OFF")
-                .align_(\center)
-                .stringColor_(Color.grey)
-                .font_(Font("Helvetica", 11).boldVariant)
-                .background_(Color.black);
-            
-            // Monitor Z signal and update indicator
-            // Read gate state (bus 1000), Z magnitude from synthesis (bus 1001), Z magnitude from ambient (bus 1002)
-            ~zMonitorRoutine = Routine({
-                loop {
-                    var zGate = In.kr(1000);
-                    var zSynthMag = In.kr(1001);
-                    var zAmbientMag = In.kr(1002);
-                    {
-                        if(~zSignalIndicator.notNil) {
-                            // Show gate state: ON if gate > 0.5 (height synthesis enabled or Z detected)
-                            if(zGate > 0.5) {
-                                ~zSignalIndicator.string_("Z: ON");
-                                ~zSignalIndicator.stringColor_(Color.cyan);
-                            } {
-                                ~zSignalIndicator.string_("Z: OFF");
-                                ~zSignalIndicator.stringColor_(Color.grey);
-                            };
-                        };
-                    }.defer;
-                    0.1.wait; // Update 10 times per second
-                };
-            }).play(AppClock);
             ~ambienceOverlay.front;
             if(~ambienceState[\sliderValues].notNil and: { ~ambienceState[\sliderValues].size > 0 }) {
                 ("Found saved state, restoring...").postln;
@@ -4330,9 +4283,7 @@ AppClock.sched(0.1, {
                 }
             }
         } {
-            if(~zMonitorRoutine.notNil) { ~zMonitorRoutine.stop; ~zMonitorRoutine = nil; };
             if(~ambienceOverlay.notNil) { ~ambienceOverlay.remove; ~ambienceOverlay = nil; };
-            ~zSignalIndicator = nil;
         }
     });
 // PLAYER button - aligned with left edge of picker windows
