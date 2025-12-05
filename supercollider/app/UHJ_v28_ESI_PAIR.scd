@@ -2973,6 +2973,10 @@ win.front;
                             var label = if(snap <= 0.25, "Lower", if(snap >= 0.75, "Height", "All"));
                             ~ambienceValues[i].string = label;
                         };
+                        // Save slider value to state for all sliders
+                        if(~ambienceState[\sliderValues].notNil) {
+                            ~ambienceState[\sliderValues][i] = sl.value;
+                        };
                         if(~synth.notNil) {
                             switch(i,
                                 0, { // HEIGHT amount (percent)
@@ -2985,9 +2989,14 @@ win.front;
                                     ~synth.set(\zsynthHeightDelay, ms);
                                 },
                                 2, { // RMIX
+                                    var currentMix = sl.value;
                                     ~ambienceValues[i].string = valPct.asString ++ "%";
-                                    ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
-                                    if(sl.value > 0) { ~ambienceOnOffBtn.value_(1); ~ambienceLastMix = sl.value; } { ~ambienceOnOffBtn.value_(0); };
+                                    if(~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 }) {
+                                        if(~synth.notNil) { ~synth.set(\ambience, currentMix.linlin(0, 1, 0, 0.2)); };
+                                        ~ambienceLastMix = currentMix;
+                                    } {
+                                        ~ambienceLastMix = currentMix;
+                                    };
                                 },
                                 3, { // PREDLY (ms)
                                     var pd = sl.value.linlin(0,1,0,0.25);
@@ -3045,6 +3054,10 @@ win.front;
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
+                // Save slider value to state
+                if(~ambienceState[\sliderValues].notNil) {
+                    ~ambienceState[\sliderValues][0] = sl.value;
+                };
                 if(~synth.notNil and: { ~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 } }) {
                     // Only send to synth when ambience is ON
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
@@ -3441,8 +3454,9 @@ win.front;
                             var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
                             var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
                             var subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
-                            var topFrontLeftX = frontLeftX, topFrontLeftY = layoutTop - 49;  // Keep TL/TR in same position (compensate for layoutTop -2)
-                            var topFrontRightX = frontRightX, topFrontRightY = layoutTop - 49;  // Keep TL/TR in same position (compensate for layoutTop -2)
+                            // Button positions match controls section: topFrontLeftX = 21, topFrontLeftY = 35, topFrontRightX = 121, topFrontRightY = 35
+                            var topFrontLeftX = 21, topFrontLeftY = 35;
+                            var topFrontRightX = 121, topFrontRightY = 35;
                             
                             Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;  // Extended box height by 7px to include RL/RR at corners
                             
@@ -3451,13 +3465,13 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // Speaker 3: Rear Left (RL)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
@@ -3487,13 +3501,13 @@ win.front;
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("7", Point(topFrontLeftX + 5, topFrontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("TL", Point(topFrontLeftX + speakerSize + 4, topFrontLeftY + 5), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 3, topFrontLeftY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
                             
                             // Speaker 8: Top Front Right (overhead) - positioned above front right
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("8", Point(topFrontRightX + 5, topFrontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("TR", Point(topFrontRightX - 18, topFrontRightY + 5), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("TFR", Point(topFrontRightX - 23, topFrontRightY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
