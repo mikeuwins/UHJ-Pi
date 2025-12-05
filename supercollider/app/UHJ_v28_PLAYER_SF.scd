@@ -5077,6 +5077,8 @@ AppClock.sched(0.1, {
                             var surroundLeftX = layoutLeft - 9, surroundLeftY = layoutTop + layoutSize - 9 + 7;
                             var surroundRightX = layoutLeft + layoutSize - 9, surroundRightY = layoutTop + layoutSize - 9 + 7;
                             var subwooferX = layoutLeft + (layoutSize / 2) - 9, subwooferY = layoutTop + (layoutSize / 2) - 9 + 7;
+                            var topFrontLeftX = layoutLeft - 9, topFrontLeftY = layoutTop - 9 - 50;
+                            var topFrontRightX = layoutLeft + layoutSize - 9, topFrontRightY = layoutTop - 9 - 50;
                             Pen.color = Color.cyan; Pen.addRect(Rect(layoutLeft, layoutTop, layoutSize, layoutSize + 7)); Pen.stroke;
                             // Speaker 1: Front Left
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
@@ -5108,13 +5110,11 @@ AppClock.sched(0.1, {
                             Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 7: Top Front Left (TFL)
-                            var topFrontLeftX = layoutLeft - 9, topFrontLeftY = layoutTop - 9 - 50;
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("7", Point(topFrontLeftX + 5, topFrontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 2, topFrontLeftY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 8: Top Front Right (TFR)
-                            var topFrontRightX = layoutLeft + layoutSize - 9, topFrontRightY = layoutTop - 9 - 50;
                             Pen.color = Color.black; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("8", Point(topFrontRightX + 5, topFrontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
