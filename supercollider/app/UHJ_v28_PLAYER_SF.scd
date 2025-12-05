@@ -1562,7 +1562,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                         //   This allows synthesized Z to pass through even if it's below detection threshold
                         // - Otherwise, gate opens only if Z is detected above threshold (prevents W/X/Y leakage)
                         // Simplified arithmetic: when heightSource > 0, gate = 1.0, otherwise check Z detection
-                        var zDetected = ((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold)).min(1);
+                        zDetected = ((zMagnitudeSynth > zThreshold) + (zMagnitudeAmbient > zThreshold)).min(1);
                         heightGateGain = (zsynthHeightSource > 0) + ((zsynthHeightSource <= 0) * zDetected);
                         heightGateGain = heightGateGain.min(1); // Clamp to 1.0
                         // Send gate state to control bus 1000 for visual indicator (1.0 = ON, 0.0 = OFF)
