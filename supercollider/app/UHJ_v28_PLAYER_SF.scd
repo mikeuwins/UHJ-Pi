@@ -1611,17 +1611,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
                                 heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
                                 heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
-                                // Height solo: mute all other channels when heightSolo = 1
-                                out = if(heightSolo > 0, [
-                                    DC.ar(0),      // FL (Speaker 1) - Muted
-                                    DC.ar(0),      // FR (Speaker 2) - Muted
-                                    DC.ar(0),      // RL (Speaker 3) - Muted
-                                    DC.ar(0),      // RR (Speaker 4) - Muted
-                                    DC.ar(0),      // C  (Speaker 5) - Muted
-                                    DC.ar(0),      // SUB (Speaker 6) - Muted
-                                    heightTFL,     // TFL (Speaker 7) - Solo
-                                    heightTFR      // TFR (Speaker 8) - Solo
-                                ], [
+                                out = [
                                     out[1] * flOn, // FL (Speaker 1) - Front Left
                                     out[4] * frOn, // FR (Speaker 2) - Front Right
                                     out[2] * rlOn, // RL (Speaker 3) - Rear Left
@@ -1630,7 +1620,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                     subChan,       // SUB (Speaker 6) - Subwoofer/LFE
                                     heightTFL,     // TFL (Speaker 7) - Top Front Left
                                     heightTFR      // TFR (Speaker 8) - Top Front Right
-                                ]);
+                                ];
                             }, {
                                 // --- OCTAGON OUTPUT MAPPING (Clockwise from Front Left) ---
                                 // ATK 8.0 decoder: Anti-clockwise from front left out[0]
