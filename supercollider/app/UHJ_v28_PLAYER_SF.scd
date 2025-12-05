@@ -1608,6 +1608,7 @@ StaticText(mainView, Rect(346, 10, 154, 28))
                                 // Gate height speakers based on Z presence (detected in ambient[3])
                                 // Gate opens when Z is present from synthesis OR reverb
                                 heightGate = K2A.ar(heightGateGain); // Convert control rate to audio rate
+                                // Decoder outputs: out[0]=C, out[1]=FL, out[2]=RL, out[3]=RR, out[4]=FR, out[5]=TFR, out[6]=TFL
                                 heightTFL = HPF.ar(out[6], topHPF) * heightGain.dbamp * heightGate * tflOn;
                                 heightTFR = HPF.ar(out[5], topHPF) * heightGain.dbamp * heightGate * tfrOn;
                                 out = [
