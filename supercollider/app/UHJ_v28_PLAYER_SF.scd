@@ -4115,6 +4115,10 @@ AppClock.sched(0.1, {
                             ~ambienceValues[i].string = labelText;
                         };
                         if(~synth.notNil) {
+                            // Save slider value to state for all sliders
+                            if(~ambienceState[\sliderValues].notNil) {
+                                ~ambienceState[\sliderValues][i] = sl.value;
+                            };
                             switch(i,
                                 0, {
                                     ~ambienceValues[i].string = valPct.asString ++ "%";
@@ -4133,15 +4137,6 @@ AppClock.sched(0.1, {
                                         ~ambienceLastMix = currentMix;
                                     } {
                                         ~ambienceLastMix = currentMix;
-                                    };
-                                    if(~ambienceRestoring.not and: { ~ambienceOnOffBtn.notNil }) {
-                                        if(currentMix > 0 and: { ~ambienceOnOffBtn.value == 0 }) {
-                                            ~ambienceOnOffBtn.valueAction_(1);
-                                        } {
-                                            if(currentMix <= 0 and: { ~ambienceOnOffBtn.value == 1 }) {
-                                                ~ambienceOnOffBtn.valueAction_(0);
-                                            };
-                                        };
                                     };
                                 },
                                 3, {
@@ -4195,6 +4190,10 @@ AppClock.sched(0.1, {
             ~ambienceSliders[0].action_({ |sl|
                 var val = (sl.value * 100).round(0.1);
                 ~ambienceValues[0].string = val.asString ++ "%";
+                // Save slider value to state
+                if(~ambienceState[\sliderValues].notNil) {
+                    ~ambienceState[\sliderValues][0] = sl.value;
+                };
                 if(~synth.notNil and: { ~ambienceOnOffBtn.notNil and: { ~ambienceOnOffBtn.value == 1 } }) {
                     ~synth.set(\ambience, sl.value.linlin(0, 1, 0, 0.2));
                 };
@@ -5083,12 +5082,12 @@ AppClock.sched(0.1, {
                             Pen.color = Color.black; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontLeftX, frontLeftY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("1", Point(frontLeftX + 5, frontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FL", Point(frontLeftX + 3, frontLeftY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 2: Front Right
                             Pen.color = Color.black; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(frontRightX, frontRightY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("2", Point(frontRightX + 5, frontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
-                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 12), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("FR", Point(frontRightX + 3, frontRightY - 13), Font("Helvetica", 10).boldVariant, Color.cyan);
                             // Speaker 3: Rear Left (RL)
                             Pen.color = Color.black; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.fill;
                             Pen.color = Color.cyan; Pen.addRect(Rect(surroundLeftX, surroundLeftY, speakerSize, speakerSize)); Pen.stroke;
@@ -5108,6 +5107,18 @@ AppClock.sched(0.1, {
                             Pen.color = Color.cyan; Pen.addRect(Rect(subwooferX, subwooferY, speakerSize, speakerSize)); Pen.stroke;
                             Pen.stringAtPoint("6", Point(subwooferX + 5, subwooferY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
                             Pen.stringAtPoint("SUB", Point(subwooferX - 1, subwooferY + speakerSize + 2), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // Speaker 7: Top Front Left (TFL)
+                            var topFrontLeftX = layoutLeft - 9, topFrontLeftY = layoutTop - 9 - 50;
+                            Pen.color = Color.black; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(topFrontLeftX, topFrontLeftY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("7", Point(topFrontLeftX + 5, topFrontLeftY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("TFL", Point(topFrontLeftX + speakerSize + 2, topFrontLeftY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
+                            // Speaker 8: Top Front Right (TFR)
+                            var topFrontRightX = layoutLeft + layoutSize - 9, topFrontRightY = layoutTop - 9 - 50;
+                            Pen.color = Color.black; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.fill;
+                            Pen.color = Color.cyan; Pen.addRect(Rect(topFrontRightX, topFrontRightY, speakerSize, speakerSize)); Pen.stroke;
+                            Pen.stringAtPoint("8", Point(topFrontRightX + 5, topFrontRightY + 2), Font("Helvetica", 13).boldVariant, Color.cyan);
+                            Pen.stringAtPoint("TFR", Point(topFrontRightX - 22, topFrontRightY + 3), Font("Helvetica", 10).boldVariant, Color.cyan);
                         },
                         8, { // Octagon
                             var radius = 80, angleStep = 2 * pi / 8, startAngle = -22.5 * pi / 180, speakerPositions;
