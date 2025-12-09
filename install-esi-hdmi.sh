@@ -329,20 +329,28 @@ else
 fi
 # ATK and AmbiVerbSC now installed via Quark system above
 
-# Remove problematic GUI components (keeping PointView as it works in the system)
-echo "Removing problematic GUI components..."
-# Only remove if directories exist to prevent errors
-if [ -d "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/" ]; then
-    rm -rf /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/GUI/
+# Remove problematic GUI components BEFORE moving to Extensions
+echo "Removing problematic GUI components from downloaded-quarks..."
+cd /home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks
+
+# Remove problematic wslib components
+if [ -d "wslib/wslib-classes/GUI/" ]; then
+    sudo -u $ACTUAL_USER rm -rf wslib/wslib-classes/GUI/
     echo "Removed wslib GUI components"
 fi
-if [ -f "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc" ]; then
-    rm "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc"
+if [ -f "wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc" ]; then
+    sudo -u $ACTUAL_USER rm "wslib/wslib-classes/Main Features/Interpolation/extPen-splineCurve.sc"
     echo "Removed extPen-splineCurve.sc"
 fi
-if [ -f "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc" ]; then
-    rm "/home/$ACTUAL_USER/.local/share/SuperCollider/downloaded-quarks/wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc"
+if [ -f "wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc" ]; then
+    sudo -u $ACTUAL_USER rm "wslib/wslib-classes/Main Features/SVGFile/extColPen-asSVGFile.sc"
     echo "Removed extColPen-asSVGFile.sc"
+fi
+
+# Remove entire wslib directory if it exists (can cause conflicts)
+if [ -d "wslib" ]; then
+    sudo -u $ACTUAL_USER rm -rf wslib
+    echo "Removed entire wslib directory (conflict-prone)"
 fi
 
 # Download ATK assets manually (kernels and matrices only)
