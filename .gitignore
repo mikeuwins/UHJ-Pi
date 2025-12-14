@@ -6,3 +6,49 @@ sc3-plugins/
 
 # Cursor IDE
 .cursor/
+
+# Development artifacts - chat logs and backups
+*chat*.md
+*cursor*.md
+*backup*.md
+chat_backup_*.md
+cursor_chat*.md
+cursor_debugging*.md
+cursor_*.md
+
+# Test scripts
+**/test_*.scd
+**/Test_*.scd
+**/*Test*.scd
+tests/
+
+# Log files
+*.log
+**/*.log
+
+# Temporary files
+last_commit.diff
+commit_history.txt
+morning.md
+stereo_mute_plan.md
+phj_z_diagnostics.log
+github-ca.pem
+
+# Session notes
+notes/
+
+# Archive/compressed files
+*.zip
+*.tar.gz
+*.tar
+
+# Python virtual environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Backup files (but keep version backups like v21_backup.scd which show development)
+*.backup
+**/*.backup
+!**/*_backup.scd
