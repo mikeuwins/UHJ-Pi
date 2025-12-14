@@ -52,3 +52,9 @@ __pycache__/
 *.backup
 **/*.backup
 !**/*_backup.scd
+
+# Additional files to hide
+stereo_mute_plan.md
+restore-v26-working.sh
+morning.md
+fan-control/
